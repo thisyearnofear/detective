@@ -15,6 +15,7 @@ type VoteState = Record<string, "REAL" | "BOT">;
 export default function MultiChatContainer({ fid }: Props) {
   const [activeTab, setActiveTab] = useState(1);
   const [votes, setVotes] = useState<VoteState>({});
+  const [newMatchIds, setNewMatchIds] = useState<Set<string>>(new Set());
 
   // Poll for active matches
   const {
@@ -27,17 +28,28 @@ export default function MultiChatContainer({ fid }: Props) {
     revalidateOnFocus: true,
   });
 
-  // Initialize votes from match data
+  // Initialize votes from match data and track new matches
   useEffect(() => {
     if (matchData?.matches) {
       const newVotes: VoteState = {};
+      const newMatches = new Set<string>();
+
       matchData.matches.forEach((match: any) => {
-        if (match.currentVote && !votes[match.id]) {
-          newVotes[match.id] = match.currentVote;
+        // Default to REAL (human) for new matches
+        if (!votes[match.id]) {
+          newVotes[match.id] = match.currentVote || "REAL";
+          newMatches.add(match.id);
         }
       });
+
       if (Object.keys(newVotes).length > 0) {
         setVotes((prev) => ({ ...prev, ...newVotes }));
+        setNewMatchIds(newMatches);
+
+        // Clear new match status after animation period
+        setTimeout(() => {
+          setNewMatchIds(new Set());
+        }, 5000);
       }
     }
   }, [matchData]);
@@ -183,30 +195,15 @@ export default function MultiChatContainer({ fid }: Props) {
               </div>
 
               {/* Vote indicator */}
-              <div
-                className={`absolute top-2 left-2 z-10 px-2 py-1 rounded text-xs font-bold ${
-                  votes[match.id] === "BOT"
-                    ? "bg-red-500/20 text-red-300 border border-red-500/50"
-                    : votes[match.id] === "REAL"
-                      ? "bg-green-500/20 text-green-300 border border-green-500/50"
-                      : "bg-gray-500/20 text-gray-300 border border-gray-500/50"
-                }`}
-              >
-                {votes[match.id] === "BOT"
-                  ? "🤖 Bot"
-                  : votes[match.id] === "REAL"
-                    ? "👤 Human"
-                    : "❓ Undecided"}
-              </div>
-
               <ChatWindow
                 fid={fid}
                 match={match}
-                currentVote={votes[match.id]}
+                currentVote={votes[match.id] || "REAL"}
                 onVoteToggle={() => handleVoteToggle(match.id)}
                 onComplete={() => handleMatchComplete(match.id)}
                 isCompact={true}
                 showVoteToggle={true}
+                isNewMatch={newMatchIds.has(match.id)}
               />
             </div>
           );
@@ -246,31 +243,15 @@ export default function MultiChatContainer({ fid }: Props) {
         {/* Active chat */}
         {slots[activeTab] ? (
           <div className="relative">
-            {/* Vote indicator */}
-            <div
-              className={`absolute top-2 left-2 z-10 px-2 py-1 rounded text-xs font-bold ${
-                votes[slots[activeTab].id] === "BOT"
-                  ? "bg-red-500/20 text-red-300 border border-red-500/50"
-                  : votes[slots[activeTab].id] === "REAL"
-                    ? "bg-green-500/20 text-green-300 border border-green-500/50"
-                    : "bg-gray-500/20 text-gray-300 border border-gray-500/50"
-              }`}
-            >
-              {votes[slots[activeTab].id] === "BOT"
-                ? "🤖 Bot"
-                : votes[slots[activeTab].id] === "REAL"
-                  ? "👤 Human"
-                  : "❓ Undecided"}
-            </div>
-
             <ChatWindow
               fid={fid}
               match={slots[activeTab]}
-              currentVote={votes[slots[activeTab].id]}
+              currentVote={votes[slots[activeTab].id] || "REAL"}
               onVoteToggle={() => handleVoteToggle(slots[activeTab].id)}
               onComplete={() => handleMatchComplete(slots[activeTab].id)}
               isCompact={false}
               showVoteToggle={true}
+              isNewMatch={newMatchIds.has(slots[activeTab].id)}
             />
           </div>
         ) : (

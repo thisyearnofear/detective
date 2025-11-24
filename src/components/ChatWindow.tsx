@@ -5,6 +5,7 @@ import useSWR from "swr";
 import Image from "next/image";
 import Timer from "./Timer";
 import EmojiPicker from "./EmojiPicker";
+import VoteToggle from "./VoteToggle";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -24,6 +25,7 @@ type Props = {
     voteLocked?: boolean;
   };
   currentVote?: "REAL" | "BOT";
+  isNewMatch?: boolean;
   onVoteToggle?: () => void;
   onComplete?: () => void;
   isCompact?: boolean;
@@ -38,6 +40,7 @@ export default function ChatWindow({
   onComplete,
   isCompact = false,
   showVoteToggle = false,
+  isNewMatch = false,
 }: Props) {
   const [input, setInput] = useState("");
   const [isTimeUp, setIsTimeUp] = useState(false);
@@ -207,27 +210,16 @@ export default function ChatWindow({
         )}
       </div>
 
-      {/* Vote toggle button (if enabled) */}
+      {/* Vote toggle (if enabled) */}
       {showVoteToggle && !isTimeUp && !match.voteLocked && (
         <div className="mb-3">
-          <button
-            onClick={onVoteToggle}
-            className={`w-full py-2 rounded-lg font-medium transition-all ${
-              currentVote === "BOT"
-                ? "bg-red-600 hover:bg-red-700 text-white"
-                : currentVote === "REAL"
-                  ? "bg-green-600 hover:bg-green-700 text-white"
-                  : "bg-slate-700 hover:bg-slate-600 text-gray-300"
-            }`}
-          >
-            {currentVote === "BOT" ? (
-              <>🤖 I think this is a BOT</>
-            ) : currentVote === "REAL" ? (
-              <>👤 I think this is a HUMAN</>
-            ) : (
-              <>❓ Click to vote</>
-            )}
-          </button>
+          <VoteToggle
+            currentVote={currentVote || "REAL"}
+            onToggle={onVoteToggle!}
+            isLocked={match.voteLocked}
+            showAnimation={isNewMatch}
+            isCompact={isCompact}
+          />
         </div>
       )}
 
@@ -282,17 +274,12 @@ export default function ChatWindow({
       {isTimeUp || match.voteLocked ? (
         <div className="text-center py-3 bg-slate-700/50 rounded-lg">
           <p className="text-sm text-gray-300">
-            {match.voteLocked ? "Vote locked! " : "Time's up! "}
-            {currentVote ? (
-              <>
-                You voted:{" "}
-                <span className="font-bold">
-                  {currentVote === "BOT" ? "🤖 Bot" : "👤 Human"}
-                </span>
-              </>
-            ) : (
-              "No vote submitted"
-            )}
+            <span className="text-xs text-gray-500">Vote locked • </span>
+            <span
+              className={`font-bold ${currentVote === "BOT" ? "text-red-400" : "text-green-400"}`}
+            >
+              {currentVote === "BOT" ? "🤖 BOT" : "👤 HUMAN"}
+            </span>
           </p>
         </div>
       ) : (
