@@ -130,9 +130,11 @@ class GameManager {
           ];
       } else if (this.state.bots.size > 0) {
         // Fallback to a bot if no other players are available
-        const availableBots = Array.from(this.state.bots.values());
-        opponent =
-          availableBots[Math.floor(Math.random() * availableBots.length)];
+        // Ensure we don't match against the player's own bot
+        const availableBots = Array.from(this.state.bots.values()).filter(b => b.fid !== fid);
+        if (availableBots.length > 0) {
+          opponent = availableBots[Math.floor(Math.random() * availableBots.length)];
+        }
       }
     }
 
@@ -317,4 +319,10 @@ class GameManager {
 }
 
 // Export a singleton instance of the GameManager
-export const gameManager = GameManager.getInstance();
+const globalForGame = global as unknown as { gameManager: GameManager };
+
+export const gameManager = globalForGame.gameManager || GameManager.getInstance();
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForGame.gameManager = gameManager;
+}

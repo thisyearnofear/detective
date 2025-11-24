@@ -3,6 +3,7 @@
   "version": "3.0.0",
   "description": "Farcaster mini app - AI detective game",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

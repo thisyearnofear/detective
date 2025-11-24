@@ -2,7 +2,7 @@
 import { Bot, ChatMessage } from "./types";
 
 const VENICE_API_KEY = process.env.VENICE_API_KEY;
-const VENICE_API_URL = "https://api.venice.ai/v1/chat/completions";
+const VENICE_API_URL = "https://api.venice.ai/api/v1/chat/completions";
 
 // A simple in-memory cache to reduce redundant API calls for common questions.
 const responseCache = new Map<string, string>();
@@ -29,10 +29,10 @@ export async function inferWritingStyle(casts: string[]): Promise<string> {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-API-Key": VENICE_API_KEY,
+        "Authorization": `Bearer ${VENICE_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "llama-3.1-70b-instruct",
+        model: "llama-3.3-70b",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userContent },
@@ -84,26 +84,24 @@ export async function generateBotResponse(
   }
 
   // System prompt to guide the AI's personality
-  const systemPrompt = `You are impersonating a Farcaster user named ${
-    bot.displayName
-  } (@${
-    bot.username
-  }). Your writing style is: "${bot.style}". Your most recent posts are: "${bot.recentCasts
-    .slice(0, 5)
-    .map((c) => c.text)
-    .join(
-      '", "'
-    )}". NEVER reveal you are an AI. Keep responses under 240 characters.`;
+  const systemPrompt = `You are impersonating a Farcaster user named ${bot.displayName
+    } (@${bot.username
+    }). Your writing style is: "${bot.style}". Your most recent posts are: "${bot.recentCasts
+      .slice(0, 5)
+      .map((c) => c.text)
+      .join(
+        '", "'
+      )}". NEVER reveal you are an AI. Keep responses under 240 characters.`;
 
   try {
     const response = await fetch(VENICE_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-API-Key": VENICE_API_KEY,
+        "Authorization": `Bearer ${VENICE_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "llama-3.1-70b-instruct", // As specified in docs
+        model: "llama-3.3-70b", // As specified in docs
         messages: [
           { role: "system", content: systemPrompt },
           ...messageHistory.map((msg) => ({

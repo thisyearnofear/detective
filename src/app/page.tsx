@@ -60,10 +60,15 @@ export default function Home() {
 
   // Use SWR for polling the game state every 3 seconds
   const { data: gameState, error: gameStateError } = useSWR(
-    "/api/game/status",
+    sdkUser ? `/api/game/status?fid=${sdkUser.fid}` : "/api/game/status",
     fetcher,
     { refreshInterval: 3000 }
   );
+
+  const handleLogout = () => {
+    setSdkUser(null);
+    setAuthMode(null);
+  };
 
   useEffect(() => {
     const initAuth = async () => {
@@ -104,6 +109,20 @@ export default function Home() {
       case "REGISTRATION":
         return <GameRegister fid={sdkUser.fid} isRegistrationOpen={true} />;
       case "LIVE":
+        if (!gameState.isRegistered) {
+          return (
+            <div className="bg-slate-800 rounded-lg p-6 text-center">
+              <h3 className="text-xl font-bold text-yellow-400 mb-2">Not Registered</h3>
+              <p className="text-gray-300 mb-4">
+                You missed the registration window for this game.
+              </p>
+              <div className="text-sm text-gray-400">
+                <p>Wait for the next game cycle or</p>
+                <a href="/admin" className="text-blue-400 hover:underline">use Admin Panel to force register</a>
+              </div>
+            </div>
+          );
+        }
         return <LiveGameView fid={sdkUser.fid} />;
       case "FINISHED":
         return (
@@ -159,16 +178,24 @@ export default function Home() {
         {/* Show user info and game when authenticated */}
         {sdkUser && (
           <>
-            <div className="bg-slate-800 rounded-lg p-4 mb-8">
-              <p className="text-sm text-center text-gray-400">
-                Logged in as{" "}
-                <strong className="text-white">@{sdkUser.username}</strong> (FID: {sdkUser.fid})
-                {authMode === 'web' && (
-                  <span className="ml-2 text-xs bg-blue-900/30 text-blue-400 px-2 py-1 rounded">
-                    Web Mode
-                  </span>
-                )}
-              </p>
+            <div className="bg-slate-800 rounded-lg p-4 mb-8 flex justify-between items-center">
+              <div className="flex-1 text-center">
+                <p className="text-sm text-gray-400">
+                  Logged in as{" "}
+                  <strong className="text-white">@{sdkUser.username}</strong> (FID: {sdkUser.fid})
+                  {authMode === 'web' && (
+                    <span className="ml-2 text-xs bg-blue-900/30 text-blue-400 px-2 py-1 rounded">
+                      Web Mode
+                    </span>
+                  )}
+                </p>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="text-xs text-red-400 hover:text-red-300 underline ml-4"
+              >
+                Logout
+              </button>
             </div>
 
             {/* Game Status Display */}

@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import '@/styles/globals.css';
 
 export const metadata: Metadata = {
-  title: 'Detective - Farcaster Game',
+  title: 'Detective - Bot or Not? Prove it!',
   description: 'AI-powered social deduction game on Farcaster. Can you tell if you\'re chatting with a real person or an AI bot?',
 
   // Favicon and app icons
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 
   // Open Graph (for social sharing)
   openGraph: {
-    title: 'Detective - Farcaster Game',
+    title: 'Detective - Bot or Not? Prove it!',
     description: 'Can you tell if you are chatting with a real person or an AI bot?',
     type: 'website',
     url: 'https://detective.app', // Update with your actual domain
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   // Twitter Card
   twitter: {
     card: 'summary_large_image',
-    title: 'Detective - Farcaster Game',
+    title: 'Detective - Bot or Not? Prove it!',
     description: 'Can you tell if you are chatting with a real person or an AI bot?',
     images: ['/og-image.png'],
   },
