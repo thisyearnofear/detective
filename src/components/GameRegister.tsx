@@ -1,38 +1,78 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { Player } from '@/lib/types';
 
-type Props = { fid: number };
+type Props = {
+  fid: number;
+  // This will be passed down from a parent component that fetches the game state
+  isRegistrationOpen: boolean; 
+};
 
-export default function GameRegister({ fid }: Props) {
-  const [status, setStatus] = useState<string>('');
-  const [registered, setRegistered] = useState(false);
+export default function GameRegister({ fid, isRegistrationOpen }: Props) {
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [registeredPlayer, setRegisteredPlayer] = useState<Player | null>(null);
 
-  const register = async () => {
-    setStatus('Registering...');
-    const res = await fetch('/api/game/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fid }),
-    }).then((r) => r.json());
-    if (res.success) {
-      setRegistered(true);
-      setStatus('Registered. You can start chatting.');
-    } else {
-      setStatus(res.error || 'Registration failed');
+  // Don't render the component if registration is not open
+  if (!isRegistrationOpen) {
+    return null;
+  }
+  
+  // If player is already registered, show a success message
+  if (registeredPlayer) {
+    return (
+      <div className="bg-slate-800 rounded-lg p-6 mb-8 border border-green-500">
+        <p className="text-center text-green-400 font-semibold">
+          You are registered for this game cycle!
+        </p>
+      </div>
+    );
+  }
+
+  const handleRegister = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/game/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fid }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'An unknown error occurred.');
+      }
+
+      setRegisteredPlayer(data.player);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="card mb-8">
+    <div className="bg-slate-800 rounded-lg p-6 mb-8">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-sm text-gray-400">Neynar score gate ≥ 0.8</div>
-          <div className="text-sm text-gray-300">FID: {fid}</div>
+          <h2 className="text-lg font-bold">Join the Game</h2>
+          <p className="text-sm text-gray-400">
+            Register now to participate in the current cycle.
+          </p>
         </div>
-        <button className="btn-primary" onClick={register} disabled={registered}>Register</button>
+        <button 
+          className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+          onClick={handleRegister} 
+          disabled={isLoading}
+        >
+          {isLoading ? 'Registering...' : 'Register'}
+        </button>
       </div>
-      {status && <div className="mt-3 text-sm text-gray-300">{status}</div>}
+      {error && <div className="mt-4 text-sm text-red-400 text-center">{error}</div>}
     </div>
   );
 }

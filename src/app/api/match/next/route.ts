@@ -1,39 +1,65 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getActiveCycle, createMatch } from '@/lib/gameState';
+// src/app/api/match/next/route.ts
+import { NextResponse } from "next/server";
+import { gameManager } from "@/lib/gameState";
+import { NextRequest } from "next/server";
 
-export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const fidParam = searchParams.get('fid');
-  const fid = fidParam ? parseInt(fidParam, 10) : NaN;
-  if (!fid || Number.isNaN(fid)) return NextResponse.json({ error: 'Missing fid' }, { status: 400 });
+/**
+ * API route to get the next match for a player.
+ * Expects a GET request with a `fid` query parameter.
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const fid = searchParams.get("fid");
 
-  const cycle = getActiveCycle();
-  if (!cycle) return NextResponse.json({ error: 'No active cycle' }, { status: 404 });
+    if (!fid) {
+      return NextResponse.json({ error: "FID is required." }, { status: 400 });
+    }
 
-  for (const m of cycle.currentMatches.values()) {
-    if (m.player1Fid === fid) return NextResponse.json({ match: m });
+    const playerFid = parseInt(fid, 10);
+    if (isNaN(playerFid)) {
+      return NextResponse.json({ error: "Invalid FID." }, { status: 400 });
+    }
+
+    const gameState = gameManager.getGameState();
+    if (gameState.state !== "LIVE") {
+      return NextResponse.json(
+        { error: "The game is not currently live." },
+        { status: 403 }
+      );
+    }
+
+    const match = gameManager.createNextMatch(playerFid);
+
+    if (!match) {
+      return NextResponse.json(
+        { error: "Could not find or create a match for the player." },
+        { status: 404 }
+      );
+    }
+
+    // Sanitize the opponent object before sending it to the client.
+    // The client should not know if the opponent is a 'REAL' user or a 'BOT'.
+    const sanitizedOpponent = {
+      fid: match.opponent.fid,
+      username: match.opponent.username,
+      displayName: match.opponent.displayName,
+      pfpUrl: match.opponent.pfpUrl,
+    };
+
+    const sanitizedMatch = {
+      id: match.id,
+      opponent: sanitizedOpponent,
+      startTime: match.startTime,
+      endTime: match.endTime,
+    };
+
+    return NextResponse.json(sanitizedMatch);
+  } catch (error) {
+    console.error("Error creating next match:", error);
+    return NextResponse.json(
+      { error: "An unexpected error occurred." },
+      { status: 500 }
+    );
   }
-
-  const available: number[] = [];
-  for (const k of cycle.registeredUsers.keys()) {
-    if (k !== fid && !cycle.matchedPlayers.has(k)) available.push(k);
-  }
-
-  let match;
-  const useBot = available.length === 0 || Math.random() < 0.5;
-  if (useBot) {
-    const personaPool = Array.from(cycle.registeredUsers.values()).filter((u) => u.fid !== fid);
-    const persona = personaPool[Math.floor(Math.random() * Math.max(personaPool.length, 1))];
-    match = createMatch(cycle, fid, 'BOT', persona?.username);
-    cycle.matchedPlayers.add(fid);
-  } else {
-    const opponentFid = available[Math.floor(Math.random() * available.length)];
-    match = createMatch(cycle, fid, opponentFid);
-    cycle.matchedPlayers.add(fid);
-    cycle.matchedPlayers.add(opponentFid);
-  }
-
-  cycle.currentMatches.set(match.id, match);
-  return NextResponse.json({ match });
 }
-

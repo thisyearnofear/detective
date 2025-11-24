@@ -1,31 +1,46 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
-type Props = { seconds: number; onComplete?: () => void };
+type Props = { 
+  duration: number; // Duration in seconds
+  onComplete?: () => void;
+};
 
-export default function Timer({ seconds, onComplete }: Props) {
-  const [remaining, setRemaining] = useState(seconds);
+export default function Timer({ duration, onComplete }: Props) {
+  const [remaining, setRemaining] = useState(duration);
+  const onCompleteRef = useRef(onComplete);
+
+  // Keep the onComplete callback reference up-to-date without re-triggering the effect
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
   useEffect(() => {
-    setRemaining(seconds);
-    const id = setInterval(() => {
-      setRemaining((r) => {
-        const next = r - 1;
-        if (next <= 0) {
-          clearInterval(id);
-          if (onComplete) onComplete();
+    // Start with the full duration
+    setRemaining(duration);
+
+    const intervalId = setInterval(() => {
+      setRemaining((prev) => {
+        if (prev <= 1) {
+          clearInterval(intervalId);
+          onCompleteRef.current?.();
           return 0;
         }
-        return next;
+        return prev - 1;
       });
     }, 1000);
-    return () => clearInterval(id);
-  }, [seconds, onComplete]);
 
-  const mm = Math.floor(remaining / 60).toString().padStart(2, '0');
-  const ss = (remaining % 60).toString().padStart(2, '0');
+    return () => clearInterval(intervalId);
+  }, [duration]); // Only re-run the effect if the total duration changes
 
-  return <div className="text-sm text-gray-400">Time left: {mm}:{ss}</div>;
+  const minutes = Math.floor(remaining / 60).toString().padStart(2, '0');
+  const seconds = (remaining % 60).toString().padStart(2, '0');
+
+  return (
+    <div className="text-sm text-blue-300 font-mono bg-slate-700/50 rounded px-2 py-1">
+      Time: {minutes}:{seconds}
+    </div>
+  );
 }
 
