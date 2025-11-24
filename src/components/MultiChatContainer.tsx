@@ -22,8 +22,9 @@ export default function MultiChatContainer({ fid }: Props) {
     error,
     mutate,
   } = useSWR(`/api/match/active?fid=${fid}`, fetcher, {
-    refreshInterval: 3000,
+    refreshInterval: 1000, // Faster polling for better responsiveness
     refreshWhenHidden: false,
+    revalidateOnFocus: true,
   });
 
   // Initialize votes from match data
@@ -77,17 +78,24 @@ export default function MultiChatContainer({ fid }: Props) {
   const handleMatchComplete = useCallback(
     async (matchId: string) => {
       try {
-        await fetch("/api/match/vote", {
+        const response = await fetch("/api/match/vote", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ matchId, fid }),
         });
+
+        if (!response.ok) {
+          console.error("Failed to lock vote:", await response.text());
+        }
       } catch (error) {
         console.error("Error locking vote:", error);
       }
 
-      // Refresh to get new matches
-      setTimeout(() => mutate(), 1000);
+      // Immediately refresh to get new matches
+      await mutate();
+
+      // Also refresh after a short delay to catch any async updates
+      setTimeout(() => mutate(), 500);
     },
     [fid, mutate],
   );
