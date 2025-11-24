@@ -14,7 +14,7 @@ Frontend:  Next.js 15 + React 19 + TypeScript + Tailwind CSS 4
 Backend:   Next.js API Routes (serverless)
 Auth:      @farcaster/miniapp-sdk 0.2.1
 Game Logic: In-memory state (Map-based, no database)
-APIs:      Neynar SDK (content scraping), Claude API (bot intelligence)
+APIs:      Neynar SDK (content scraping), Venice AI (bot intelligence via OpenAI SDK)
 Hosting:   Vercel (free tier)
 ```
 
@@ -30,7 +30,7 @@ detective/
 │   ├── lib/
 │   │   ├── gameState.ts       # ✓ In-memory game state store
 │   │   ├── neynar.ts          # ✓ Neynar API client & helpers
-│   │   └── claude.ts          # ✓ Claude API for bot responses
+│   │   └── inference.ts       # ✓ Venice AI for bot responses
 │   ├── hooks/                 # Custom React hooks (Phase 2)
 │   └── styles/
 │       └── globals.css        # ✓ Tailwind + custom styles
@@ -58,11 +58,11 @@ detective/
   - Neynar score validation (> 0.8 quality filter)
   - Bulk user fetching
 
-- **Claude Bot Logic** (`claude.ts`):
+### Venice AI Bot Logic (`inference.ts`):
   - Generate context-aware bot responses
   - System prompt injection with user's recent posts
   - Response validation & tone extraction
-  - ~$0.003 cost per bot response
+  - Privacy-first; OpenAI-compatible client
 
 ### Build Status
 ✅ TypeScript compilation successful  
@@ -106,7 +106,7 @@ detective/
    cp .env.example .env.local
    # Add your API keys:
    # NEYNAR_API_KEY=...
-   # ANTHROPIC_API_KEY=...
+   # VENICE_API_KEY=...
    ```
 
 2. **Install & develop**:
@@ -135,7 +135,7 @@ The app will auto-detect Next.js and configure properly.
 
 **Per game cycle** (50 players, 5 rounds each = 250 bot responses):
 - Neynar API: Free tier (~200 API calls well under 10k/day limit)
-- Claude API: ~$0.75 (250 responses × $0.003)
+- Venice AI: low per-game cost at this scale
 - Vercel: Free tier
 - **Total: <$1/game**
 
@@ -146,7 +146,7 @@ Budget for 10 games/month: **~$10** + operational overhead.
 1. **No Database**: Game state in-memory (50 players = ~1-2 MB RAM). Acceptable for MVP.
 2. **HTTP Polling**: Simpler than WebSocket for 50 concurrent users.
 3. **Neynar Score > 0.8**: Filters out bots and low-quality accounts upfront.
-4. **Claude 3.5 Sonnet**: Best price/performance ratio for impersonation task.
+4. **Venice AI (Llama 3.3 70B)**: Privacy-first inference with strong impersonation quality.
 5. **Vercel KV (Phase 3)**: Optional for multi-instance sync if needed later.
 
 ## Git Commits
@@ -158,7 +158,7 @@ Budget for 10 games/month: **~$10** + operational overhead.
 As we build Phase 2, we may discover:
 - Actual Farcaster SDK usage patterns (the docs show multiple approaches)
 - Neynar API response formats & latency
-- Claude's effectiveness at impersonating diverse writing styles
+- Venice AI's effectiveness at impersonating diverse writing styles
 - HTTP polling latency on mobile (may switch to WebSocket)
 
 These will inform Phase 2-3 refinements.
