@@ -66,9 +66,12 @@ export async function POST(request: Request) {
                 }
 
                 const userData = await userLookupResponse.json();
-                const fid = userData.result?.user?.fid;
+                // Handle different API response structures (v1 vs v2 or changes)
+                const user = userData.user || userData.result?.user;
+                const fid = user?.fid;
 
                 if (!fid) {
+                    console.error(`Could not find FID for ${username}. Response:`, JSON.stringify(userData));
                     errors.push({ username, error: "Could not retrieve FID" });
                     continue;
                 }

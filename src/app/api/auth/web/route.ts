@@ -20,7 +20,7 @@ export async function GET(request: Request) {
 
     // Lookup username to get FID via Neynar
     const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
-    
+
     if (!NEYNAR_API_KEY) {
       // Dev mode: Return mock data
       const mockFid = Math.floor(Math.random() * 10000);
@@ -55,9 +55,11 @@ export async function GET(request: Request) {
     }
 
     const userData = await userLookupResponse.json();
-    const fid = userData.result?.user?.fid;
+    const user = userData.user || userData.result?.user;
+    const fid = user?.fid;
 
     if (!fid) {
+      console.error(`Could not find FID for ${username}. Response:`, JSON.stringify(userData));
       return NextResponse.json(
         { error: "Could not retrieve user FID" },
         { status: 404 }

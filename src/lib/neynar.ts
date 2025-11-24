@@ -72,12 +72,16 @@ export async function getFarcasterUserData(
 
     // 3. Fetch user's recent casts
     const feedResponse = await fetch(`https://api.neynar.com/v2/farcaster/feed?feed_type=filter&filter_type=fids&fids=${fid}&limit=15`, {
-        method: "GET",
-        headers: { "Content-Type": "application/json", api_key: NEYNAR_API_KEY },
+      method: "GET",
+      headers: { "Content-Type": "application/json", api_key: NEYNAR_API_KEY },
     });
     if (!feedResponse.ok) throw new Error(`Neynar feed API error: ${feedResponse.statusText}`);
     const feedData = await feedResponse.json();
     const recentCasts: { text: string }[] = feedData.casts.map((c: any) => ({ text: c.text }));
+
+    if (recentCasts.length < 5) {
+      return { isValid: false, userProfile: null, recentCasts: [], style: "" };
+    }
 
     // 4. Infer writing style from casts
     const style = await inferWritingStyle(recentCasts.map(c => c.text));

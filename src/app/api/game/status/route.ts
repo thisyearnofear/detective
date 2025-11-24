@@ -6,9 +6,19 @@ import { gameManager } from "@/lib/gameState";
  * API route to get the current status of the game cycle.
  * Handles GET requests.
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const fidParam = searchParams.get("fid");
     const fullState = gameManager.getGameState();
+
+    let isRegistered = false;
+    if (fidParam) {
+      const fid = parseInt(fidParam, 10);
+      if (!isNaN(fid)) {
+        isRegistered = fullState.players.has(fid);
+      }
+    }
 
     // Return a simplified version of the state for clients
     const clientState = {
@@ -17,6 +27,7 @@ export async function GET() {
       playerCount: fullState.players.size,
       registrationEnds: fullState.registrationEnds,
       gameEnds: fullState.gameEnds,
+      isRegistered, // Add this field
     };
 
     return NextResponse.json(clientState);
