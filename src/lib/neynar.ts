@@ -22,7 +22,7 @@ interface FarcasterUserData {
  * @returns A comprehensive object with all user data for the game.
  */
 export async function getFarcasterUserData(
-  fid: number
+  fid: number,
 ): Promise<FarcasterUserData> {
   // For local development without an API key, return mock data.
   if (!NEYNAR_API_KEY) {
@@ -40,28 +40,37 @@ export async function getFarcasterUserData(
         pfpUrl: "https://i.imgur.com/vL43u65.jpg",
       },
       recentCasts: mockCasts,
-      style: await inferWritingStyle(mockCasts.map(c => c.text)),
+      style: await inferWritingStyle(mockCasts.map((c) => c.text)),
     };
   }
 
   try {
     // 1. Fetch user profile for validation and basic info
-    const userResponse = await fetch(`https://api.neynar.com/v2/farcaster/user/bulk?fids=${fid}`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json", api_key: NEYNAR_API_KEY },
-    });
+    const userResponse = await fetch(
+      `https://api.neynar.com/v2/farcaster/user/bulk?fids=${fid}`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          api_key: NEYNAR_API_KEY,
+        },
+      },
+    );
 
-    if (!userResponse.ok) throw new Error(`Neynar user API error: ${userResponse.statusText}`);
+    if (!userResponse.ok)
+      throw new Error(`Neynar user API error: ${userResponse.statusText}`);
     const userData = await userResponse.json();
     const user = userData.users?.[0];
 
-    if (!user) return { isValid: false, userProfile: null, recentCasts: [], style: "" };
+    if (!user)
+      return { isValid: false, userProfile: null, recentCasts: [], style: "" };
 
     // 2. Perform validation (using mock logic as before)
     const mockScore = user.follower_count > 100 ? 0.9 : 0.7;
     const isValid = mockScore >= NEYNAR_SCORE_THRESHOLD;
 
-    if (!isValid) return { isValid: false, userProfile: null, recentCasts: [], style: "" };
+    if (!isValid)
+      return { isValid: false, userProfile: null, recentCasts: [], style: "" };
 
     const userProfile: UserProfile = {
       fid: user.fid,
@@ -70,24 +79,33 @@ export async function getFarcasterUserData(
       pfpUrl: user.pfp_url,
     };
 
-    // 3. Fetch user's recent casts
-    const feedResponse = await fetch(`https://api.neynar.com/v2/farcaster/feed?feed_type=filter&filter_type=fids&fids=${fid}&limit=15`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json", api_key: NEYNAR_API_KEY },
-    });
-    if (!feedResponse.ok) throw new Error(`Neynar feed API error: ${feedResponse.statusText}`);
+    // 3. Fetch user's recent casts (more data for better impersonation)
+    const feedResponse = await fetch(
+      `https://api.neynar.com/v2/farcaster/feed?feed_type=filter&filter_type=fids&fids=${fid}&limit=50`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          api_key: NEYNAR_API_KEY,
+        },
+      },
+    );
+    if (!feedResponse.ok)
+      throw new Error(`Neynar feed API error: ${feedResponse.statusText}`);
     const feedData = await feedResponse.json();
-    const recentCasts: { text: string }[] = feedData.casts.map((c: any) => ({ text: c.text }));
+    const recentCasts: { text: string }[] = feedData.casts.map((c: any) => ({
+      text: c.text,
+    }));
 
-    if (recentCasts.length < 5) {
+    // Require at least 10 casts for better pattern learning
+    if (recentCasts.length < 10) {
       return { isValid: false, userProfile: null, recentCasts: [], style: "" };
     }
 
     // 4. Infer writing style from casts
-    const style = await inferWritingStyle(recentCasts.map(c => c.text));
+    const style = await inferWritingStyle(recentCasts.map((c) => c.text));
 
     return { isValid: true, userProfile, recentCasts, style };
-
   } catch (error) {
     console.error("Error fetching Farcaster user data:", error);
     return { isValid: false, userProfile: null, recentCasts: [], style: "" };

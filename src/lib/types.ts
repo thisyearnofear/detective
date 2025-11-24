@@ -59,6 +59,15 @@ export interface Match {
   voteHistory: VoteChange[]; // Track all vote changes
   voteLocked: boolean; // Locked when chat ends
   lastPlayerMessageTime: number; // For inactivity tracking
+  typingIndicator?: TypingIndicator; // Bot typing state
+}
+
+// Typing indicator state for realistic bot behavior
+export interface TypingIndicator {
+  isTyping: boolean;
+  startTime: number;
+  endTime: number;
+  hasPauses?: boolean;
 }
 
 // Tracks each vote change during a match
