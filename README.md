@@ -1,62 +1,215 @@
-# DETECTIVE
+# Detective - Farcaster Mini App
 
-[![A dective](/readme-images/detective.png)](https://detective.stefanbohacek.com/)
+🔍 **An AI-powered social deduction game on Farcaster**
 
-## About the game
+Can you tell if you're chatting with a real person or an AI bot trained on their posts?
 
-Detective is a game created by [Stefan Bohacek](https://stefanbohacek.online/@stefan). The rules are fairly simple:
+## About
 
-1. When the game starts, players get randomly assigned the role of a Detective, or an Impostor.
-2. There is a third role in the game, the Robot, which is a chat bot powered by [BOT libre!](https://www.botlibre.com/).
-3. The Impostor will always be paired with another human player, the Detective.
-4. Impostor's goal is to deceive the Detective into thinking they are speaking with the Robot (chat bot).
-5. As a Detective, player needs to correctly guess whether they are speaking with the Impostor. This is done by saying `you are an impostor` or `you are a robot`.
+Detective is a Farcaster mini app where players engage in short conversations and guess whether they're speaking with another real user or an intelligent bot. The bot is trained on the player's recent Farcaster posts, making the impersonation as authentic as possible.
 
-Play the game a few times, and observe how the Robot answers questions. As an Impostor, you will want to mimic those responses. If you're playing as a Detective, well, good luck, I guess!
+**Current Status**: Phase 1 (Foundation) Complete ✓  
+**Next**: Phase 2 (AI Integration & Polish) - 1 week  
+**Target Launch**: Early December 2025
 
+## Quick Start
 
-[![Not even trying](/readme-images/doing-it-wrong.png)](https://detective.stefanbohacek.com/log?id=878)
+### Prerequisites
+- Node.js 18+ (LTS recommended)
+- npm/yarn/pnpm
+- API keys:
+  - [Neynar](https://neynar.com/app/api-keys)
+  - [Anthropic Claude](https://console.anthropic.com/)
 
-The chat bot can learn from its input, but note that this feature can be temporarily disabled at times.
+### Setup
 
+1. **Clone and install**:
+   ```bash
+   git clone https://github.com/thisyearnofear/detective.git
+   cd detective
+   npm install
+   ```
 
-## Join the development (please!)
+2. **Configure environment**:
+   ```bash
+   cp .env.example .env.local
+   ```
+   Then add your API keys to `.env.local`:
+   ```
+   NEYNAR_API_KEY=your_key_here
+   ANTHROPIC_API_KEY=your_key_here
+   ```
 
-***Personal note from the game's creator:***
+3. **Run locally**:
+   ```bash
+   npm run dev
+   # Visit http://localhost:3000
+   ```
 
-Alright, here's the deal:
+4. **Build for production**:
+   ```bash
+   npm run build
+   npm start
+   ```
 
-I am too busy working on [Botwiki](https://botwiki.org/) and some other projects. I created the Detective game in May 2015 as a small side project, while learning node.js. It was quite popular, getting around 100,000 plays within the first 2-3 days.
+## Architecture
 
-I was meaning to add some extra features, but seeing the interest dwindle -- and I am generally a busy person, I ended up mostly abandoning the game.
+### Tech Stack
+- **Frontend**: Next.js 15 + React 19 + TypeScript + Tailwind CSS
+- **Backend**: Next.js API Routes (serverless)
+- **Authentication**: Farcaster Mini App SDK
+- **Game State**: In-memory (no database required for MVP)
+- **APIs**: Neynar (Farcaster data), Claude (bot intelligence)
+- **Hosting**: Vercel (free tier)
 
-Fast forward to April 2016. Someone posted the game on reddit and the game was played over 16,000 times in the past day or two. I'm very happy to see people are still interested and I would love to at least add the scoreboard.
-
-Interested in helping? Here's a few assorted notes (I am typing this fast to get the code online while people are still playing the game):
-
-### Install the Detective game locally
-
-1. First, make sure you have node.js installed and a MySQL server running.
-2. Go ahead and import the database `detective.sql` saved in the `db` folder.
-3. Make sure that you will be able to connect to the DB with this code:
-```js
-var connection = mysql.createConnection({
-  host     : 'localhost',
-  user     : 'root',
-  password : process.env.DB_PASSWORD,
-  database : 'detective_db'
-});
+### Game Flow
 ```
-4. `npm install`
-5. `npm install gulp-nodemon gulp-sourcemaps --savedev`
-6. `gulp`
-7. Open `http://localhost:4000/play` in your browser (or `http://localhost:4000/` to see the landing page, but note that the Play link doesn't *quite* work).
-8. To edit the front end JavaScript, go to the `/src/scripts` folder, bump the version of the `scripts.1.x.js` file (also update the file `/views/play.handlebars` so that it loads the updated version).
+Registration (Neynar score > 0.8)
+    ↓
+Match Assignment (Real player or bot)
+    ↓
+4-minute Chat (HTTP polling)
+    ↓
+Voting (Real or Bot?)
+    ↓
+Scoring & Leaderboard
+    ↓
+Repeat 5 times per game cycle
+```
 
-If you have any questions, try [stefan@stefanbohacek.com](mailto:stefan@stefanbohacek.com), [@stefanbohacek](https://twitter.com/stefanbohacek), or join [botmakers.org](https://botmakers.org/) and look for **@stefan**.
+## Project Structure
 
-Some of the code really needs to be cleaned up: see hacks such as using a class `shifted-1`, or how some of the code really should be modularized (for example the `badWords`).
+```
+src/
+├── app/                    # Next.js pages & API routes
+│   ├── layout.tsx         # Root layout
+│   ├── page.tsx           # Landing page
+│   └── api/               # API endpoints (Phase 2)
+├── components/            # Reusable React components (Phase 2)
+├── lib/
+│   ├── gameState.ts       # In-memory game state store
+│   ├── neynar.ts          # Neynar API client
+│   └── claude.ts          # Claude bot logic
+├── hooks/                 # Custom React hooks (Phase 2)
+└── styles/
+    └── globals.css        # Tailwind styles
+```
 
-Feel free to [open a new issue](https://github.com/stefanbohacek/detective/issues/new) if you notice anything that should be fixed, or would like to see a new feature added.
+## Development Roadmap
 
-Thanks!
+### Phase 1: MVP Foundation (1-2 weeks) ✓
+- [x] Next.js project setup with modern tech stack
+- [x] In-memory game state store
+- [x] Neynar API integration (user fetch, cast scraping, score validation)
+- [x] Claude API integration (bot response generation)
+- [x] Landing page & error handling
+
+### Phase 2: AI Integration & Polish (1 week)
+- [ ] API routes for game flow (register, match, chat, vote, leaderboard)
+- [ ] React components (chat UI, voting, leaderboard, timer)
+- [ ] Claude prompt engineering & optimization
+- [ ] User testing with 5-10 beta players
+- [ ] Mobile responsiveness & UX polish
+
+### Phase 3: Multi-Game Support (1 week)
+- [ ] Game cycle lifecycle management
+- [ ] Basic analytics & cost tracking
+- [ ] Optional: Vercel KV for multi-instance sync
+- [ ] Production deployment setup
+
+### Phase 4: Soft Launch (1 week)
+- [ ] First public game cycle (50 players)
+- [ ] Community announcement & Discord/Twitter awareness
+- [ ] Real-time monitoring & bug fixes
+- [ ] Leaderboard & results sharing
+
+### Phase 5: Growth & Refinement (Ongoing)
+- [ ] Iterative improvements based on user feedback
+- [ ] Seasonal themes & special events
+- [ ] Optional: NFT badges for top scorers
+- [ ] Analytics dashboard
+
+## Game Mechanics
+
+### Registration Phase
+- Users must have **Neynar score > 0.8** (filters bots/low-quality accounts)
+- Hard cap: **50 players per cycle**
+- System scrapes 30 recent casts per user for bot training
+
+### Match Phase
+- Duration: **4 minutes** per match
+- 5 matches per player per cycle
+- **50% real users, 50% bots** in random assignment
+- Messages exchanged via HTTP polling (3s interval)
+
+### Bot Intelligence
+- Claude 3.5 Sonnet fine-tuned with user's recent posts
+- System prompt injects:
+  - Username & display name
+  - Top 10 recent casts
+  - Inferred tone & writing style
+  - Instruction to stay under 240 chars (Farcaster limit)
+
+### Voting & Scoring
+- After each match: Guess "Real" or "Bot"
+- Accuracy calculated per user
+- Leaderboard sorted by:
+  1. Accuracy (%)
+  2. Speed (first to correct answer wins tiebreaker)
+
+## Costs
+
+**Per game cycle** (50 players, 5 rounds = 250 bot responses):
+- Neynar API: Free tier (10k req/day limit, we use ~200)
+- Claude API: ~$0.75 (250 responses × $0.003/response)
+- Vercel: Free tier
+- **Total: <$1 per game**
+
+**Budget estimate**: $50-100/month for 10 games (assuming weekly cycles)
+
+## API Reference
+
+### Game Management
+- `POST /api/game/register` - Register user for game cycle
+- `GET /api/game/status` - Get current game state
+- `GET /api/game/cycles` - List available cycles
+
+### Gameplay
+- `GET /api/match/next` - Get next opponent (real or bot)
+- `POST /api/chat/send` - Send message (relay or generate bot response)
+- `GET /api/chat/poll` - Poll for new messages
+- `POST /api/vote/submit` - Submit guess & record vote
+- `GET /api/leaderboard/current` - Get current rankings
+
+## Contributing
+
+Contributions welcome! Please:
+1. Fork the repo
+2. Create a feature branch (`git checkout -b feature/amazing-thing`)
+3. Commit your changes (`git commit -am 'Add amazing thing'`)
+4. Push to the branch (`git push origin feature/amazing-thing`)
+5. Open a Pull Request
+
+## License
+
+MIT License - see [LICENSE.md](LICENSE.md)
+
+## Support
+
+- 🐛 **Bugs**: [Open an issue](https://github.com/thisyearnofear/detective/issues)
+- 💬 **Questions**: Tweet [@stefanbohacek](https://warpcast.com/stefan) or mention [@detective](https://warpcast.com/~/channel/detective)
+- 📊 **Farcaster**: Join the [Detective channel](https://warpcast.com/~/channel/detective)
+
+## Acknowledgments
+
+- Original Detective game concept: [Stefan Bohacek](https://stefanbohacek.online/)
+- Farcaster mini app infrastructure
+- Neynar API & community
+- Anthropic Claude for the AI brain
+
+---
+
+**Built for Farcaster. Made with ❤️**
+
+See [ROADMAP.md](ROADMAP.md) for detailed development plan.  
+See [MIGRATION_SUMMARY.md](MIGRATION_SUMMARY.md) for migration notes.
