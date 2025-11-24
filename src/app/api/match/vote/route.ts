@@ -1,0 +1,146 @@
+// src/app/api/match/vote/route.ts
+import { NextResponse } from "next/server";
+import { gameManager } from "@/lib/gameState";
+import { NextRequest } from "next/server";
+
+/**
+ * API route to update the vote for a specific match.
+ * Can be called multiple times during a match to toggle the vote.
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { matchId, vote, fid } = body;
+
+    if (!matchId || !vote || !fid) {
+      return NextResponse.json(
+        { error: "matchId, vote, and fid are required." },
+        { status: 400 }
+      );
+    }
+
+    if (vote !== "REAL" && vote !== "BOT") {
+      return NextResponse.json(
+        { error: "Vote must be either 'REAL' or 'BOT'." },
+        { status: 400 }
+      );
+    }
+
+    const playerFid = parseInt(fid, 10);
+    if (isNaN(playerFid)) {
+      return NextResponse.json({ error: "Invalid FID." }, { status: 400 });
+    }
+
+    // Verify the match belongs to this player
+    const match = gameManager.getMatch(matchId);
+    if (!match) {
+      return NextResponse.json(
+        { error: "Match not found." },
+        { status: 404 }
+      );
+    }
+
+    if (match.player.fid !== playerFid) {
+      return NextResponse.json(
+        { error: "This match does not belong to the specified player." },
+        { status: 403 }
+      );
+    }
+
+    // Update the vote
+    const updatedMatch = gameManager.updateMatchVote(matchId, vote);
+
+    if (!updatedMatch) {
+      return NextResponse.json(
+        { error: "Could not update vote. Match may be locked." },
+        { status: 400 }
+      );
+    }
+
+    // Check if we should auto-lock (time is up)
+    const now = Date.now();
+    let isCorrect = null;
+
+    if (now >= updatedMatch.endTime && !updatedMatch.voteLocked) {
+      isCorrect = gameManager.lockMatchVote(matchId);
+    }
+
+    return NextResponse.json({
+      success: true,
+      matchId,
+      currentVote: updatedMatch.currentVote,
+      voteLocked: updatedMatch.voteLocked,
+      voteChanges: updatedMatch.voteHistory.length,
+      isCorrect, // Will be null unless vote was just locked
+    });
+  } catch (error) {
+    console.error("Error updating vote:", error);
+    return NextResponse.json(
+      { error: "An unexpected error occurred." },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * API route to lock the vote for a match when time expires.
+ * This is called automatically by the client when the timer runs out.
+ */
+export async function PUT(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { matchId, fid } = body;
+
+    if (!matchId || !fid) {
+      return NextResponse.json(
+        { error: "matchId and fid are required." },
+        { status: 400 }
+      );
+    }
+
+    const playerFid = parseInt(fid, 10);
+    if (isNaN(playerFid)) {
+      return NextResponse.json({ error: "Invalid FID." }, { status: 400 });
+    }
+
+    // Verify the match belongs to this player
+    const match = gameManager.getMatch(matchId);
+    if (!match) {
+      return NextResponse.json(
+        { error: "Match not found." },
+        { status: 404 }
+      );
+    }
+
+    if (match.player.fid !== playerFid) {
+      return NextResponse.json(
+        { error: "This match does not belong to the specified player." },
+        { status: 403 }
+      );
+    }
+
+    // Lock the vote
+    const isCorrect = gameManager.lockMatchVote(matchId);
+
+    if (isCorrect === null) {
+      return NextResponse.json(
+        { error: "Vote already locked or match not found." },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      matchId,
+      isCorrect,
+      actualType: match.opponent.type,
+      finalVote: match.currentVote || "REAL",
+    });
+  } catch (error) {
+    console.error("Error locking vote:", error);
+    return NextResponse.json(
+      { error: "An unexpected error occurred." },
+      { status: 500 }
+    );
+  }
+}
