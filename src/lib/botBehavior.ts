@@ -53,14 +53,17 @@ export function calculateResponseTiming(
   messageLength: number,
   isFirstMessage: boolean,
   messageHistory: ChatMessage[],
-  userStyle: string
+  userStyle: string,
 ): ResponseTiming {
   // Determine typing speed based on user style
   let speedProfile = TYPING_SPEEDS.average;
 
   if (userStyle.includes("brief") || userStyle.includes("terse")) {
     speedProfile = TYPING_SPEEDS.fast;
-  } else if (userStyle.includes("thoughtful") || userStyle.includes("detailed")) {
+  } else if (
+    userStyle.includes("thoughtful") ||
+    userStyle.includes("detailed")
+  ) {
     speedProfile = TYPING_SPEEDS.slow;
   } else if (messageHistory.length > 3) {
     // Speed up as conversation progresses
@@ -68,7 +71,8 @@ export function calculateResponseTiming(
   }
 
   // Calculate base typing duration
-  const charsPerMinute = speedProfile.min + Math.random() * (speedProfile.max - speedProfile.min);
+  const charsPerMinute =
+    speedProfile.min + Math.random() * (speedProfile.max - speedProfile.min);
   const charsPerMs = charsPerMinute / 60000;
   const baseTypingDuration = messageLength / charsPerMs;
 
@@ -103,7 +107,7 @@ export function calculateResponseTiming(
 export function addImperfections(
   message: string,
   userStyle: string,
-  isMobile: boolean = Math.random() < 0.7 // 70% on mobile
+  isMobile: boolean = Math.random() < 0.7, // 70% on mobile
 ): string {
   // Determine imperfection probability based on style
   let typoChance = 0.05; // 5% base chance
@@ -122,15 +126,16 @@ export function addImperfections(
 
   // Add typos
   if (Math.random() < typoChance) {
-    const words = result.split(' ');
+    const words = result.split(" ");
     const wordIndex = Math.floor(Math.random() * words.length);
     const word = words[wordIndex].toLowerCase();
 
-    const typoPattern = TYPO_PATTERNS.find(p => p.original === word);
+    const typoPattern = TYPO_PATTERNS.find((p) => p.original === word);
     if (typoPattern && typoPattern.typos.length > 0) {
-      const typo = typoPattern.typos[Math.floor(Math.random() * typoPattern.typos.length)];
+      const typo =
+        typoPattern.typos[Math.floor(Math.random() * typoPattern.typos.length)];
       words[wordIndex] = words[wordIndex].replace(word, typo);
-      result = words.join(' ');
+      result = words.join(" ");
     }
   }
 
@@ -150,21 +155,23 @@ export function addImperfections(
       () => result.replace(/\.$/, ""), // Missing period
       () => result.replace(/\?$/, ""), // Missing question mark
       () => result.toLowerCase(), // No capitalization
-      () => result.replace(/^./, c => c.toLowerCase()), // No initial cap
+      () => result.replace(/^./, (c) => c.toLowerCase()), // No initial cap
       () => result + "..", // Double period
       () => result.replace(/\s,/g, ","), // No space after comma
     ];
 
-    const issue = punctuationIssues[Math.floor(Math.random() * punctuationIssues.length)];
+    const issue =
+      punctuationIssues[Math.floor(Math.random() * punctuationIssues.length)];
     result = issue();
   }
 
   // Sometimes people don't finish their
-  if (Math.random() < 0.02) { // 2% chance
-    const words = result.split(' ');
+  if (Math.random() < 0.02) {
+    // 2% chance
+    const words = result.split(" ");
     if (words.length > 3) {
       words.pop();
-      result = words.join(' ');
+      result = words.join(" ");
     }
   }
 
@@ -177,20 +184,27 @@ export function addImperfections(
 export function shouldUseEmojis(
   userStyle: string,
   messageHistory: ChatMessage[],
-  isFirstMessage: boolean
+  isFirstMessage: boolean,
 ): boolean {
   // Base emoji probability from style analysis
   let emojiProbability = 0.1; // 10% base
 
   if (userStyle.includes("emoji") || userStyle.includes("expressive")) {
     emojiProbability = 0.6;
-  } else if (userStyle.includes("professional") || userStyle.includes("formal")) {
+  } else if (
+    userStyle.includes("professional") ||
+    userStyle.includes("formal")
+  ) {
     emojiProbability = 0.02;
   }
 
   // Check if human has used emojis
-  const humanMessages = messageHistory.filter(m => m.sender.fid !== messageHistory[0]?.sender.fid);
-  const humanUsedEmojis = humanMessages.some(m => /[\u{1F300}-\u{1F9FF}]/u.test(m.text));
+  const humanMessages = messageHistory.filter(
+    (m) => m.sender.fid !== messageHistory[0]?.sender.fid,
+  );
+  const humanUsedEmojis = humanMessages.some((m) =>
+    /[\u{1F300}-\u{1F9FF}]/u.test(m.text),
+  );
 
   if (humanUsedEmojis) {
     // Mirror behavior slightly
@@ -208,23 +222,29 @@ export function shouldUseEmojis(
 /**
  * Generate realistic emoji usage
  */
-export function addEmojis(message: string, conservative: boolean = true): string {
-  const commonEmojis = ["😅", "👍", "💯", "🔥", "👀", "🤔", "😂", "✨", "🚀"];
-  const rareEmojis = ["🎯", "⚡", "🌟", "💪", "🙌", "🤝", "📈", "💡", "🎉"];
+export function addEmojis(
+  message: string,
+  conservative: boolean = true,
+): string {
+  // Use the same emojis available in the UI picker
+  const commonEmojis = ["🦄", "🎩", "🌈", "🟣", "🚀", "👀", "🔥", "✨"];
+  const rareEmojis = ["🫡", "💯", "🤝", "💜", "🌟", "⚡", "🎯", "💎"];
 
   if (conservative) {
     // Add max 1 emoji, usually at the end
     if (Math.random() < 0.7) {
       // 70% chance at end
-      const emoji = commonEmojis[Math.floor(Math.random() * commonEmojis.length)];
+      const emoji =
+        commonEmojis[Math.floor(Math.random() * commonEmojis.length)];
       return `${message} ${emoji}`;
     } else {
       // 30% chance inline
-      const words = message.split(' ');
+      const words = message.split(" ");
       const position = Math.floor(Math.random() * words.length);
-      const emoji = commonEmojis[Math.floor(Math.random() * commonEmojis.length)];
+      const emoji =
+        commonEmojis[Math.floor(Math.random() * commonEmojis.length)];
       words.splice(position, 0, emoji);
-      return words.join(' ');
+      return words.join(" ");
     }
   } else {
     // Power user mode - multiple emojis
@@ -237,10 +257,10 @@ export function addEmojis(message: string, conservative: boolean = true): string
       if (Math.random() < 0.5 && i === emojiCount - 1) {
         result += ` ${emoji}`;
       } else {
-        const words = result.split(' ');
+        const words = result.split(" ");
         const position = Math.floor(Math.random() * words.length);
         words.splice(position, 0, emoji);
-        result = words.join(' ');
+        result = words.join(" ");
       }
     }
     return result;
@@ -250,16 +270,28 @@ export function addEmojis(message: string, conservative: boolean = true): string
 /**
  * Pattern detection for common Farcaster behaviors
  */
-export function detectConversationPattern(messageHistory: ChatMessage[]): string {
-  const lastMessage = messageHistory[messageHistory.length - 1]?.text.toLowerCase() || "";
+export function detectConversationPattern(
+  messageHistory: ChatMessage[],
+): string {
+  const lastMessage =
+    messageHistory[messageHistory.length - 1]?.text.toLowerCase() || "";
 
   // Common patterns and appropriate response styles
-  if (lastMessage.includes("gm")) return "greeting";
-  if (lastMessage.includes("wdyt") || lastMessage.includes("thoughts?")) return "opinion";
+  if (lastMessage.includes("gm") || lastMessage.includes("gn"))
+    return "greeting";
+  if (lastMessage.includes("wdyt") || lastMessage.includes("thoughts?"))
+    return "opinion";
   if (lastMessage.includes("?")) return "question";
-  if (lastMessage.includes("lol") || lastMessage.includes("lmao")) return "humor";
-  if (lastMessage.includes("agree") || lastMessage.includes("disagree")) return "discussion";
-  if (lastMessage.includes("wen") || lastMessage.includes("soon")) return "speculation";
+  if (lastMessage.includes("lol") || lastMessage.includes("lmao"))
+    return "humor";
+  if (lastMessage.includes("agree") || lastMessage.includes("disagree"))
+    return "discussion";
+  if (lastMessage.includes("wen") || lastMessage.includes("soon"))
+    return "speculation";
+  if (lastMessage.includes("wagmi") || lastMessage.includes("lfg"))
+    return "hype";
+  if (lastMessage.includes("fren") || lastMessage.includes("ser"))
+    return "crypto-native";
 
   return "general";
 }
@@ -290,7 +322,9 @@ export function generateTypingPattern(timing: ResponseTiming): TypingIndicator {
     indicator.pauseTimes = [];
 
     for (let i = 0; i < pauseCount; i++) {
-      const pauseStart = timing.initialDelay + (timing.typingDuration * (i + 1) / (pauseCount + 1));
+      const pauseStart =
+        timing.initialDelay +
+        (timing.typingDuration * (i + 1)) / (pauseCount + 1);
       const pauseDuration = 500 + Math.random() * 1500; // 0.5-2 seconds
       indicator.pauseTimes.push({
         start: now + pauseStart,
@@ -318,12 +352,14 @@ export function shouldAddRedHerring(isBot: boolean): boolean {
 export function applyRedHerring(message: string, isBot: boolean): string {
   if (isBot) {
     // Make bot response too perfect
-    return message
-      .split('. ')
-      .map(s => s.charAt(0).toUpperCase() + s.slice(1))
-      .join('. ')
-      .replace(/\s+/g, ' ')
-      .trim() + '.';
+    return (
+      message
+        .split(". ")
+        .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+        .join(". ")
+        .replace(/\s+/g, " ")
+        .trim() + "."
+    );
   } else {
     // Make human response bot-like
     const templates = [

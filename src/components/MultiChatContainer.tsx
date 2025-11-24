@@ -284,6 +284,9 @@ export default function MultiChatContainer({ fid }: Props) {
           <li>• Your vote locks when the timer ends</li>
           <li>• Manage both conversations to maximize your score</li>
           <li>
+            • Use the 🦄 button for quick emoji access (or type :unicorn:)
+          </li>
+          <li>
             • You'll face {matchData?.playerPool?.totalOpponents || "multiple"}{" "}
             different opponents
           </li>
