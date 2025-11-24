@@ -71,6 +71,15 @@ export async function GET(request: NextRequest) {
       Math.ceil(totalOpponents / matchesPerRound),
     );
 
+    // Calculate leaderboard position for this player (only available after game ends)
+    let playerRank = 0;
+    if (gameState.leaderboard && gameState.leaderboard.length > 0) {
+      const rankIndex = gameState.leaderboard.findIndex(
+        (entry) => entry.player.fid === playerFid
+      );
+      playerRank = rankIndex >= 0 ? rankIndex + 1 : 0;
+    }
+
     return NextResponse.json({
       matches: sanitizedMatches,
       slots,
@@ -83,6 +92,8 @@ export async function GET(request: NextRequest) {
         totalBots,
         totalOpponents,
       },
+      playerRank,
+      gameState: gameState.state,
     });
   } catch (error) {
     console.error("Error fetching active matches:", error);

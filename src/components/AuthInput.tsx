@@ -44,17 +44,17 @@ export default function AuthInput({ onAuthSuccess }: Props) {
     };
 
     return (
-        <div className="bg-slate-800 rounded-lg p-8 mb-8">
-            <div className="text-center mb-6">
-                <h2 className="text-2xl font-bold mb-2">Welcome to Detective</h2>
-                <p className="text-gray-400">
+        <div className="space-y-6">
+            <div className="text-center">
+                <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2 drop-shadow-lg">Welcome to Detective</h2>
+                <p className="text-sm sm:text-base text-gray-200 drop-shadow-md">
                     Enter your Farcaster username to play
                 </p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                    <label htmlFor="username" className="block text-sm font-medium text-gray-300 mb-2">
+                    <label htmlFor="username" className="block text-sm font-medium text-gray-200 mb-2 drop-shadow-sm">
                         Farcaster Username
                     </label>
                     <input
@@ -63,13 +63,13 @@ export default function AuthInput({ onAuthSuccess }: Props) {
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
                         placeholder="e.g., dwr, v, jessepollak"
-                        className="w-full bg-slate-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full bg-slate-700/70 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all border border-slate-600/70"
                         disabled={isLoading}
                     />
                 </div>
 
                 {error && (
-                    <div className="bg-red-900/20 border border-red-500 rounded-lg p-3 text-red-400 text-sm">
+                    <div className="bg-red-900/40 border border-red-500/60 rounded-lg p-3 text-red-200 text-sm drop-shadow-sm">
                         {error}
                     </div>
                 )}
@@ -77,16 +77,16 @@ export default function AuthInput({ onAuthSuccess }: Props) {
                 <button
                     type="submit"
                     disabled={isLoading || !username.trim()}
-                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-colors"
+                    className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-slate-600 disabled:to-slate-700 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-all shadow-lg hover:shadow-xl drop-shadow-lg"
                 >
                     {isLoading ? 'Connecting...' : 'Connect'}
                 </button>
             </form>
 
-            <div className="mt-6 pt-6 border-t border-slate-700">
-                <p className="text-xs text-gray-500 text-center">
+            <div className="pt-4 border-t border-slate-700/50">
+                <p className="text-xs text-gray-300 text-center drop-shadow-sm">
                     Using Warpcast?{' '}
-                    <a href="warpcast://detective" className="text-blue-400 hover:text-blue-300">
+                    <a href="warpcast://detective" className="text-blue-300 hover:text-blue-200 font-medium">
                         Open in app
                     </a>
                 </p>

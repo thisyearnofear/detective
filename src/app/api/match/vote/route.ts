@@ -83,8 +83,9 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * API route to lock the vote for a match when time expires.
- * This is called automatically by the client when the timer runs out.
+ * API route to finalize/confirm vote lock when timer expires (idempotent).
+ * Vote is automatically locked server-side when endTime passes.
+ * This endpoint just refreshes the match state and returns the result.
  */
 export async function PUT(request: NextRequest) {
   try {
@@ -119,12 +120,27 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Lock the vote
-    const isCorrect = gameManager.lockMatchVote(matchId);
+    // If vote is already locked, return the result
+    if (match.voteLocked) {
+      const guess = match.currentVote || "REAL";
+      const actualType = match.opponent.type;
+      const isCorrect = guess === actualType;
 
+      return NextResponse.json({
+        success: true,
+        matchId,
+        isCorrect,
+        actualType,
+        finalVote: guess,
+        voteLocked: true,
+      });
+    }
+
+    // If vote is not locked yet (shouldn't happen with auto-lock), lock it now
+    const isCorrect = gameManager.lockMatchVote(matchId);
     if (isCorrect === null) {
       return NextResponse.json(
-        { error: "Vote already locked or match not found." },
+        { error: "Failed to lock vote." },
         { status: 400 }
       );
     }
@@ -135,9 +151,10 @@ export async function PUT(request: NextRequest) {
       isCorrect,
       actualType: match.opponent.type,
       finalVote: match.currentVote || "REAL",
+      voteLocked: true,
     });
   } catch (error) {
-    console.error("Error locking vote:", error);
+    console.error("Error finalizing vote:", error);
     return NextResponse.json(
       { error: "An unexpected error occurred." },
       { status: 500 }

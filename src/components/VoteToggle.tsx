@@ -8,6 +8,7 @@ interface VoteToggleProps {
   isLocked?: boolean;
   showAnimation?: boolean;
   isCompact?: boolean;
+  voteResult?: "correct" | "incorrect" | null;
 }
 
 export default function VoteToggle({
@@ -16,9 +17,11 @@ export default function VoteToggle({
   isLocked = false,
   showAnimation = true,
   isCompact = false,
+  voteResult = null,
 }: VoteToggleProps) {
   const [isAnimating, setIsAnimating] = useState(false);
   const [hasInteracted, setHasInteracted] = useState(false);
+  const [lockAnimating, setLockAnimating] = useState(false);
 
   // Show hint animation in first 5 seconds if not interacted
   useEffect(() => {
@@ -32,6 +35,14 @@ export default function VoteToggle({
       return () => clearTimeout(timer);
     }
   }, [showAnimation, hasInteracted, isLocked]);
+
+  // Trigger lock animation when vote becomes locked
+  useEffect(() => {
+    if (isLocked && !lockAnimating) {
+      setLockAnimating(true);
+      setTimeout(() => setLockAnimating(false), 600);
+    }
+  }, [isLocked]);
 
   const handleToggle = () => {
     if (isLocked) return;
@@ -66,6 +77,9 @@ export default function VoteToggle({
           }
           border-2 ${isBot ? "border-red-500/50" : "border-green-500/50"}
           ${isAnimating ? "animate-pulse ring-2 ring-blue-400/50" : ""}
+          ${lockAnimating ? "animate-vote-lock" : ""}
+          ${voteResult === "correct" ? "animate-vote-correct" : ""}
+          ${voteResult === "incorrect" ? "animate-vote-incorrect" : ""}
         `}
         aria-label={`Vote: Currently ${isBot ? "Bot" : "Human"}`}
       >
@@ -121,8 +135,22 @@ export default function VoteToggle({
         </div>
       )}
 
+      {/* Vote Result Feedback */}
+      {voteResult === "correct" && (
+        <div className={`${textSize} text-green-400 flex items-center gap-1 animate-vote-feedback`}>
+          <span>✓</span>
+          <span>Correct vote!</span>
+        </div>
+      )}
+      {voteResult === "incorrect" && (
+        <div className={`${textSize} text-red-400 flex items-center gap-1 animate-vote-feedback`}>
+          <span>✗</span>
+          <span>Better luck next time</span>
+        </div>
+      )}
+
       {/* Locked State Indicator */}
-      {isLocked && (
+      {isLocked && !voteResult && (
         <div className={`${textSize} text-gray-500 flex items-center gap-1`}>
           <span>🔒</span>
           <span>Vote locked</span>

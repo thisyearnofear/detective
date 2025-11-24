@@ -3,8 +3,28 @@
 import useSWR from 'swr';
 import { LeaderboardEntry } from '@/lib/types';
 import Image from 'next/image';
+import { useState } from 'react';
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
+
+type LeaderboardMode = 'current' | 'career';
+
+interface CareerStats {
+  totalGames: number;
+  overallAccuracy: number;
+  totalVotes: number;
+  totalCorrect: number;
+  bestAccuracy: number;
+  worstAccuracy: number;
+  avgSpeed: number;
+  leaderboardHistory: Array<{
+    gameId: string;
+    timestamp: number;
+    rank: number;
+    totalPlayers: number;
+    accuracy: number;
+  }>;
+}
 
 const getRankColor = (rank: number) => {
   if (rank === 1) return 'text-yellow-400';
@@ -13,10 +33,25 @@ const getRankColor = (rank: number) => {
   return 'text-gray-500';
 };
 
-export default function Leaderboard() {
-  const { data: leaderboard, error } = useSWR<LeaderboardEntry[]>('/api/leaderboard/current', fetcher, {
-    refreshInterval: 10000, // Refresh every 10 seconds
-  });
+export default function Leaderboard({ fid, mode: initialMode = 'current' }: { fid?: number; mode?: LeaderboardMode } = {}) {
+  const [mode, setMode] = useState<LeaderboardMode>(initialMode);
+  
+  const { data: leaderboard, error } = useSWR<LeaderboardEntry[]>(
+    (mode as string) === 'current' ? '/api/leaderboard/current' : null,
+    fetcher, 
+    {
+      refreshInterval: 10000,
+    }
+  );
+
+  const { data: careerStats } = useSWR<CareerStats>(
+    (mode as string) === 'career' && fid ? `/api/stats/career?fid=${fid}` : null,
+    fetcher,
+    {
+      revalidateOnFocus: true,
+      dedupingInterval: 5000,
+    }
+  );
 
   if (error) {
     return <div className="bg-slate-800 rounded-lg p-6 mt-8 text-center text-red-400">Failed to load leaderboard.</div>;
@@ -26,9 +61,196 @@ export default function Leaderboard() {
     return <div className="bg-slate-800 rounded-lg p-6 mt-8 text-center text-gray-400">Loading Leaderboard...</div>;
   }
 
+  // Career stats mode
+  if ((mode as string) === 'career') {
+    if (!careerStats) {
+      return (
+        <div className="bg-slate-800 rounded-lg p-6 mt-8 text-center">
+          <div className="animate-pulse mb-4">
+            <div className="h-8 bg-slate-700 rounded w-48 mx-auto mb-4"></div>
+            <div className="h-4 bg-slate-700 rounded w-32 mx-auto"></div>
+          </div>
+          <p className="text-gray-500">Loading your stats...</p>
+        </div>
+      );
+    }
+
+    const speedSeconds = (careerStats.avgSpeed / 1000).toFixed(1);
+
+    return (
+      <div className="bg-slate-800 rounded-lg p-6 mt-8">
+        {/* Tab switcher */}
+        <div className="flex gap-2 mb-6 border-b border-slate-700">
+          <button
+            onClick={() => setMode('current' as LeaderboardMode)}
+            className={`px-4 py-2 font-medium transition-colors ${
+              (mode as string) === 'current'
+                ? 'border-b-2 border-blue-500 text-white'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Current Game
+          </button>
+          <button
+            onClick={() => setMode('career' as LeaderboardMode)}
+            className={`px-4 py-2 font-medium transition-colors ${
+              (mode as string) === 'career'
+                ? 'border-b-2 border-blue-500 text-white'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Career Stats
+          </button>
+        </div>
+
+        <h2 className="text-2xl font-bold mb-6 text-center">Career Stats</h2>
+
+        {/* Main stats grid */}
+        <div className="grid md:grid-cols-2 gap-4 mb-6">
+          <div className="bg-slate-900/50 rounded-lg p-4">
+            <div className="text-sm text-gray-400 mb-2">Games Played</div>
+            <div className="text-3xl font-bold text-white">
+              {careerStats.totalGames}
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-blue-900/30 to-purple-900/30 border border-purple-500/30 rounded-lg p-4">
+            <div className="text-sm text-gray-400 mb-2">Overall Accuracy</div>
+            <div className="text-3xl font-bold text-purple-300">
+              {careerStats.overallAccuracy.toFixed(1)}%
+            </div>
+            <div className="text-xs text-gray-500 mt-1">
+              {careerStats.totalCorrect} of {careerStats.totalVotes} correct
+            </div>
+          </div>
+
+          <div className="bg-slate-900/50 border border-green-500/20 rounded-lg p-4">
+            <div className="text-sm text-gray-400 mb-2">Best Game</div>
+            <div className="text-3xl font-bold text-green-400">
+              {careerStats.bestAccuracy.toFixed(0)}%
+            </div>
+          </div>
+
+          <div className="bg-slate-900/50 border border-blue-500/20 rounded-lg p-4">
+            <div className="text-sm text-gray-400 mb-2">Avg Decision Speed</div>
+            <div className="text-3xl font-bold text-blue-400">{speedSeconds}s</div>
+            <div className="text-xs text-gray-500 mt-1">per correct vote</div>
+          </div>
+        </div>
+
+        {/* Game history */}
+        {careerStats.leaderboardHistory.length > 0 && (
+          <div className="mt-6">
+            <h3 className="font-bold text-white mb-3">Game History</h3>
+            <div className="space-y-2">
+              {careerStats.leaderboardHistory.map((entry, idx) => {
+                const date = new Date(entry.timestamp).toLocaleDateString();
+                const percentile = Math.round(
+                  ((entry.totalPlayers - entry.rank) / entry.totalPlayers) * 100
+                );
+
+                return (
+                  <div
+                    key={entry.gameId}
+                    className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg border border-slate-700/50"
+                  >
+                    <div>
+                      <div className="text-sm font-medium text-white">
+                        Game #{careerStats.totalGames - idx}
+                      </div>
+                      <div className="text-xs text-gray-500">{date}</div>
+                    </div>
+
+                    <div className="flex items-center gap-6">
+                      <div className="text-right">
+                        <div className="text-sm font-bold text-purple-300">
+                          {entry.accuracy.toFixed(0)}%
+                        </div>
+                        <div className="text-xs text-gray-500">accuracy</div>
+                      </div>
+
+                      <div className="text-right">
+                        <div className="text-sm font-bold text-blue-300">
+                          #{entry.rank}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          top {percentile}%
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Insights */}
+        {careerStats.totalGames > 0 && (
+          <div className="bg-slate-900/30 border border-slate-700 rounded-lg p-4 mt-6">
+            <h3 className="font-bold text-white mb-2">Insights</h3>
+            <div className="space-y-2 text-sm text-gray-300">
+              {careerStats.totalGames < 3 ? (
+                <p>💡 Play more games to unlock deeper insights about your playstyle!</p>
+              ) : (
+                <>
+                  <p>
+                    📈{' '}
+                    {careerStats.overallAccuracy >= 60
+                      ? "You're above average! Keep playing to stay sharp."
+                      : 'Keep practicing - you improve with each game!'}
+                  </p>
+                  <p>
+                    ⚡ You make decisions{' '}
+                    {careerStats.avgSpeed < 20000
+                      ? 'very quickly'
+                      : careerStats.avgSpeed < 35000
+                        ? 'at a good pace'
+                        : 'more carefully'}{' '}
+                    - this is your strength!
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Current game leaderboard mode
+  if (!leaderboard) {
+    return <div className="bg-slate-800 rounded-lg p-6 mt-8 text-center text-gray-400">Loading Leaderboard...</div>;
+  }
+
   if (leaderboard.length === 0) {
     return (
       <div className="bg-slate-800 rounded-lg p-6 mt-8">
+        {/* Tab switcher */}
+        <div className="flex gap-2 mb-6 border-b border-slate-700">
+          <button
+            onClick={() => setMode('current' as LeaderboardMode)}
+            className={`px-4 py-2 font-medium transition-colors ${
+              (mode as string) === 'current'
+                ? 'border-b-2 border-blue-500 text-white'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Current Game
+          </button>
+          {fid && (
+            <button
+              onClick={() => setMode('career' as LeaderboardMode)}
+              className={`px-4 py-2 font-medium transition-colors ${
+                (mode as string) === 'career'
+                  ? 'border-b-2 border-blue-500 text-white'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Career Stats
+            </button>
+          )}
+        </div>
         <h2 className="text-2xl font-bold mb-4 text-center">Leaderboard</h2>
         <p className="text-gray-400 text-center">No scores recorded yet. Play a match to get on the board!</p>
       </div>
@@ -37,6 +259,32 @@ export default function Leaderboard() {
 
   return (
     <div className="bg-slate-800 rounded-lg p-6 mt-8">
+      {/* Tab switcher */}
+      <div className="flex gap-2 mb-6 border-b border-slate-700">
+        <button
+          onClick={() => setMode('current' as LeaderboardMode)}
+          className={`px-4 py-2 font-medium transition-colors ${
+            (mode as string) === 'current'
+              ? 'border-b-2 border-blue-500 text-white'
+              : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          Current Game
+        </button>
+        {fid && (
+          <button
+            onClick={() => setMode('career' as LeaderboardMode)}
+            className={`px-4 py-2 font-medium transition-colors ${
+              (mode as string) === 'career'
+                ? 'border-b-2 border-blue-500 text-white'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Career Stats
+          </button>
+        )}
+      </div>
+
       <h2 className="text-2xl font-bold mb-4 text-center">Leaderboard</h2>
       <div className="flow-root">
         <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">

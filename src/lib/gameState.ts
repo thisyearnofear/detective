@@ -168,10 +168,20 @@ class GameManager {
 
     for (const [slotNum, matchId] of session.activeMatches) {
       const match = this.state.matches.get(matchId);
-      if (!match || match.endTime <= now) {
+      if (!match) {
+        hasExpiredMatches = true;
+        session.activeMatches.delete(slotNum);
+      } else if (match.endTime <= now && !match.voteLocked) {
+        // Auto-lock vote when time expires (backend is source of truth)
+        this.lockMatchVote(matchId);
+        hasExpiredMatches = true;
+        session.activeMatches.delete(slotNum);
+      } else if (match.endTime <= now && match.voteLocked) {
+        // Already locked, clean up
         hasExpiredMatches = true;
         session.activeMatches.delete(slotNum);
       } else {
+        // Match still active
         matches.push(match);
         activeMatchCount++;
       }

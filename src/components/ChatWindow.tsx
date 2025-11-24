@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import useSWR from "swr";
-import Image from "next/image";
-import Timer from "./Timer";
 import EmojiPicker from "./EmojiPicker";
 import VoteToggle from "./VoteToggle";
+import ProgressRingTimer from "./ProgressRingTimer";
+import OpponentCard from "./OpponentCard";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -48,6 +48,11 @@ export default function ChatWindow({
   const [warningLevel, setWarningLevel] = useState<
     "none" | "warning" | "critical"
   >("none");
+  const [messageCount, setMessageCount] = useState(0);
+  const [opponentColors, setOpponentColors] = useState<{
+    primary: [number, number, number];
+    secondary: [number, number, number];
+  } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Poll for messages if not provided (backward compatibility)
@@ -68,10 +73,13 @@ export default function ChatWindow({
   const messages =
     match.messages || chatData?.chats?.[match.id]?.messages || [];
 
-  // Auto-scroll to bottom on new messages
+  // Auto-scroll to bottom on new messages and track count
   useEffect(() => {
+    if (messages.length !== messageCount) {
+      setMessageCount(messages.length);
+    }
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, messageCount]);
 
   // Track inactivity
   useEffect(() => {
@@ -159,53 +167,65 @@ export default function ChatWindow({
 
   return (
     <div
-      className={`bg-slate-800 rounded-lg ${isCompact ? "p-4" : "p-6"} ${
+      className={`bg-slate-800 rounded-lg ${isCompact ? "p-4" : "p-6"} transition-all duration-300 relative ${
         warningLevel !== "none" ? "ring-2" : ""
-      } ${warningLevel === "warning" ? "ring-yellow-500" : ""} ${
-        warningLevel === "critical" ? "ring-red-500 animate-pulse" : ""
+      } ${warningLevel === "warning" ? "ring-yellow-500 ring-opacity-50" : ""} ${
+        warningLevel === "critical" ? "ring-red-500 ring-opacity-75" : ""
       }`}
+      style={
+        warningLevel !== "none"
+          ? {
+              boxShadow:
+                warningLevel === "warning"
+                  ? "inset 0 0 20px rgba(234, 179, 8, 0.2), 0 0 15px rgba(234, 179, 8, 0.15)"
+                  : "inset 0 0 20px rgba(239, 68, 68, 0.25), 0 0 20px rgba(239, 68, 68, 0.2)",
+            }
+          : {}
+      }
     >
       {/* Warning banner */}
       {warningLevel !== "none" && !isTimeUp && (
         <div
-          className={`absolute top-0 left-0 right-0 p-2 text-center text-sm rounded-t-lg ${
+          className={`absolute top-0 left-0 right-0 p-3 text-center text-sm rounded-t-lg font-semibold transition-all ${
             warningLevel === "warning"
-              ? "bg-yellow-500/20 text-yellow-300"
-              : "bg-red-500/20 text-red-300"
+              ? "bg-gradient-to-r from-yellow-500/30 to-amber-500/20 text-yellow-200 animate-inactivity-warning"
+              : "bg-gradient-to-r from-red-500/40 to-orange-500/30 text-red-100 animate-inactivity-critical"
           }`}
         >
-          {warningLevel === "warning" && "⚠️ Send a message to stay active!"}
-          {warningLevel === "critical" && "🚨 Send a message now or forfeit!"}
-        </div>
-      )}
-
-      {/* Header */}
-      <div
-        className={`flex justify-between items-center ${isCompact ? "mb-3" : "mb-4"}`}
-      >
-        <div className="flex items-center gap-3">
-          <Image
-            className={`${isCompact ? "h-10 w-10" : "h-12 w-12"} rounded-full`}
-            src={match.opponent.pfpUrl}
-            alt={match.opponent.username}
-            width={isCompact ? 40 : 48}
-            height={isCompact ? 40 : 48}
-          />
-          <div>
-            <h2 className={`${isCompact ? "text-base" : "text-lg"} font-bold`}>
-              @{match.opponent.username}
-            </h2>
-            {!isCompact && (
-              <p className="text-sm text-gray-400">
-                Is this person real or a bot?
-              </p>
+          <div className="flex items-center justify-center gap-2">
+            {warningLevel === "warning" && (
+              <>
+                <span className="animate-bounce">⚠️</span>
+                <span>Send a message to stay active!</span>
+              </>
+            )}
+            {warningLevel === "critical" && (
+              <>
+                <span className="animate-pulse">🚨</span>
+                <span>Send a message now or forfeit!</span>
+              </>
             )}
           </div>
         </div>
+      )}
+
+      {/* Opponent Card */}
+      <div className={`flex justify-between items-start gap-4 ${isCompact ? "mb-3" : "mb-4"}`}>
+        <div className="flex-1">
+          <OpponentCard
+            opponent={match.opponent}
+            isNewMatch={isNewMatch}
+            compact={isCompact}
+            onColorsExtracted={(primary, secondary) => {
+              setOpponentColors({ primary, secondary });
+            }}
+          />
+        </div>
         {match.endTime && !isTimeUp && (
-          <Timer
+          <ProgressRingTimer
             duration={matchDuration > 0 ? matchDuration : 0}
             onComplete={handleTimeUp}
+            compact={isCompact}
           />
         )}
       </div>
@@ -242,31 +262,53 @@ export default function ChatWindow({
             Say hello! Your conversation starts now.
           </div>
         )}
-        {messages.map((msg: any) => (
-          <div
-            key={msg.id}
-            className={`flex flex-col ${
-              msg.sender.fid === fid ? "items-end" : "items-start"
-            }`}
-          >
+        {messages.map((msg: any, idx: number) => {
+          // Calculate staggered delay for animation
+          const delayMs = idx * 40; // 40ms stagger between messages
+          const isNewMessage = idx >= messageCount - 1; // Last message is newest
+          const animationDelay = isNewMessage ? `${delayMs}ms` : "0ms";
+
+          return (
             <div
-              className={`max-w-xs ${
-                isCompact ? "md:max-w-sm" : "md:max-w-md"
-              } rounded-lg px-3 py-2 ${
-                msg.sender.fid === fid
-                  ? "bg-blue-600 text-white"
-                  : "bg-slate-700 text-gray-200"
+              key={msg.id}
+              className={`flex flex-col ${
+                msg.sender.fid === fid ? "items-end" : "items-start"
               }`}
+              style={{
+                animation: isNewMessage
+                  ? msg.sender.fid === fid
+                    ? `slide-in-down 0.4s ease-out ${animationDelay} both`
+                    : `slide-in-up 0.4s ease-out ${animationDelay} both`
+                  : "none",
+              }}
             >
-              <p className={`${isCompact ? "text-xs" : "text-sm"}`}>
-                {msg.text}
-              </p>
+              <div
+                className={`max-w-xs ${
+                  isCompact ? "md:max-w-sm" : "md:max-w-md"
+                } rounded-lg px-3 py-2 ${
+                  msg.sender.fid === fid
+                    ? "bg-blue-600 text-white"
+                    : "bg-slate-700 text-gray-200"
+                }`}
+                style={
+                  msg.sender.fid !== fid && opponentColors
+                    ? {
+                        backgroundColor: `rgba(${opponentColors.primary[0]}, ${opponentColors.primary[1]}, ${opponentColors.primary[2]}, 0.15)`,
+                        borderLeft: `3px solid rgb(${opponentColors.primary[0]}, ${opponentColors.primary[1]}, ${opponentColors.primary[2]})`,
+                      }
+                    : {}
+                }
+              >
+                <p className={`${isCompact ? "text-xs" : "text-sm"}`}>
+                  {msg.text}
+                </p>
+              </div>
+              <span className="text-xs text-gray-500 mt-1">
+                @{msg.sender.username}
+              </span>
             </div>
-            <span className="text-xs text-gray-500 mt-1">
-              @{msg.sender.username}
-            </span>
-          </div>
-        ))}
+          );
+        })}
         <div ref={messagesEndRef} />
       </div>
 
