@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import '@/styles/globals.css';
+import GradientBackground from '@/components/GradientBackground';
 
 export const metadata: Metadata = {
   title: 'Detective - Bot or Not? Prove it!',
@@ -43,7 +44,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="bg-slate-900 text-white">{children}</body>
+      <body className="bg-slate-950 text-white">
+        <GradientBackground state="LIVE" />
+        {/* Dark overlay for better text contrast */}
+        <div className="fixed inset-0 -z-5 bg-gradient-to-b from-slate-950/30 via-slate-950/50 to-slate-950/40 pointer-events-none" />
+        {children}
+      </body>
     </html>
   );
 }

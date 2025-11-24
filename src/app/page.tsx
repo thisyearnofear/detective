@@ -130,85 +130,110 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen p-6">
-      <div className="max-w-2xl mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-5xl font-bold mb-2">🔍 Detective</h1>
-          <p className="text-xl text-gray-300">
+    <main className="min-h-screen flex items-center justify-center p-4 sm:p-6 relative">
+      <div className="w-full max-w-2xl">
+        {/* Hero Section */}
+        <div className="text-center mb-8 sm:mb-12 animate-fade-in">
+          <h1 className="text-5xl sm:text-7xl font-black mb-3 sm:mb-4 bg-gradient-to-r from-blue-400 via-violet-400 to-blue-400 bg-clip-text text-transparent drop-shadow-2xl" style={{ textShadow: '0 4px 12px rgba(0,0,0,0.8)' }}>
+            🔍 Detective
+          </h1>
+          <p className="text-xl sm:text-2xl font-bold text-white mb-1 sm:mb-2 drop-shadow-lg" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.9)' }}>
             Are you talking to a human or a bot?
+          </p>
+          <p className="text-sm sm:text-base text-gray-200 drop-shadow-md" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}>
+            A Farcaster social deduction game
           </p>
         </div>
 
-        {/* Show AuthInput for web users who haven't authenticated */}
-        {authMode === "web" && !sdkUser && (
-          <AuthInput onAuthSuccess={handleWebAuth} />
-        )}
-
-        {/* Show user info and game when authenticated */}
-        {sdkUser && (
-          <>
-            <div className="bg-slate-800 rounded-lg p-4 mb-8 flex justify-between items-center">
-              <div className="flex-1 text-center">
-                <p className="text-sm text-gray-400">
-                  Logged in as{" "}
-                  <strong className="text-white">@{sdkUser.username}</strong>{" "}
-                  (FID: {sdkUser.fid})
-                  {authMode === "web" && (
-                    <span className="ml-2 text-xs bg-blue-900/30 text-blue-400 px-2 py-1 rounded">
-                      Web Mode
-                    </span>
-                  )}
-                </p>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="text-xs text-red-400 hover:text-red-300 underline ml-4"
-              >
-                Logout
-              </button>
+        {/* Main Content */}
+        {!sdkUser ? (
+          // Not authenticated
+          <div className="space-y-6 sm:space-y-8">
+            {/* Auth Card */}
+            <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 backdrop-blur-xl rounded-2xl p-6 sm:p-8 border border-slate-700/60 shadow-2xl animate-scale-in">
+              <AuthInput onAuthSuccess={handleWebAuth} />
             </div>
 
-            {/* Game Status Display */}
+            {/* How to Play */}
+            <div className="bg-gradient-to-br from-slate-800/85 to-slate-900/85 rounded-xl p-6 border border-slate-700/50 backdrop-blur-md">
+              <h3 className="text-lg sm:text-xl font-bold text-white mb-4 drop-shadow-md">How to Play</h3>
+              <ol className="space-y-3 text-gray-300 text-sm sm:text-base">
+                {[
+                  "Register for a game when registration is open.",
+                  "Manage 2 simultaneous chats, each lasting 1 minute.",
+                  "Vote during the chat: Is each opponent a REAL person or a BOT?",
+                  "Complete multiple matches in rounds!",
+                  "Climb the leaderboard with accuracy and speed!",
+                ].map((rule, i) => (
+                  <li key={i} className="flex gap-3">
+                    <span className="font-semibold text-blue-400 flex-shrink-0 min-w-6">{i + 1}.</span>
+                    <span>{rule}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </div>
+        ) : (
+          // Authenticated
+          <div className="space-y-6 sm:space-y-8">
+            {/* User Info Card */}
+            <div className="bg-gradient-to-r from-blue-900/50 to-violet-900/50 rounded-xl p-4 sm:p-6 border border-blue-500/50 backdrop-blur-md">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs sm:text-sm text-gray-200 drop-shadow-sm">Logged in as</p>
+                  <p className="text-lg sm:text-xl font-bold text-white drop-shadow-md">
+                    @{sdkUser.username}
+                    {authMode === "web" && (
+                      <span className="ml-2 text-xs bg-blue-900/70 text-blue-200 px-2 py-1 rounded border border-blue-500/50">
+                        Web Mode
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-red-300 hover:text-red-200 hover:bg-red-900/40 rounded-lg transition-colors whitespace-nowrap drop-shadow-sm"
+                >
+                  Logout
+                </button>
+              </div>
+            </div>
+
+            {/* Game Status */}
             {gameState && (
-              <div className="bg-slate-800/50 rounded-lg p-4 mb-8 text-center">
-                <p className="text-lg font-semibold uppercase tracking-widest text-blue-400">
+              <div className="bg-gradient-to-r from-amber-900/50 to-orange-900/50 rounded-xl p-4 sm:p-6 border border-amber-500/50 text-center backdrop-blur-md">
+                <p className="text-xs sm:text-sm text-gray-200 mb-1 drop-shadow-sm">Game Status</p>
+                <p className="text-2xl sm:text-3xl font-bold text-white uppercase tracking-widest drop-shadow-lg">
                   {gameState.state}
                 </p>
-                <p className="text-sm text-gray-400">
+                <p className="text-xs sm:text-sm text-gray-200 mt-2 drop-shadow-sm">
                   {gameState.playerCount} players registered
                 </p>
               </div>
             )}
 
-            {/* Conditionally Rendered Game Component */}
+            {/* Game Content */}
             {renderGameState()}
-          </>
+
+            {/* Back to Home */}
+            {sdkUser && gameState && (
+              <div className="text-center">
+                <button
+                  onClick={handleLogout}
+                  className="text-xs sm:text-sm text-gray-300 hover:text-gray-200 transition-colors drop-shadow-sm"
+                >
+                  ← Return to home
+                </button>
+              </div>
+            )}
+          </div>
         )}
 
-        {/* How to Play Section (always visible) */}
-        <div className="bg-slate-800 rounded-lg p-6 mt-12">
-          <h2 className="text-xl font-bold mb-4">How to Play</h2>
-          <ol className="space-y-3 text-gray-300 text-sm">
-            {[
-              "Register for a game when registration is open.",
-              "Manage 2 simultaneous chats, each lasting 1 minute.",
-              "Vote during the chat: Is each opponent a REAL person or a BOT?",
-              `Complete multiple matches in ${gameState?.playerCount ? Math.min(10, (gameState.playerCount - 1) * 2) : "10"} rounds!`,
-              "Climb the leaderboard with accuracy and speed!",
-            ].map((rule, i) => (
-              <li key={i} className="flex gap-3">
-                <span className="font-bold text-blue-400">{i + 1}.</span>
-                <span>{rule}</span>
-              </li>
-            ))}
-          </ol>
-        </div>
-
-        {/* Admin Link (Dev Mode) */}
-        <div className="mt-6 text-center">
+        {/* Footer */}
+        <div className="mt-8 sm:mt-12 text-center">
           <a
             href="/admin"
-            className="inline-block bg-slate-700 hover:bg-slate-600 text-gray-300 hover:text-white px-4 py-2 rounded-lg text-sm transition-colors"
+            className="inline-block px-4 py-2 text-xs sm:text-sm text-gray-400 hover:text-gray-300 transition-colors drop-shadow-sm font-medium"
           >
             🔧 Admin Panel
           </a>

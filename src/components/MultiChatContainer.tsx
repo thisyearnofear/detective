@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import useSWR from "swr";
 import ChatWindow from "./ChatWindow";
+import ResultsCard from "./ResultsCard";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -12,10 +13,25 @@ type Props = {
 
 type VoteState = Record<string, "REAL" | "BOT">;
 
+type RoundResult = {
+  roundNumber: number;
+  correct: boolean;
+  opponentUsername: string;
+  opponentType: "REAL" | "BOT";
+  opponentFid: number;
+};
+
 export default function MultiChatContainer({ fid }: Props) {
   const [activeTab, setActiveTab] = useState(1);
   const [votes, setVotes] = useState<VoteState>({});
   const [newMatchIds, setNewMatchIds] = useState<Set<string>>(new Set());
+  const [gameFinished, setGameFinished] = useState(false);
+  const [roundResults, setRoundResults] = useState<RoundResult[]>([]);
+  const [revealingMatch, setRevealingMatch] = useState<string | null>(null);
+  const [revealData, setRevealData] = useState<{
+    opponent: { fid: number; username: string; displayName: string; pfpUrl: string };
+    actualType: "REAL" | "BOT";
+  } | null>(null);
 
   // Poll for active matches
   const {
@@ -96,8 +112,45 @@ export default function MultiChatContainer({ fid }: Props) {
           body: JSON.stringify({ matchId, fid }),
         });
 
+        const result = await response.json();
+
+        if (response.ok && result.isCorrect !== undefined) {
+          // Get the match to find opponent info
+          const match = matchData?.matches.find((m: any) => m.id === matchId);
+          if (match) {
+            setRevealingMatch(matchId);
+            setRevealData({
+              opponent: {
+                fid: match.opponent.fid,
+                username: match.opponent.username,
+                displayName: match.opponent.displayName,
+                pfpUrl: match.opponent.pfpUrl,
+              },
+              actualType: result.actualType,
+            });
+
+            // Add to round results
+            setRoundResults((prev) => [
+              ...prev,
+              {
+                roundNumber: match.roundNumber,
+                correct: result.isCorrect,
+                opponentUsername: match.opponent.username,
+                opponentType: result.actualType,
+                opponentFid: match.opponent.fid,
+              },
+            ]);
+
+            // Dismiss reveal after 2 seconds
+            setTimeout(() => {
+              setRevealingMatch(null);
+              setRevealData(null);
+            }, 2000);
+          }
+        }
+
         if (!response.ok) {
-          console.error("Failed to lock vote:", await response.text());
+          console.error("Failed to lock vote:", result.error);
         }
       } catch (error) {
         console.error("Error locking vote:", error);
@@ -109,7 +162,7 @@ export default function MultiChatContainer({ fid }: Props) {
       // Also refresh after a short delay to catch any async updates
       setTimeout(() => mutate(), 500);
     },
-    [fid, mutate],
+    [fid, mutate, matchData],
   );
 
   if (error) {
@@ -137,6 +190,41 @@ export default function MultiChatContainer({ fid }: Props) {
     currentRound = 1,
     totalRounds = 5,
   } = matchData;
+
+  // Check if game is finished (all rounds completed and no active matches)
+  useEffect(() => {
+    if (
+      !gameFinished &&
+      matches.length === 0 &&
+      currentRound > totalRounds &&
+      roundResults.length === totalRounds
+    ) {
+      setGameFinished(true);
+    }
+  }, [matches.length, currentRound, totalRounds, roundResults.length, gameFinished]);
+
+  // Show end game screen
+  if (gameFinished && roundResults.length > 0) {
+    const accuracy =
+      (roundResults.filter((r) => r.correct).length / roundResults.length) * 100;
+
+    return (
+      <ResultsCard
+        isVisible={true}
+        mode="game-complete"
+        accuracy={accuracy}
+        roundResults={roundResults}
+        leaderboardRank={matchData?.playerRank || 1}
+        totalPlayers={matchData?.playerPool?.totalPlayers || 0}
+        onPlayAgain={() => {
+          setGameFinished(false);
+          setRoundResults([]);
+          setVotes({});
+          mutate();
+        }}
+      />
+    );
+  }
 
   if (matches.length === 0) {
     return (
@@ -187,18 +275,21 @@ export default function MultiChatContainer({ fid }: Props) {
             );
           }
 
+          const currentVote = votes[match.id] || "REAL";
+          const voteColor = currentVote === "BOT" ? "border-red-500/50" : "border-green-500/50";
+
           return (
-            <div key={match.id} className="relative">
+            <div key={match.id} className={`relative border-l-4 ${voteColor} transition-colors duration-300 rounded-lg overflow-hidden`}>
               {/* Chat number badge */}
               <div className="absolute -top-2 -right-2 z-10 bg-blue-600 rounded-full w-8 h-8 flex items-center justify-center text-white font-bold text-sm">
                 {slotNumber}
               </div>
 
-              {/* Vote indicator */}
+              {/* Chat content */}
               <ChatWindow
                 fid={fid}
                 match={match}
-                currentVote={votes[match.id] || "REAL"}
+                currentVote={currentVote}
                 onVoteToggle={() => handleVoteToggle(match.id)}
                 onComplete={() => handleMatchComplete(match.id)}
                 isCompact={true}
@@ -217,18 +308,20 @@ export default function MultiChatContainer({ fid }: Props) {
           {[1, 2].map((slotNumber) => {
             const match = slots[slotNumber];
             const isActive = activeTab === slotNumber;
+            const currentVote = match ? (votes[match.id] || "REAL") : "REAL";
+            const voteColor = currentVote === "BOT" ? "border-red-500" : "border-green-500";
 
             return (
               <button
                 key={slotNumber}
                 onClick={() => setActiveTab(slotNumber)}
                 disabled={!match}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors relative ${
+                className={`px-4 py-2 rounded-lg font-medium transition-colors relative border-b-2 ${voteColor} ${
                   isActive
                     ? "bg-blue-600 text-white"
                     : match
                       ? "bg-slate-700 text-gray-300 hover:bg-slate-600"
-                      : "bg-slate-800 text-gray-500 cursor-not-allowed"
+                      : "bg-slate-800 text-gray-500 cursor-not-allowed border-slate-600"
                 }`}
               >
                 Chat {slotNumber}
@@ -281,6 +374,16 @@ export default function MultiChatContainer({ fid }: Props) {
           </li>
         </ul>
       </div>
+
+      {/* Opponent reveal card */}
+      {revealData && revealingMatch && (
+        <ResultsCard
+          isVisible={revealingMatch !== null}
+          mode="opponent-reveal"
+          opponent={revealData.opponent}
+          actualType={revealData.actualType}
+        />
+      )}
     </div>
   );
 }
