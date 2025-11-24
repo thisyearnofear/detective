@@ -5,11 +5,17 @@
  * - Validate Neynar score
  */
 
-import { NeynarAPIClient, Configuration } from '@neynar/nodejs-sdk';
+import { NeynarAPIClient, NeynarHubClient, Configuration } from '@neynar/nodejs-sdk';
 
 const client = new NeynarAPIClient(
   new Configuration({
-    apiKey: process.env.NEYNAR_API_KEY,
+    apiKey: (process.env.NEYNAR_API_KEY as string) || '',
+  })
+);
+
+const hub = new NeynarHubClient(
+  new Configuration({
+    apiKey: (process.env.NEYNAR_API_KEY as string) || '',
   })
 );
 
@@ -28,9 +34,9 @@ export async function fetchUserByFid(fid: number) {
       return {
         fid: user.fid,
         username: user.username,
-        displayName: user.displayName,
-        pfpUrl: user.pfpUrl,
-        neynarScore: user.neynarScore || 0, // May not always be available
+        displayName: (user as any).display_name,
+        pfpUrl: (user as any).pfp_url,
+        neynarScore: (user as any).score || 0,
       };
     }
     return null;
@@ -45,13 +51,12 @@ export async function fetchUserByFid(fid: number) {
  */
 export async function getUserRecentCasts(fid: number, limit = 30): Promise<string[]> {
   try {
-    const response = await client.fetchCastsByFid({
-      fid,
-      pageSize: limit,
-    });
-
-    if (response.casts && response.casts.length > 0) {
-      return response.casts.map((cast) => cast.text || '').filter(Boolean);
+    const response = await hub.fetchUsersCasts({ fid, pageSize: limit, reverse: true });
+    const messages = (response as any).messages || [];
+    if (messages.length > 0) {
+      return messages
+        .map((m: any) => m?.data?.castAddBody?.text || '')
+        .filter((t: string) => !!t);
     }
     return [];
   } catch (error) {

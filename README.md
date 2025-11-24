@@ -8,8 +8,8 @@ Can you tell if you're chatting with a real person or an AI bot trained on their
 
 Detective is a Farcaster mini app where players engage in short conversations and guess whether they're speaking with another real user or an intelligent bot. The bot is trained on the player's recent Farcaster posts, making the impersonation as authentic as possible.
 
-**Current Status**: Phase 1 (Foundation) Complete ✓  
-**Next**: Phase 2 (AI Integration & Polish) - 1 week  
+**Current Status**: Phase 1 (Foundation) Complete ✓
+**Next**: Phase 2 (AI Integration & Polish) - 1 week
 **Target Launch**: Early December 2025
 
 ## Quick Start
@@ -77,24 +77,6 @@ Scoring & Leaderboard
 Repeat 5 times per game cycle
 ```
 
-## Project Structure
-
-```
-src/
-├── app/                    # Next.js pages & API routes
-│   ├── layout.tsx         # Root layout
-│   ├── page.tsx           # Landing page
-│   └── api/               # API endpoints (Phase 2)
-├── components/            # Reusable React components (Phase 2)
-├── lib/
-│   ├── gameState.ts       # In-memory game state store
-│   ├── neynar.ts          # Neynar API client
-│   └── claude.ts          # Claude bot logic
-├── hooks/                 # Custom React hooks (Phase 2)
-└── styles/
-    └── globals.css        # Tailwind styles
-```
-
 ## Development Roadmap
 
 ### Phase 1: MVP Foundation (1-2 weeks) ✓
@@ -111,27 +93,14 @@ src/
 - [ ] User testing with 5-10 beta players
 - [ ] Mobile responsiveness & UX polish
 
-### Phase 3: Multi-Game Support (1 week)
-- [ ] Game cycle lifecycle management
-- [ ] Basic analytics & cost tracking
-- [ ] Optional: Vercel KV for multi-instance sync
-- [ ] Production deployment setup
-
-### Phase 4: Soft Launch (1 week)
-- [ ] First public game cycle (50 players)
-- [ ] Community announcement & Discord/Twitter awareness
-- [ ] Real-time monitoring & bug fixes
-- [ ] Leaderboard & results sharing
-
-### Phase 5: Growth & Refinement (Ongoing)
-- [ ] Iterative improvements based on user feedback
-- [ ] Seasonal themes & special events
-- [ ] Optional: NFT badges for top scorers
-- [ ] Analytics dashboard
+### Future Phases:
+- Phase 3: Multi-Game Support (1 week)
+- Phase 4: Soft Launch (1 week)
+- Phase 5: Growth & Refinement (Ongoing)
 
 ## Game Mechanics
 
-### Registration Phase
+### Registration
 - Users must have **Neynar score > 0.8** (filters bots/low-quality accounts)
 - Hard cap: **50 players per cycle**
 - System scrapes 30 recent casts per user for bot training
@@ -144,18 +113,13 @@ src/
 
 ### Bot Intelligence
 - Claude 3.5 Sonnet fine-tuned with user's recent posts
-- System prompt injects:
-  - Username & display name
-  - Top 10 recent casts
-  - Inferred tone & writing style
-  - Instruction to stay under 240 chars (Farcaster limit)
+- System prompt injects: username, display name, recent casts, tone & style
+- Instruction to stay under 240 chars (Farcaster limit)
 
 ### Voting & Scoring
 - After each match: Guess "Real" or "Bot"
-- Accuracy calculated per user
-- Leaderboard sorted by:
-  1. Accuracy (%)
-  2. Speed (first to correct answer wins tiebreaker)
+- Accuracy calculated per user: (Correct Guesses / Total Guesses) × 100
+- Leaderboard sorted by accuracy and speed (tiebreaker)
 
 ## Costs
 
@@ -200,16 +164,10 @@ MIT License - see [LICENSE.md](LICENSE.md)
 - 💬 **Questions**: Tweet [@stefanbohacek](https://warpcast.com/stefan) or mention [@detective](https://warpcast.com/~/channel/detective)
 - 📊 **Farcaster**: Join the [Detective channel](https://warpcast.com/~/channel/detective)
 
-## Acknowledgments
-
-- Original Detective game concept: [Stefan Bohacek](https://stefanbohacek.online/)
-- Farcaster mini app infrastructure
-- Neynar API & community
-- Anthropic Claude for the AI brain
-
 ---
 
 **Built for Farcaster. Made with ❤️**
 
-See [ROADMAP.md](ROADMAP.md) for detailed development plan.  
-See [MIGRATION_SUMMARY.md](MIGRATION_SUMMARY.md) for migration notes.
+For detailed documentation, see:
+- [DOCS_01_OVERVIEW_ARCHITECTURE.md](DOCS_01_OVERVIEW_ARCHITECTURE.md) - Project overview and architecture
+- [DOCS_02_DEVELOPMENT_GUIDE.md](DOCS_02_DEVELOPMENT_GUIDE.md) - Development guide and implementation

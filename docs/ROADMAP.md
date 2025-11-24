@@ -9,6 +9,10 @@ Migrate Detective from a Twitter OAuth + MySQL multiplayer game into a **Farcast
 - **Neynar Quality Filter**: Score > 0.8 (ensures quality participants)
 - **No database required** initially (game state in memory, Farcaster owns social graph)
 - **Simple deployment**: Vercel serverless functions
+- **Privacy-first inference**: Venice AI (no logging, no training on game data)
+
+**Status**: Phase 1 ✅ COMPLETE (Nov 24, 2025)  
+**Current Phase**: Phase 2 (AI Integration & Polish) - In Progress
 
 **Feasibility: 9/10 (Very High)** — Severely constrained scope eliminates most scaling concerns. Game state can live in-memory per session.
 
@@ -89,7 +93,7 @@ Migrate Detective from a Twitter OAuth + MySQL multiplayer game into a **Farcast
 | **Auth** | @farcaster/miniapp-sdk | Native Farcaster authentication |
 | **Game State** | In-memory (Map/Record) + Vercel KV (optional) | 50 players = negligible memory footprint |
 | **Real-time Chat** | HTTP polling (3s interval) | Simplicity over elegance at this scale |
-| **AI/Bot** | Anthropic Claude API | Cost-effective (~$0.003/response) |
+| **AI/Bot** | Venice AI (Llama 3.3 70B) | Privacy-first (~$2.80/1M output tokens), no logging |
 | **Farcaster Data** | Neynar API | User validation, score filtering, content scraping |
 | **Hosting** | Vercel | Free tier sufficient for this load |
 | **Styling** | Tailwind CSS | Rapid UI iteration |
@@ -98,90 +102,81 @@ Migrate Detective from a Twitter OAuth + MySQL multiplayer game into a **Farcast
 
 ## 3. Development Phases
 
-### Phase 1: MVP Foundation (1-2 weeks)
+### Phase 1: MVP Foundation (1-2 weeks) ✅ COMPLETE
 **Goal**: Core game loop works, single game cycle, no database
 
-- [ ] **Project Setup**
-  - Initialize `create-next-app` with TypeScript
-  - Install @farcaster/miniapp-sdk, Neynar SDK, Claude SDK
-  - Setup environment variables (.env.local)
-  - Configure Vercel deployment
+**Completed**:
+- [x] Project Setup
+  - ✅ Next.js 15 + TypeScript + React 19
+  - ✅ @farcaster/miniapp-sdk integrated
+  - ✅ Neynar SDK & Venice AI installed
+  - ✅ Environment configuration (.env.example)
+- [x] Core Game Logic
+  - ✅ In-memory game state store (`gameState.ts`)
+  - ✅ User, Match, Game, Leaderboard data structures
+  - ✅ Neynar API client (`neynar.ts`)
+  - ✅ Venice AI bot logic (`claude.ts` → will be `inference.ts`)
+- [x] Landing Page
+  - ✅ Farcaster SDK initialization
+  - ✅ How-to-play instructions
+  - ✅ Game status display
+- [x] Build & Deployment
+  - ✅ TypeScript compilation
+  - ✅ Tailwind CSS styling
+  - ✅ Git initialized
 
-- [ ] **Farcaster Integration**
-  - Implement Mini App manifest
-  - User authentication flow (Farcaster SDK)
-  - Retrieve user profile (FID, username, pfp)
-  - List available game cycles (hardcoded initially)
-
-- [ ] **Game Registration with Quality Gate**
-  - Registration UI (simple form with "Join" button)
-  - **Quality filter**: Call Neynar to validate Farcaster score > 0.8
-  - Reject if score too low (graceful error)
-  - Hard cap at 50 registrants per cycle
-  - Store in-memory: `registeredUsers: Map<FID, UserProfile>`
-  - Scrape top 30 recent casts via Neynar for each user
-
-- [ ] **Chat Interface (HTTP Polling)**
-  - 2-column layout: Messages + opponent responses
-  - Fake bot responses (Claude API with hardcoded context initially)
-  - 4-minute timer countdown
-  - Real user-to-user messaging via polling (/api/chat/poll)
-  - In-memory message queue: `messages: Map<matchId, Message[]>`
-
-- [ ] **Voting & Basic Scoring**
-  - Vote submission endpoint (/api/vote/submit)
-  - Calculate accuracy per match (in-memory)
-  - Simple leaderboard view (computed from in-memory scores)
-
-- [ ] **Testing**
-  - End-to-end flow with 2-3 test users
-  - Verify Neynar score filtering works
-  - Confirm in-memory state persistence
-
-**Output**: Playable game with Claude bot, working leaderboard, no database
+**Output**: Project scaffolding complete, ready for API/component implementation
 
 ---
 
-### Phase 2: AI Integration & Polish (1 week)
-**Goal**: Claude bots feel authentic, game is fun
+### Phase 2: AI Integration & Polish (1 week) 🔄 IN PROGRESS
+**Goal**: Believable bots, complete game loop, ready for beta testing
 
-- [ ] **Prompt Engineering**
-  - Design system prompt with context injection:
-    ```
-    You are @${username}. You recently wrote these posts:
-    ${recentCasts}
-    
-    Your style: ${toneSummary}
-    Keep responses under 240 chars. Stay in character.
-    Never say you're an AI. Respond naturally.
-    ```
-  - Test prompts manually before integration
+**To Build**:
+- [ ] **API Routes**
+  - [ ] `/api/game/register` - Validate Neynar score > 0.8, enqueue user, scrape casts
+  - [ ] `/api/game/status` - Return current game cycle state
+  - [ ] `/api/game/cycles` - List available cycles
+  - [ ] `/api/match/next` - Assign next opponent (50% real, 50% bot)
+  - [ ] `/api/chat/send` - Relay message or generate Venice AI response
+  - [ ] `/api/chat/poll` - Poll for new messages (3s interval)
+  - [ ] `/api/vote/submit` - Record guess, calculate accuracy
+  - [ ] `/api/leaderboard/current` - Return sorted rankings
 
-- [ ] **Bot Response Generation**
-  - Implement `/api/chat/send` (handles both users & bots)
-  - Route to Claude if opponent is bot
-  - Add response caching (same question → cached response)
-  - Cost tracking in console logs
+- [ ] **React Components**
+  - [ ] `GameRegister.tsx` - Registration form with Neynar validation UI
+  - [ ] `ChatWindow.tsx` - Real-time chat with message polling
+  - [ ] `Timer.tsx` - 4-minute countdown with visual feedback
+  - [ ] `VotingPanel.tsx` - Real/Bot selection with results
+  - [ ] `Leaderboard.tsx` - Rankings with user stats
+  - [ ] `GameStatus.tsx` - Current cycle info & player count
+
+- [ ] **Inference Engine**
+  - [ ] Rename `lib/claude.ts` → `lib/inference.ts`
+  - [ ] Update to use Venice AI (Llama 3.3 70B) instead of Claude
+  - [ ] Implement system prompt with Farcaster tone injection
+  - [ ] Add response caching for repeated questions
+  - [ ] Cost tracking & monitoring
 
 - [ ] **Matching Algorithm**
-  - Pseudorandom user pairing in `getNextMatch()`
-  - Ensure same user isn't matched twice in same cycle
-  - 50% real user, 50% bot assignments
-  - Track match history in-memory
+  - [ ] Pseudorandom pairing in `getNextMatch()`
+  - [ ] Prevent user matching twice in same cycle
+  - [ ] 50% real users / 50% bots balance
+  - [ ] Match history tracking
 
 - [ ] **User Testing**
-  - Recruit 5-10 Farcaster beta users
-  - 1-2 game cycles (3-4 hour sessions)
-  - Collect feedback on bot believability
-  - Adjust prompts iteratively
+  - [ ] Recruit 5-10 Farcaster beta users (score > 0.8)
+  - [ ] Run 1-2 game cycles (3-4 hour sessions)
+  - [ ] Collect feedback on bot believability
+  - [ ] Adjust Venice AI prompts iteratively
+  - [ ] Measure avg guess accuracy (target: 55%+ vs 50% random)
 
-- [ ] **UI Polish**
-  - Smooth message animations
-  - Loading states on responses
-  - Timer visual feedback
-  - Mobile responsiveness
+- [ ] **Privacy Communication**
+  - [ ] Update landing page: "Venice AI - no logging, no training"
+  - [ ] Add privacy notice in game
+  - [ ] Marketing angle: Privacy-first game on Farcaster
 
-**Output**: Believable bots, polished MVP, ready for soft launch
+**Output**: Fully playable game with Venice AI bots, tested with beta users
 
 ---
 
@@ -280,7 +275,7 @@ Migrate Detective from a Twitter OAuth + MySQL multiplayer game into a **Farcast
 | Service | Purpose | Cost | Status |
 |---------|---------|------|--------|
 | **Neynar API** | Farcaster content scraping, user validation | Free tier (10k req/day) | ✓ Essential |
-| **Claude API** | Bot intelligence | ~$0.003/response (~$1-2/game) | ✓ Essential |
+| **Venice AI API** | Bot intelligence (Llama 3.3 70B, privacy-first) | ~$0.70/game (250 responses) | ✓ Essential |
 | **Vercel** | Hosting & deployment | Free tier (sufficient for 50 users) | ✓ Essential |
 | **No Database** | Game state in-memory | Free | ✓ MVP Phase |
 | **Vercel KV** | Optional: Multi-instance sync | $5-10/mo | ○ Phase 3+ |
@@ -291,11 +286,11 @@ Migrate Detective from a Twitter OAuth + MySQL multiplayer game into a **Farcast
 # Farcaster Mini App SDK
 NEXT_PUBLIC_FARCASTER_HUB_URL=https://hub.farcaster.xyz
 
-# Neynar API
-NEYNAR_API_KEY=your_neynar_key
+# Neynar API (get at https://neynar.com/app/api-keys)
+NEYNAR_API_KEY=your_neynar_api_key
 
-# Claude API
-ANTHROPIC_API_KEY=your_claude_key
+# Venice AI API (get at https://venice.ai/settings/api)
+VENICE_API_KEY=your_venice_api_key
 
 # Optional: Vercel KV (Phase 3+)
 # KV_URL=...

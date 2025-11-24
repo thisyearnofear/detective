@@ -11,15 +11,8 @@ export default function Home() {
   useEffect(() => {
     const initializeMiniApp = async () => {
       try {
-        // Get context from Farcaster SDK
-        const context = await sdk.context.user.getCurrent();
-        
-        // Extract user from context
-        if (context && 'user' in context) {
-          setUser((context as any).user);
-        } else {
-          setUser(context);
-        }
+        const context = await sdk.context;
+        setUser((context as any).user);
 
         // Signal to Farcaster that the app is ready
         await sdk.actions.ready();
