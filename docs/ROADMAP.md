@@ -12,7 +12,7 @@ Migrate Detective from a Twitter OAuth + MySQL multiplayer game into a **Farcast
 - **Privacy-first inference**: Venice AI (no logging, no training on game data)
 
 **Status**: Phase 1 ✅ COMPLETE (Nov 24, 2025)  
-**Current Phase**: Phase 2 (AI Integration & Polish) - Implementation Complete
+**Current Phase**: Phase 2 (AI Integration & Polish) - Ready for Testing
 
 **Feasibility: 9/10 (Very High)** — Severely constrained scope eliminates most scaling concerns. Game state can live in-memory per session.
 
@@ -177,6 +177,32 @@ Migrate Detective from a Twitter OAuth + MySQL multiplayer game into a **Farcast
   - [ ] Marketing angle: Privacy-first game on Farcaster
 
 **Output**: Fully playable game with Venice AI bots, tested with beta users
+
+---
+
+### Phase 2.5: Implementation Plan for Logic & UI Gaps
+
+After the initial implementation of Phase 2, a review identified key gaps between the game's design and the code. This plan outlines the steps to rectify them.
+
+#### **Part 1: Fix the AI Impersonation Data Pipeline**
+The goal is to stop creating bots from a hardcoded list and instead create them dynamically when real players register for a game.
+
+**Step 1: Enhance the Neynar Client (`src/lib/neynar.ts`)**
+*   **Action:** ✅ I will enhance the `validateUser` function to also return the user's recent casts. The `neynar-sdk` can do this efficiently in a single call. This new function will provide both the user's profile and the content needed for impersonation.
+
+**Step 2: Refactor Bot Creation (`src/lib/gameState.ts`)**
+*   **Action 1 (Consolidate):** ✅ I will remove the `populateInitialBots` method and the dependency on the hardcoded `src/lib/users.ts` file.
+*   **Action 2 (Enhance):** ✅ I will modify the `registerPlayer` method. When a new player registers, this method will now also be responsible for creating a "bot" version of that player. It will take the casts fetched in Step 1 and use them to create a new `Bot` object, which will then be added to the `state.bots` map. This ensures a 1:1 relationship between a registered player and a potential bot opponent.
+
+**Step 3: Update the Registration API (`src/app/api/game/register/route.ts`)**
+*   **Action:** ✅ I will make the `registerPlayer` function in the `GameManager` asynchronous (since it will now be fetching casts from Neynar). The API route will then be updated to `await` this function call, ensuring the bot is fully created before the API responds.
+
+#### **Part 2: Improve UI by Displaying Opponent's Profile Picture**
+
+This is a straightforward frontend enhancement that will significantly improve the user experience.
+
+**Step 1: Enhance the `ChatWindow.tsx` Component**
+*   **Action:** ✅ I will modify the `ChatWindow.tsx` component to display the opponent's profile picture. I'll add an `<Image>` component to the header of the chat window, next to the opponent's username. I can also add it next to each of their messages for a more authentic chat feel.
 
 ---
 
