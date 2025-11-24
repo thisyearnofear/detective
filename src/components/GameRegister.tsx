@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Player } from '@/lib/types';
 
 type Props = {
   fid: number;
   // This will be passed down from a parent component that fetches the game state
-  isRegistrationOpen: boolean; 
+  isRegistrationOpen: boolean;
 };
 
 export default function GameRegister({ fid, isRegistrationOpen }: Props) {
@@ -18,7 +18,7 @@ export default function GameRegister({ fid, isRegistrationOpen }: Props) {
   if (!isRegistrationOpen) {
     return null;
   }
-  
+
   // If player is already registered, show a success message
   if (registeredPlayer) {
     return (
@@ -64,9 +64,9 @@ export default function GameRegister({ fid, isRegistrationOpen }: Props) {
             Register now to participate in the current cycle.
           </p>
         </div>
-        <button 
+        <button
           className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg transition-colors"
-          onClick={handleRegister} 
+          onClick={handleRegister}
           disabled={isLoading}
         >
           {isLoading ? 'Registering...' : 'Register'}
