@@ -1,44 +1,50 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getActiveCycle, addMessageToMatch } from '@/lib/gameState';
-import { generateBotResponse } from '@/lib/inference';
+// src/app/api/chat/send/route.ts
+import { NextResponse } from "next/server";
+import { gameManager } from "@/lib/gameState";
+import { generateBotResponse } from "@/lib/inference";
+import { Bot } from "@/lib/types";
 
-export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { matchId, senderFid, senderUsername, content } = body as {
-    matchId: string;
-    senderFid: number;
-    senderUsername: string;
-    content: string;
-  };
+/**
+ * API route to send a message in a match.
+ * Expects a POST request with `matchId`, `senderFid`, and `text`.
+ */
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { matchId, senderFid, text } = body;
 
-  const cycle = getActiveCycle();
-  if (!cycle) return NextResponse.json({ error: 'No active game cycle' }, { status: 404 });
-
-  const match = cycle.currentMatches.get(matchId);
-  if (!match) return NextResponse.json({ error: 'Match not found' }, { status: 404 });
-
-  addMessageToMatch(match, senderFid, senderUsername, content, false);
-
-  if (match.isPlayer2Bot && senderFid === match.player1Fid) {
-    let personaUser = null as any;
-    for (const u of cycle.registeredUsers.values()) {
-      if (match.botPersonaUsername && u.username === match.botPersonaUsername) {
-        personaUser = u;
-        break;
-      }
+    if (!matchId || !senderFid || !text) {
+      return NextResponse.json(
+        { error: "matchId, senderFid, and text are required." },
+        { status: 400 }
+      );
     }
 
-    const botText = await generateBotResponse({
-      username: match.botPersonaUsername || 'bot',
-      displayName: personaUser?.displayName,
-      recentCasts: personaUser?.recentCasts || [],
-      userMessage: content,
-      maxTokens: 150,
-    });
+    const match = gameManager.getMatch(matchId);
+    if (!match) {
+      return NextResponse.json({ error: "Match not found." }, { status: 404 });
+    }
+    if (Date.now() > match.endTime) {
+      return NextResponse.json({ error: "Match has ended." }, { status: 403 });
+    }
 
-    addMessageToMatch(match, 'BOT', match.botPersonaUsername || 'bot', botText, true);
+    // Add the player's message to the state
+    gameManager.addMessageToMatch(matchId, text, senderFid);
+
+    // If the opponent is a bot, generate a response
+    if (match.opponent.type === "BOT") {
+      const bot = match.opponent as Bot;
+      const botResponse = await generateBotResponse(bot, match.messages);
+      // Add the bot's response to the state
+      gameManager.addMessageToMatch(matchId, botResponse, bot.fid);
+    }
+
+    return NextResponse.json({ success: true, message: "Message sent." });
+  } catch (error) {
+    console.error("Error sending message:", error);
+    return NextResponse.json(
+      { error: "An unexpected error occurred." },
+      { status: 500 }
+    );
   }
-
-  return NextResponse.json({ messages: match.messages });
 }
-

@@ -1,29 +1,33 @@
-import { NextResponse } from 'next/server';
-import { getActiveCycle } from '@/lib/gameState';
+// src/app/api/game/cycles/route.ts
+import { NextResponse } from "next/server";
+import { gameManager } from "@/lib/gameState";
 
+/**
+ * API route to get the list of available game cycles.
+ * In the current MVP, this will always return only the single, active cycle.
+ * Handles GET requests.
+ */
 export async function GET() {
-  const cycle = getActiveCycle();
-  if (!cycle) return NextResponse.json({ cycles: [] });
+  try {
+    const gameState = gameManager.getGameState();
 
-  const now = new Date();
-  let status: 'REGISTRATION' | 'LIVE' | 'FINISHED' = 'REGISTRATION';
-  if (now >= cycle.startTime && now <= cycle.endTime) status = 'LIVE';
-  else if (now > cycle.endTime) status = 'FINISHED';
-
-  return NextResponse.json({
-    cycles: [
+    // For the MVP, we only have one cycle. This can be expanded later.
+    const availableCycles = [
       {
-        id: cycle.id,
-        name: cycle.name,
-        registrationOpenAt: cycle.registrationOpenAt,
-        registrationCloseAt: cycle.registrationCloseAt,
-        startTime: cycle.startTime,
-        endTime: cycle.endTime,
-        status,
-        players: cycle.registeredUsers.size,
-        maxPlayers: cycle.maxPlayers,
+        id: gameState.cycleId,
+        state: gameState.state,
+        playerCount: gameState.players.size,
+        registrationEnds: gameState.registrationEnds,
+        gameEnds: gameState.gameEnds,
       },
-    ],
-  });
-}
+    ];
 
+    return NextResponse.json(availableCycles);
+  } catch (error) {
+    console.error("Error fetching game cycles:", error);
+    return NextResponse.json(
+      { error: "An unexpected error occurred." },
+      { status: 500 }
+    );
+  }
+}

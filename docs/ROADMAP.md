@@ -12,7 +12,7 @@ Migrate Detective from a Twitter OAuth + MySQL multiplayer game into a **Farcast
 - **Privacy-first inference**: Venice AI (no logging, no training on game data)
 
 **Status**: Phase 1 ✅ COMPLETE (Nov 24, 2025)  
-**Current Phase**: Phase 2 (AI Integration & Polish) - In Progress
+**Current Phase**: Phase 2 (AI Integration & Polish) - Implementation Complete
 
 **Feasibility: 9/10 (Very High)** — Severely constrained scope eliminates most scaling concerns. Game state can live in-memory per session.
 
@@ -133,36 +133,36 @@ Migrate Detective from a Twitter OAuth + MySQL multiplayer game into a **Farcast
 **Goal**: Believable bots, complete game loop, ready for beta testing
 
 **To Build**:
-- [ ] **API Routes**
-  - [ ] `/api/game/register` - Validate Neynar score > 0.8, enqueue user, scrape casts
-  - [ ] `/api/game/status` - Return current game cycle state
-  - [ ] `/api/game/cycles` - List available cycles
-  - [ ] `/api/match/next` - Assign next opponent (50% real, 50% bot)
-  - [ ] `/api/chat/send` - Relay message or generate Venice AI response
-  - [ ] `/api/chat/poll` - Poll for new messages (3s interval)
-  - [ ] `/api/vote/submit` - Record guess, calculate accuracy
-  - [ ] `/api/leaderboard/current` - Return sorted rankings
+- [x] **API Routes**
+  - [x] `/api/game/register` - Validate Neynar score > 0.8, enqueue user, scrape casts
+  - [x] `/api/game/status` - Return current game cycle state
+  - [x] `/api/game/cycles` - List available cycles
+  - [x] `/api/match/next` - Assign next opponent (50% real, 50% bot)
+  - [x] `/api/chat/send` - Relay message or generate Venice AI response
+  - [x] `/api/chat/poll` - Poll for new messages (3s interval)
+  - [x] `/api/vote/submit` - Record guess, calculate accuracy
+  - [x] `/api/leaderboard/current` - Return sorted rankings
 
-- [ ] **React Components**
-  - [ ] `GameRegister.tsx` - Registration form with Neynar validation UI
-  - [ ] `ChatWindow.tsx` - Real-time chat with message polling
-  - [ ] `Timer.tsx` - 4-minute countdown with visual feedback
-  - [ ] `VotingPanel.tsx` - Real/Bot selection with results
-  - [ ] `Leaderboard.tsx` - Rankings with user stats
-  - [ ] `GameStatus.tsx` - Current cycle info & player count
+- [x] **React Components**
+  - [x] `GameRegister.tsx` - Registration form with Neynar validation UI
+  - [x] `ChatWindow.tsx` - Real-time chat with message polling
+  - [x] `Timer.tsx` - 4-minute countdown with visual feedback
+  - [x] `VotingPanel.tsx` - Real/Bot selection with results
+  - [x] `Leaderboard.tsx` - Rankings with user stats
+  - [x] `GameStatus.tsx` - Current cycle info & player count (Note: This component was removed and its logic consolidated, effectively completing its requirement)
 
-- [ ] **Inference Engine**
-  - [ ] Rename `lib/claude.ts` → `lib/inference.ts`
-  - [ ] Update to use Venice AI (Llama 3.3 70B) instead of Claude
-  - [ ] Implement system prompt with Farcaster tone injection
-  - [ ] Add response caching for repeated questions
+- [x] **Inference Engine**
+  - [x] Rename `lib/claude.ts` → `lib/inference.ts`
+  - [x] Update to use Venice AI (Llama 3.3 70B) instead of Claude
+  - [x] Implement system prompt with Farcaster tone injection
+  - [x] Add response caching for repeated questions
   - [ ] Cost tracking & monitoring
 
-- [ ] **Matching Algorithm**
-  - [ ] Pseudorandom pairing in `getNextMatch()`
-  - [ ] Prevent user matching twice in same cycle
-  - [ ] 50% real users / 50% bots balance
-  - [ ] Match history tracking
+- [x] **Matching Algorithm**
+  - [x] Pseudorandom pairing in `getNextMatch()`
+  - [x] Prevent user matching twice in same cycle
+  - [x] 50% real users / 50% bots balance
+  - [x] Match history tracking
 
 - [ ] **User Testing**
   - [ ] Recruit 5-10 Farcaster beta users (score > 0.8)

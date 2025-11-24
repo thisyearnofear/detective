@@ -1,284 +1,279 @@
-/**
- * In-memory game state store
- * Holds all game data without database
- * Structure:
- * - users: Map of FID -> User profiles
- * - games: Map of game ID -> Game state
- * - matches: Map of match ID -> Match data
- * - messages: Map of match ID -> Message array
- */
+// src/lib/gameState.ts
+import {
+  GameState,
+  GameCycleState,
+  Player,
+  Bot,
+  Match,
+  LeaderboardEntry,
+  UserProfile,
+} from "./types";
+import { USERS } from "@/lib/users"; // Hardcoded user data
 
-export interface User {
-  fid: number;
-  username: string;
-  displayName?: string;
-  pfpUrl?: string;
-  recentCasts: string[];
-  neynarScore: number;
-  createdAt: Date;
-}
-
-export interface UserProfile {
-  fid: number;
-  username: string;
-  displayName?: string;
-  pfpUrl?: string;
-  recentCasts: string[];
-}
-
-export interface Match {
-  id: string;
-  gameId: string;
-  player1Fid: number;
-  player2FidOrBot: number | 'BOT';
-  isPlayer2Bot: boolean;
-  botPersonaUsername?: string;
-  startedAt: Date;
-  endedAt?: Date;
-  messages: Message[];
-  votes: Map<number, Vote>; // FID -> Vote
-}
-
-export interface Message {
-  matchId: string;
-  senderFid: number | 'BOT';
-  senderUsername: string;
-  content: string;
-  timestamp: Date;
-  isBot: boolean;
-}
-
-export interface Vote {
-  voterFid: number;
-  guess: 'REAL' | 'BOT';
-  isCorrect: boolean;
-  timestamp: Date;
-}
-
-export interface GameCycle {
-  id: string;
-  name: string;
-  registrationOpenAt: Date;
-  registrationCloseAt: Date;
-  startTime: Date;
-  endTime: Date;
-  maxPlayers: number;
-  registeredUsers: Map<number, User>; // FID -> User
-  currentMatches: Map<string, Match>; // matchId -> Match
-  matchedPlayers: Set<number>; // FIDs already matched in current round
-  completedMatches: Match[];
-  leaderboard: LeaderboardEntry[];
-}
-
-export interface LeaderboardEntry {
-  fid: number;
-  username: string;
-  displayName?: string;
-  pfpUrl?: string;
-  correctGuesses: number;
-  totalGuesses: number;
-  accuracy: number;
-  rank: number;
-}
-
-// Global state
-const gameState = {
-  users: new Map<number, User>(),
-  activeCycle: null as GameCycle | null,
-};
+const GAME_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+const REGISTRATION_DURATION = 1 * 60 * 60 * 1000; // 1 hour
+const MAX_PLAYERS = 50;
 
 /**
- * Create a new game cycle
+ * Manages the in-memory state of the game.
+ * Implemented as a singleton to ensure a single source of truth.
  */
-export function createGameCycle(
-  name: string,
-  registrationOpenAt: Date,
-  registrationCloseAt: Date,
-  startTime: Date,
-  endTime: Date,
-  maxPlayers = 50
-): GameCycle {
-  return {
-    id: `cycle_${Date.now()}`,
-    name,
-    registrationOpenAt,
-    registrationCloseAt,
-    startTime,
-    endTime,
-    maxPlayers,
-    registeredUsers: new Map(),
-    currentMatches: new Map(),
-    matchedPlayers: new Set(),
-    completedMatches: [],
-    leaderboard: [],
-  };
-}
+class GameManager {
+  private static instance: GameManager;
+  private state: GameState;
 
-/**
- * Register a user for the active game cycle
- */
-export function registerUserForGame(
-  cycle: GameCycle,
-  user: User
-): { success: boolean; message: string } {
-  // Check if game is in registration phase
-  const now = new Date();
-  if (now < cycle.registrationOpenAt || now > cycle.registrationCloseAt) {
-    return { success: false, message: 'Registration is not open' };
+  private constructor() {
+    this.state = this.initializeGameState();
+    this.populateInitialBots();
   }
 
-  // Check if user already registered
-  if (cycle.registeredUsers.has(user.fid)) {
-    return { success: false, message: 'User already registered' };
+  /**
+   * Gets the singleton instance of the GameManager.
+   */
+  public static getInstance(): GameManager {
+    if (!GameManager.instance) {
+      GameManager.instance = new GameManager();
+    }
+    return GameManager.instance;
   }
 
-  // Check if we've hit max players
-  if (cycle.registeredUsers.size >= cycle.maxPlayers) {
-    return { success: false, message: `Game is full (max ${cycle.maxPlayers} players)` };
+  /**
+   * Initializes or resets the game state to its default.
+   */
+  private initializeGameState(): GameState {
+    const now = Date.now();
+    return {
+      cycleId: `cycle-${now}`,
+      state: "REGISTRATION",
+      registrationEnds: now + REGISTRATION_DURATION,
+      gameEnds: now + GAME_DURATION,
+      players: new Map<number, Player>(),
+      bots: new Map<number, Bot>(),
+      matches: new Map<string, Match>(),
+      leaderboard: [],
+    };
   }
 
-  // Register user
-  cycle.registeredUsers.set(user.fid, user);
-  gameState.users.set(user.fid, user);
-
-  return { success: true, message: 'Successfully registered' };
-}
-
-/**
- * Create a new match between two players or a player and bot
- */
-export function createMatch(
-  cycle: GameCycle,
-  player1Fid: number,
-  player2FidOrBot: number | 'BOT',
-  botPersonaUsername?: string
-): Match {
-  const isBot = player2FidOrBot === 'BOT';
-
-  return {
-    id: `match_${Date.now()}_${Math.random()}`,
-    gameId: cycle.id,
-    player1Fid,
-    player2FidOrBot,
-    isPlayer2Bot: isBot,
-    botPersonaUsername,
-    startedAt: new Date(),
-    messages: [],
-    votes: new Map(),
-  };
-}
-
-/**
- * Add message to match
- */
-export function addMessageToMatch(
-  match: Match,
-  senderFid: number | 'BOT',
-  senderUsername: string,
-  content: string,
-  isBot = false
-): void {
-  match.messages.push({
-    matchId: match.id,
-    senderFid,
-    senderUsername,
-    content,
-    timestamp: new Date(),
-    isBot,
-  });
-}
-
-/**
- * Submit a vote in a match
- */
-export function submitVote(
-  match: Match,
-  voterFid: number,
-  guess: 'REAL' | 'BOT'
-): void {
-  const isCorrect =
-    guess === 'BOT' ? match.isPlayer2Bot : !match.isPlayer2Bot;
-
-  match.votes.set(voterFid, {
-    voterFid,
-    guess,
-    isCorrect,
-    timestamp: new Date(),
-  });
-}
-
-/**
- * Calculate leaderboard for a game cycle
- */
-export function calculateLeaderboard(cycle: GameCycle): LeaderboardEntry[] {
-  const scoreMap = new Map<
-    number,
-    { correct: number; total: number; fid: number; user: User }
-  >();
-
-  // Aggregate votes
-  cycle.completedMatches.forEach((match) => {
-    match.votes.forEach((vote, fid) => {
-      if (!scoreMap.has(fid)) {
-        scoreMap.set(fid, {
-          fid,
-          correct: 0,
-          total: 0,
-          user: cycle.registeredUsers.get(fid)!,
-        });
-      }
-
-      const entry = scoreMap.get(fid)!;
-      entry.total++;
-      if (vote.isCorrect) entry.correct++;
+  /**
+   * Populates the game with bots based on a hardcoded list of users.
+   */
+  private populateInitialBots(): void {
+    USERS.forEach((user) => {
+      const bot: Bot = {
+        ...user,
+        type: "BOT",
+        originalAuthor: user,
+        recentCasts: [], // This would be populated by Neynar
+        style: "Direct and to the point.", // This would be inferred
+      };
+      this.state.bots.set(user.fid, bot);
     });
-  });
+  }
 
-  // Convert to leaderboard
-  const leaderboard = Array.from(scoreMap.values())
-    .map((entry) => ({
-      fid: entry.fid,
-      username: entry.user.username,
-      displayName: entry.user.displayName,
-      pfpUrl: entry.user.pfpUrl,
-      correctGuesses: entry.correct,
-      totalGuesses: entry.total,
-      accuracy: entry.total > 0 ? (entry.correct / entry.total) * 100 : 0,
-      rank: 0,
-    }))
-    .sort((a, b) => {
-      // Sort by accuracy, then by speed (timestamp)
+  /**
+   * Returns the current game state.
+   */
+  public getGameState(): GameState {
+    // Periodically update the cycle state based on time
+    this.updateCycleState();
+    return this.state;
+  }
+
+  /**
+   * Registers a new player for the current game cycle.
+   */
+  public registerPlayer(userProfile: UserProfile): Player | null {
+    if (this.state.players.size >= MAX_PLAYERS) {
+      console.warn("Max players reached. Cannot register new player.");
+      return null;
+    }
+    if (this.state.players.has(userProfile.fid)) {
+      return this.state.players.get(userProfile.fid)!;
+    }
+
+    const newPlayer: Player = {
+      ...userProfile,
+      type: "REAL",
+      isRegistered: true,
+      score: 0,
+      voteHistory: [],
+    };
+
+    this.state.players.set(userProfile.fid, newPlayer);
+    return newPlayer;
+  }
+
+  /**
+   * Finds the next opponent for a given player.
+   */
+  public createNextMatch(fid: number): Match | null {
+    const player = this.state.players.get(fid);
+    if (!player) return null;
+
+    // 50% chance to play against a bot
+    const playAgainstBot = Math.random() < 0.5;
+
+    let opponent: Player | Bot | undefined;
+
+    if (playAgainstBot) {
+      const availableBots = Array.from(this.state.bots.values());
+      opponent =
+        availableBots[Math.floor(Math.random() * availableBots.length)];
+    } else {
+      const availablePlayers = Array.from(this.state.players.values()).filter(
+        (p) => p.fid !== fid
+      );
+      if (availablePlayers.length > 0) {
+        opponent =
+          availablePlayers[
+            Math.floor(Math.random() * availablePlayers.length)
+          ];
+      } else {
+        // Fallback to a bot if no other players are available
+        const availableBots = Array.from(this.state.bots.values());
+        opponent =
+          availableBots[Math.floor(Math.random() * availableBots.length)];
+      }
+    }
+
+    if (!opponent) return null;
+
+    const now = Date.now();
+    const match: Match = {
+      id: `match-${player.fid}-${opponent.fid}-${now}`,
+      player,
+      opponent,
+      startTime: now,
+      endTime: now + 4 * 60 * 1000, // 4-minute match
+      messages: [],
+      isVotingComplete: false,
+      isFinished: false,
+    };
+
+    this.state.matches.set(match.id, match);
+    return match;
+  }
+
+  /**
+   * Retrieves a match by its ID.
+   */
+  public getMatch(matchId: string): Match | undefined {
+    return this.state.matches.get(matchId);
+  }
+
+  /**
+   * Adds a message to a match's chat history.
+   */
+  public addMessageToMatch(matchId: string, text: string, senderFid: number) {
+    const match = this.getMatch(matchId);
+    const sender =
+      this.state.players.get(senderFid) || this.state.bots.get(senderFid);
+    if (!match || !sender) return null;
+
+    const message = {
+      id: `msg-${Date.now()}`,
+      sender: { fid: sender.fid, username: sender.username },
+      text,
+      timestamp: Date.now(),
+    };
+
+    match.messages.push(message);
+    return message;
+  }
+
+  /**
+   * Records a player's vote for a given match.
+   * @returns A boolean indicating if the guess was correct, or null if vote failed.
+   */
+  public recordVote(
+    voterFid: number,
+    matchId: string,
+    guess: "REAL" | "BOT"
+  ): boolean | null {
+    const player = this.state.players.get(voterFid);
+    const match = this.state.matches.get(matchId);
+
+    if (!player || !match || match.isVotingComplete) {
+      return null;
+    }
+
+    // Ensure voting happens only after the match is over
+    if (Date.now() < match.endTime) {
+      return null;
+    }
+
+    const actualType = match.opponent.type;
+    const isCorrect = guess === actualType;
+    const voteSpeed = Date.now() - match.endTime; // Time in ms since match ended
+
+    player.voteHistory.push({
+      matchId,
+      correct: isCorrect,
+      speed: voteSpeed,
+    });
+
+    match.isVotingComplete = true;
+
+    return isCorrect;
+  }
+
+  /**
+   * Updates the game state based on the current time.
+   */
+  private updateCycleState(): void {
+    const now = Date.now();
+    if (this.state.state === "REGISTRATION" && now > this.state.registrationEnds) {
+      this.state.state = "LIVE";
+    }
+    if (this.state.state === "LIVE" && now > this.state.gameEnds) {
+      this.state.state = "FINISHED";
+      // Calculate and store the final leaderboard once the game is finished.
+      this.state.leaderboard = this.getLeaderboard();
+    }
+  }
+
+  /**
+   * Calculates and returns the current leaderboard, sorted by score.
+   * This can be used for both provisional and final leaderboards.
+   */
+  public getLeaderboard(): LeaderboardEntry[] {
+    const leaderboard: LeaderboardEntry[] = Array.from(
+      this.state.players.values()
+    ).map((player) => {
+      const correctVotes = player.voteHistory.filter((v) => v.correct);
+      const accuracy =
+        player.voteHistory.length > 0
+          ? (correctVotes.length / player.voteHistory.length) * 100
+          : 0;
+      const avgSpeed =
+        correctVotes.length > 0
+          ? correctVotes.reduce((sum, v) => sum + v.speed, 0) /
+            correctVotes.length
+          : 0;
+
+      return {
+        player: {
+          fid: player.fid,
+          username: player.username,
+          displayName: player.displayName,
+          pfpUrl: player.pfpUrl,
+        },
+        accuracy,
+        avgSpeed,
+      };
+    });
+
+    // Sort by accuracy (desc), then by speed (asc)
+    leaderboard.sort((a, b) => {
       if (b.accuracy !== a.accuracy) {
         return b.accuracy - a.accuracy;
       }
-      return 0;
+      return a.avgSpeed - b.avgSpeed;
     });
 
-  // Add ranks
-  leaderboard.forEach((entry, index) => {
-    entry.rank = index + 1;
-  });
-
-  return leaderboard;
+    return leaderboard;
+  }
 }
 
-/**
- * Get the current game state (for debugging/inspection)
- */
-export function getGameState() {
-  return gameState;
-}
-
-/**
- * Set active game cycle
- */
-export function setActiveCycle(cycle: GameCycle | null) {
-  gameState.activeCycle = cycle;
-}
-
-/**
- * Get active game cycle
- */
-export function getActiveCycle(): GameCycle | null {
-  return gameState.activeCycle;
-}
+// Export a singleton instance of the GameManager
+export const gameManager = GameManager.getInstance();

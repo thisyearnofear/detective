@@ -1,34 +1,42 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getActiveCycle, submitVote, calculateLeaderboard } from '@/lib/gameState';
+// src/app/api/vote/submit/route.ts
+import { NextResponse } from "next/server";
+import { gameManager } from "@/lib/gameState";
 
-export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { matchId, voterFid, guess } = body as {
-    matchId: string;
-    voterFid: number;
-    guess: 'REAL' | 'BOT';
-  };
+/**
+ * API route to submit a vote for a match.
+ * Expects `voterFid`, `matchId`, and `guess` ('REAL' or 'BOT').
+ */
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { voterFid, matchId, guess } = body;
 
-  const cycle = getActiveCycle();
-  if (!cycle) return NextResponse.json({ error: 'No active game cycle' }, { status: 404 });
+    if (!voterFid || !matchId || !guess) {
+      return NextResponse.json(
+        { error: "voterFid, matchId, and guess are required." },
+        { status: 400 }
+      );
+    }
 
-  const match = cycle.currentMatches.get(matchId);
-  if (!match) return NextResponse.json({ error: 'Match not found' }, { status: 404 });
+    if (guess !== "REAL" && guess !== "BOT") {
+      return NextResponse.json({ error: "Invalid guess." }, { status: 400 });
+    }
 
-  submitVote(match, voterFid, guess);
-  const shouldFinalize = match.isPlayer2Bot
-    ? true
-    : (() => {
-        const player2 = typeof match.player2FidOrBot === 'number' ? match.player2FidOrBot : null;
-        return player2 !== null && match.votes.has(match.player1Fid) && match.votes.has(player2);
-      })();
+    const isCorrect = gameManager.recordVote(voterFid, matchId, guess);
 
-  if (shouldFinalize) {
-    match.endedAt = new Date();
-    cycle.currentMatches.delete(matchId);
-    cycle.completedMatches.push(match);
+    if (isCorrect === null) {
+      return NextResponse.json(
+        { error: "Failed to record vote. Match may not exist or vote is already complete." },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ success: true, correct: isCorrect });
+  } catch (error) {
+    console.error("Error submitting vote:", error);
+    return NextResponse.json(
+      { error: "An unexpected error occurred." },
+      { status: 500 }
+    );
   }
-
-  const leaderboard = calculateLeaderboard(cycle);
-  return NextResponse.json({ ok: true, leaderboard, finalized: shouldFinalize });
 }

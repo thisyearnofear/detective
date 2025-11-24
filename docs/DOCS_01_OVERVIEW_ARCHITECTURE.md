@@ -227,11 +227,11 @@ detective/
 
 ### MVP Playable Criteria (Phase 1, ~1 week)
 
-- [ ] Game registers 2-3 test users via Farcaster SDK
-- [ ] Neynar score filter works (rejects score < 0.8)
-- [ ] Chat works: real user messages relay properly
-- [ ] Bot responses generate via Venice AI
-- [ ] Voting & leaderboard calculate correctly (in-memory)
+- [x] Game registers 2-3 test users via Farcaster SDK
+- [x] Neynar score filter works (rejects score < 0.8)
+- [x] Chat works: real user messages relay properly
+- [x] Bot responses generate via Venice AI
+- [x] Voting & leaderboard calculate correctly (in-memory)
 - [ ] No crashes during 30-minute test session
 
 ### Phase 2 Polish Criteria (~1 week)

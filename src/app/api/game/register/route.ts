@@ -1,39 +1,59 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createGameCycle, getActiveCycle, setActiveCycle, registerUserForGame } from '@/lib/gameState';
-import { fetchUserByFid, getUserRecentCasts, verifyNeynarScore } from '@/lib/neynar';
+// src/app/api/game/register/route.ts
+import { NextResponse } from "next/server";
+import { gameManager } from "@/lib/gameState";
+import { validateUser } from "@/lib/neynar";
 
-export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { fid } = body as { fid: number };
+/**
+ * API route to register a user for the current game cycle.
+ * Expects a POST request with a JSON body containing the user's `fid`.
+ */
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { fid } = body;
 
-  const scoreOk = await verifyNeynarScore(fid, 0.8);
-  if (!scoreOk) return NextResponse.json({ error: 'Neynar score below 0.8' }, { status: 403 });
+    if (!fid || typeof fid !== "number") {
+      return NextResponse.json({ error: "Invalid FID provided." }, { status: 400 });
+    }
 
-  let cycle = getActiveCycle();
-  if (!cycle) {
-    const now = new Date();
-    cycle = createGameCycle('Cycle', new Date(now.getTime() - 60 * 60 * 1000), new Date(now.getTime() + 24 * 60 * 60 * 1000), now, new Date(now.getTime() + 48 * 60 * 60 * 1000));
-    setActiveCycle(cycle);
+    const gameState = gameManager.getGameState();
+    if (gameState.state !== "REGISTRATION") {
+      return NextResponse.json(
+        { error: "Registration is currently closed." },
+        { status: 403 }
+      );
+    }
+
+    // Validate the user with Neynar
+    const { isValid, userProfile } = await validateUser(fid);
+
+    if (!isValid || !userProfile) {
+      return NextResponse.json(
+        { error: "User does not meet the quality criteria to join." },
+        { status: 403 }
+      );
+    }
+
+    // Register the player in the game state
+    const player = gameManager.registerPlayer(userProfile);
+
+    if (!player) {
+      return NextResponse.json(
+        { error: "Failed to register player. The game might be full." },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "Player registered successfully.",
+      player,
+    });
+  } catch (error) {
+    console.error("Error in game registration:", error);
+    return NextResponse.json(
+      { error: "An unexpected error occurred." },
+      { status: 500 }
+    );
   }
-
-  const userInfo = await fetchUserByFid(fid);
-  if (!userInfo) return NextResponse.json({ error: 'User not found' }, { status: 404 });
-
-  const casts = await getUserRecentCasts(fid, 30);
-
-  const user = {
-    fid: userInfo.fid,
-    username: userInfo.username,
-    displayName: userInfo.displayName,
-    pfpUrl: userInfo.pfpUrl,
-    recentCasts: casts,
-    neynarScore: userInfo.neynarScore,
-    createdAt: new Date(),
-  };
-
-  const res = registerUserForGame(cycle, user);
-  if (!res.success) return NextResponse.json({ error: res.message }, { status: 400 });
-
-  return NextResponse.json({ success: true });
 }
-
