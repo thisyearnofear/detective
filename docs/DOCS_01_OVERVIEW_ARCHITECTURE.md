@@ -113,6 +113,7 @@ Detective is an AI-powered social deduction game on Farcaster. Players engage in
 
 - `POST /api/game/register` - Register user for game cycle
 - `GET /api/game/status` - Get current game state
+- `GET /api/game/cycles` - List available game cycles
 
 #### Gameplay
 
@@ -134,6 +135,7 @@ detective/
 │   │       ├── game/
 │   │       │   ├── register/route.ts  # POST: Register user
 │   │       │   ├── status/route.ts    # GET: Game state
+│   │       │   └── cycles/route.ts    # GET: List game cycles
 │   │       ├── match/
 │   │       │   └── next/route.ts      # GET: Get next opponent
 │   │       ├── chat/

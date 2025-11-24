@@ -389,7 +389,7 @@ Successfully migrated Detective from a legacy Express.js + jQuery + MySQL applic
 
 - [x] `/api/game/register` - User registration with Neynar score check
 - [x] `/api/game/status` - Current game state
-- [ ] `/api/game/cycles` - List available game cycles
+- [x] `/api/game/cycles` - List available game cycles
 - [x] `/api/match/next` - Get next opponent (real player or bot)
 - [x] `/api/chat/send` - Send message (relay or generate bot response)
 - [x] `/api/chat/poll` - Poll for new messages
