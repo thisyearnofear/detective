@@ -1,0 +1,338 @@
+// src/lib/botBehavior.ts
+
+import { ChatMessage } from "./types";
+
+/**
+ * Bot behavior configuration and utilities for more realistic bot interactions
+ */
+
+// Typing speed ranges (characters per minute)
+const TYPING_SPEEDS = {
+  slow: { min: 150, max: 200 },
+  average: { min: 200, max: 300 },
+  fast: { min: 300, max: 400 },
+  burst: { min: 400, max: 500 }, // When someone is excited or rushing
+};
+
+// Common typos and autocorrect mistakes
+const TYPO_PATTERNS = [
+  { original: "the", typos: ["teh", "hte", "th"] },
+  { original: "and", typos: ["adn", "nad", "an"] },
+  { original: "you", typos: ["yuo", "yo", "u"] },
+  { original: "that", typos: ["taht", "tht", "htat"] },
+  { original: "with", typos: ["wtih", "wiht", "wit"] },
+  { original: "have", typos: ["ahve", "hav", "hvae"] },
+  { original: "from", typos: ["form", "frmo", "fro"] },
+  { original: "what", typos: ["waht", "wht", "whta"] },
+  { original: "been", typos: ["bene", "ben", "beem"] },
+  { original: "going", typos: ["goin", "gonig", "giong"] },
+];
+
+// Mobile autocorrect mistakes
+const AUTOCORRECT_MISTAKES = [
+  { intended: "ur", autocorrected: "your" },
+  { intended: "u", autocorrected: "I" },
+  { intended: "im", autocorrected: "I'm" },
+  { intended: "dont", autocorrected: "don't" },
+  { intended: "cant", autocorrected: "can't" },
+  { intended: "wont", autocorrected: "won't" },
+];
+
+// Response timing patterns
+export interface ResponseTiming {
+  initialDelay: number; // Time before starting to type (ms)
+  typingDuration: number; // How long it takes to type the message (ms)
+  hasTypingPauses: boolean; // Whether to include pauses (thinking)
+  pausePositions?: number[]; // Where in the message to pause
+}
+
+/**
+ * Calculate realistic response timing based on context
+ */
+export function calculateResponseTiming(
+  messageLength: number,
+  isFirstMessage: boolean,
+  messageHistory: ChatMessage[],
+  userStyle: string
+): ResponseTiming {
+  // Determine typing speed based on user style
+  let speedProfile = TYPING_SPEEDS.average;
+
+  if (userStyle.includes("brief") || userStyle.includes("terse")) {
+    speedProfile = TYPING_SPEEDS.fast;
+  } else if (userStyle.includes("thoughtful") || userStyle.includes("detailed")) {
+    speedProfile = TYPING_SPEEDS.slow;
+  } else if (messageHistory.length > 3) {
+    // Speed up as conversation progresses
+    speedProfile = TYPING_SPEEDS.fast;
+  }
+
+  // Calculate base typing duration
+  const charsPerMinute = speedProfile.min + Math.random() * (speedProfile.max - speedProfile.min);
+  const charsPerMs = charsPerMinute / 60000;
+  const baseTypingDuration = messageLength / charsPerMs;
+
+  // Initial delay (time to read previous message + think)
+  let initialDelay: number;
+  if (isFirstMessage) {
+    // First message: quick to respond to "gm" or simple greetings
+    initialDelay = 1000 + Math.random() * 2000; // 1-3 seconds
+  } else {
+    const lastMessage = messageHistory[messageHistory.length - 1];
+    const readingTime = lastMessage.text.length * 30; // 30ms per character to read
+    const thinkingTime = 500 + Math.random() * 2000; // 0.5-2.5 seconds to think
+    initialDelay = readingTime + thinkingTime;
+  }
+
+  // Add variance for realism
+  initialDelay += (Math.random() - 0.5) * 1000; // ±500ms variance
+
+  // Determine if we should add pauses (thinking while typing)
+  const hasTypingPauses = Math.random() < 0.3 && messageLength > 50; // 30% chance for longer messages
+
+  return {
+    initialDelay: Math.max(500, Math.min(initialDelay, 8000)), // Cap between 0.5-8 seconds
+    typingDuration: Math.max(1000, Math.min(baseTypingDuration, 15000)), // Cap between 1-15 seconds
+    hasTypingPauses,
+  };
+}
+
+/**
+ * Add human imperfections to a message
+ */
+export function addImperfections(
+  message: string,
+  userStyle: string,
+  isMobile: boolean = Math.random() < 0.7 // 70% on mobile
+): string {
+  // Determine imperfection probability based on style
+  let typoChance = 0.05; // 5% base chance
+  let autocorrectChance = 0.03; // 3% base chance
+  let punctuationIssueChance = 0.1; // 10% base chance
+
+  if (userStyle.includes("casual") || userStyle.includes("informal")) {
+    typoChance = 0.08;
+    punctuationIssueChance = 0.3;
+  } else if (userStyle.includes("careful") || userStyle.includes("formal")) {
+    typoChance = 0.02;
+    punctuationIssueChance = 0.05;
+  }
+
+  let result = message;
+
+  // Add typos
+  if (Math.random() < typoChance) {
+    const words = result.split(' ');
+    const wordIndex = Math.floor(Math.random() * words.length);
+    const word = words[wordIndex].toLowerCase();
+
+    const typoPattern = TYPO_PATTERNS.find(p => p.original === word);
+    if (typoPattern && typoPattern.typos.length > 0) {
+      const typo = typoPattern.typos[Math.floor(Math.random() * typoPattern.typos.length)];
+      words[wordIndex] = words[wordIndex].replace(word, typo);
+      result = words.join(' ');
+    }
+  }
+
+  // Mobile autocorrect mistakes
+  if (isMobile && Math.random() < autocorrectChance) {
+    for (const mistake of AUTOCORRECT_MISTAKES) {
+      if (result.includes(mistake.intended)) {
+        result = result.replace(mistake.intended, mistake.autocorrected);
+        break;
+      }
+    }
+  }
+
+  // Punctuation issues
+  if (Math.random() < punctuationIssueChance) {
+    const punctuationIssues = [
+      () => result.replace(/\.$/, ""), // Missing period
+      () => result.replace(/\?$/, ""), // Missing question mark
+      () => result.toLowerCase(), // No capitalization
+      () => result.replace(/^./, c => c.toLowerCase()), // No initial cap
+      () => result + "..", // Double period
+      () => result.replace(/\s,/g, ","), // No space after comma
+    ];
+
+    const issue = punctuationIssues[Math.floor(Math.random() * punctuationIssues.length)];
+    result = issue();
+  }
+
+  // Sometimes people don't finish their
+  if (Math.random() < 0.02) { // 2% chance
+    const words = result.split(' ');
+    if (words.length > 3) {
+      words.pop();
+      result = words.join(' ');
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Determine if bot should use emojis based on context
+ */
+export function shouldUseEmojis(
+  userStyle: string,
+  messageHistory: ChatMessage[],
+  isFirstMessage: boolean
+): boolean {
+  // Base emoji probability from style analysis
+  let emojiProbability = 0.1; // 10% base
+
+  if (userStyle.includes("emoji") || userStyle.includes("expressive")) {
+    emojiProbability = 0.6;
+  } else if (userStyle.includes("professional") || userStyle.includes("formal")) {
+    emojiProbability = 0.02;
+  }
+
+  // Check if human has used emojis
+  const humanMessages = messageHistory.filter(m => m.sender.fid !== messageHistory[0]?.sender.fid);
+  const humanUsedEmojis = humanMessages.some(m => /[\u{1F300}-\u{1F9FF}]/u.test(m.text));
+
+  if (humanUsedEmojis) {
+    // Mirror behavior slightly
+    emojiProbability = Math.min(emojiProbability * 1.5, 0.4);
+  }
+
+  // First messages rarely have emojis unless it's a "gm" response
+  if (isFirstMessage && !messageHistory[0]?.text.toLowerCase().includes("gm")) {
+    emojiProbability *= 0.3;
+  }
+
+  return Math.random() < emojiProbability;
+}
+
+/**
+ * Generate realistic emoji usage
+ */
+export function addEmojis(message: string, conservative: boolean = true): string {
+  const commonEmojis = ["😅", "👍", "💯", "🔥", "👀", "🤔", "😂", "✨", "🚀"];
+  const rareEmojis = ["🎯", "⚡", "🌟", "💪", "🙌", "🤝", "📈", "💡", "🎉"];
+
+  if (conservative) {
+    // Add max 1 emoji, usually at the end
+    if (Math.random() < 0.7) {
+      // 70% chance at end
+      const emoji = commonEmojis[Math.floor(Math.random() * commonEmojis.length)];
+      return `${message} ${emoji}`;
+    } else {
+      // 30% chance inline
+      const words = message.split(' ');
+      const position = Math.floor(Math.random() * words.length);
+      const emoji = commonEmojis[Math.floor(Math.random() * commonEmojis.length)];
+      words.splice(position, 0, emoji);
+      return words.join(' ');
+    }
+  } else {
+    // Power user mode - multiple emojis
+    let result = message;
+    const emojiCount = Math.floor(Math.random() * 3) + 1; // 1-3 emojis
+    for (let i = 0; i < emojiCount; i++) {
+      const emojiSet = Math.random() < 0.7 ? commonEmojis : rareEmojis;
+      const emoji = emojiSet[Math.floor(Math.random() * emojiSet.length)];
+
+      if (Math.random() < 0.5 && i === emojiCount - 1) {
+        result += ` ${emoji}`;
+      } else {
+        const words = result.split(' ');
+        const position = Math.floor(Math.random() * words.length);
+        words.splice(position, 0, emoji);
+        result = words.join(' ');
+      }
+    }
+    return result;
+  }
+}
+
+/**
+ * Pattern detection for common Farcaster behaviors
+ */
+export function detectConversationPattern(messageHistory: ChatMessage[]): string {
+  const lastMessage = messageHistory[messageHistory.length - 1]?.text.toLowerCase() || "";
+
+  // Common patterns and appropriate response styles
+  if (lastMessage.includes("gm")) return "greeting";
+  if (lastMessage.includes("wdyt") || lastMessage.includes("thoughts?")) return "opinion";
+  if (lastMessage.includes("?")) return "question";
+  if (lastMessage.includes("lol") || lastMessage.includes("lmao")) return "humor";
+  if (lastMessage.includes("agree") || lastMessage.includes("disagree")) return "discussion";
+  if (lastMessage.includes("wen") || lastMessage.includes("soon")) return "speculation";
+
+  return "general";
+}
+
+/**
+ * Generate typing indicators with realistic patterns
+ */
+export interface TypingIndicator {
+  isTyping: boolean;
+  startTime: number;
+  endTime: number;
+  hasPauses: boolean;
+  pauseTimes?: Array<{ start: number; duration: number }>;
+}
+
+export function generateTypingPattern(timing: ResponseTiming): TypingIndicator {
+  const now = Date.now();
+  const indicator: TypingIndicator = {
+    isTyping: true,
+    startTime: now + timing.initialDelay,
+    endTime: now + timing.initialDelay + timing.typingDuration,
+    hasPauses: timing.hasTypingPauses,
+  };
+
+  if (timing.hasTypingPauses) {
+    // Add 1-2 pauses during typing
+    const pauseCount = Math.random() < 0.7 ? 1 : 2;
+    indicator.pauseTimes = [];
+
+    for (let i = 0; i < pauseCount; i++) {
+      const pauseStart = timing.initialDelay + (timing.typingDuration * (i + 1) / (pauseCount + 1));
+      const pauseDuration = 500 + Math.random() * 1500; // 0.5-2 seconds
+      indicator.pauseTimes.push({
+        start: now + pauseStart,
+        duration: pauseDuration,
+      });
+    }
+  }
+
+  return indicator;
+}
+
+/**
+ * Red herring behaviors - make bots occasionally too perfect or humans seem bot-like
+ */
+export function shouldAddRedHerring(isBot: boolean): boolean {
+  if (isBot) {
+    // 10% chance for bots to be suspiciously perfect
+    return Math.random() < 0.1;
+  } else {
+    // 5% chance to add bot-like behavior to humans
+    return Math.random() < 0.05;
+  }
+}
+
+export function applyRedHerring(message: string, isBot: boolean): string {
+  if (isBot) {
+    // Make bot response too perfect
+    return message
+      .split('. ')
+      .map(s => s.charAt(0).toUpperCase() + s.slice(1))
+      .join('. ')
+      .replace(/\s+/g, ' ')
+      .trim() + '.';
+  } else {
+    // Make human response bot-like
+    const templates = [
+      "That's an interesting point!",
+      "I appreciate your perspective.",
+      "Thanks for sharing that.",
+      "That makes sense to me.",
+      "I can see where you're coming from.",
+    ];
+    return templates[Math.floor(Math.random() * templates.length)];
+  }
+}
