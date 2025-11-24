@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import useSWR from "swr";
 import Image from "next/image";
 import Timer from "./Timer";
+import EmojiPicker from "./EmojiPicker";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -111,6 +112,42 @@ export default function ChatWindow({
       onComplete();
     }
   }, [onComplete]);
+
+  const handleEmojiSelect = (emoji: string) => {
+    setInput(input + emoji);
+  };
+
+  // Handle emoji shortcode expansion
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value;
+
+    // Define shortcode mappings
+    const shortcodes: Record<string, string> = {
+      ":unicorn:": "🦄",
+      ":tophat:": "🎩",
+      ":rainbow:": "🌈",
+      ":purple:": "🟣",
+      ":rocket:": "🚀",
+      ":eyes:": "👀",
+      ":fire:": "🔥",
+      ":sparkles:": "✨",
+      ":salute:": "🫡",
+      ":100:": "💯",
+      ":handshake:": "🤝",
+      ":purpleheart:": "💜",
+      ":star:": "🌟",
+      ":zap:": "⚡",
+      ":dart:": "🎯",
+      ":gem:": "💎",
+    };
+
+    // Replace shortcodes with emojis
+    Object.entries(shortcodes).forEach(([code, emoji]) => {
+      value = value.replace(new RegExp(code, "g"), emoji);
+    });
+
+    setInput(value);
+  };
 
   const matchDuration = Math.round((match.endTime - Date.now()) / 1000);
 
@@ -265,9 +302,13 @@ export default function ChatWindow({
               isCompact ? "text-sm" : ""
             }`}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={handleInputChange}
             onKeyPress={(e) => e.key === "Enter" && handleSend()}
-            placeholder="Type your message..."
+            placeholder="Type your message... (try :unicorn: or :fire:)"
+          />
+          <EmojiPicker
+            onEmojiSelect={handleEmojiSelect}
+            isCompact={isCompact}
           />
           <button
             className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg transition-colors"
