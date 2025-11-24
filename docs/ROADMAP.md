@@ -78,7 +78,7 @@ Migrate Detective from a Twitter OAuth + MySQL multiplayer game into a **Farcast
          ↕ (HTTP)             ↕ (HTTP)
     ┌─────────────┐    ┌──────────────┐
     │ Neynar API  │    │ LLM Provider │
-    │ (Validate   │    │ (Claude/GPT) │
+    │ (Validate   │    │ (Venice AI)  │
     │  user score)│    │ (Bot Brain)  │
     └─────────────┘    └──────────────┘
 ```
@@ -202,7 +202,7 @@ Migrate Detective from a Twitter OAuth + MySQL multiplayer game into a **Farcast
 
 - [ ] **Analytics Lite**
   - Simple dashboard: players registered, accuracy distribution
-  - Cost tracking: Neynar API calls, Claude tokens
+- Cost tracking: Neynar API calls, Venice tokens
   - Log to console or simple JSON file
 
 - [ ] **Security & Rate Limits**
@@ -237,7 +237,7 @@ Migrate Detective from a Twitter OAuth + MySQL multiplayer game into a **Farcast
 
 - [ ] **Monitoring**
   - Log API errors & response times
-  - Track costs (Neynar, Claude)
+- Track costs (Neynar, Venice)
   - Monitor Vercel function execution
 
 **Output**: First playable public game, data on user retention
@@ -249,7 +249,7 @@ Migrate Detective from a Twitter OAuth + MySQL multiplayer game into a **Farcast
 
 - [ ] **Iterative Improvements**
   - Adjust match timing based on feedback (3-4 min sweet spot?)
-  - Refine Claude prompts based on user comments
+- Refine Venice prompts based on user comments
   - Add 2-3 more game cycles (weekly)
   - Measure retention: % of users returning for cycle 2+
 
@@ -314,10 +314,10 @@ VENICE_API_KEY=your_venice_api_key
 
 ### ⚠️ Moderate Risk (Manageable)
 1. **AI Bot Believability** - Requires prompt engineering & user testing
-   - *Mitigation*: Start with Claude defaults, iterate on feedback per cycle
+   - *Mitigation*: Start with Venice defaults, iterate on feedback per cycle
 2. **Neynar Free Tier (10k req/day)** - Ample for 50 players (~200 reqs/game)
    - *Mitigation*: Batch scraping, cache responses, monitor costs
-3. **Claude API Cost** - ~$1-2 per game (50 players × 5 rounds = 250 bot responses)
+3. **Venice AI Cost** - low per-game cost at this scale
    - *Mitigation*: Acceptable MVP cost, budget $50-100/month
 
 ### 🟢 Very Low Risk
@@ -333,13 +333,13 @@ VENICE_API_KEY=your_venice_api_key
 - [ ] Game registers 2-3 test users via Farcaster SDK
 - [ ] Neynar score filter works (rejects score < 0.8)
 - [ ] Chat works: real user messages relay properly
-- [ ] Bot responses generate via Claude API
+- [ ] Bot responses generate via Venice AI
 - [ ] Voting & leaderboard calculate correctly (in-memory)
 - [ ] No crashes during 30-minute test session
 
 ### Phase 2 Polish Criteria (~1 week)
 - [ ] Bot responses feel "human-like" (5-10 testers, subjective feedback)
-- [ ] Claude costs tracked (~$1-2 per test game)
+- [ ] Venice costs tracked (~$1-2 per test game)
 - [ ] Mobile UI responsive on iOS/Android
 - [ ] Error handling for API failures graceful
 
@@ -426,7 +426,7 @@ detective/
 │   ├── lib/
 │   │   ├── gameState.ts             # In-memory state (Map-based)
 │   │   ├── neynar.ts                # Neynar API calls
-│   │   ├── claude.ts                # Claude API calls
+│   │   ├── inference.ts            # Venice AI calls
 │   │   ├── types.ts                 # TypeScript types
 │   │   └── utils.ts                 # Helpers
 │   ├── styles/
@@ -456,7 +456,7 @@ detective/
 | Risk | Impact | Likelihood | Mitigation |
 |------|--------|------------|-----------|
 | Neynar API rate limits (10k/day) | Medium | Low | 50 players = ~200 reqs/game. Monitor, upgrade if needed. |
-| Claude API costs escalate | Low | Low | ~$1-2/game for 50 players. Budget $50-100/month. |
+| Venice AI costs escalate | Low | Low | ~$1-2/game for 50 players. Budget $50-100/month. |
 | Bot responses not believable | High | Medium | Iterate prompts per cycle, A/B test with feedback. |
 | User churn after first cycle | High | Medium | Make cycle 2 registration easy, social sharing. |
 | Game state lost on crash | Medium | Low | Acceptable for MVP; restart game. Add Vercel KV in Phase 3. |
@@ -474,14 +474,14 @@ detective/
    - Initialize git
 3. **Create API Keys** (if not done)
    - Neynar: https://neynar.com/app/api-keys
-   - Claude: https://console.anthropic.com/
+   - Venice: https://venice.ai/
    - Vercel: https://vercel.com/
 4. **Begin Phase 1: MVP Foundation** (target: 1-2 weeks)
    - Game state store (in-memory)
    - Farcaster SDK integration
    - Neynar quality filtering (score > 0.8)
    - Chat interface (HTTP polling)
-   - Claude bot integration
+   - Venice AI bot integration
 
 ---
 
@@ -492,7 +492,7 @@ detective/
 **Technical Feasibility: 9/10**
 - No database required (game state in-memory)
 - 50 concurrent players = simple infrastructure
-- Proven tech stack (Next.js, Claude, Neynar)
+- Proven tech stack (Next.js, Venice AI, Neynar)
 - Vercel free tier sufficient for MVP
 
 **Timeline: 3-4 weeks**
@@ -502,7 +502,7 @@ detective/
 
 **Monthly Costs**
 - Neynar: Free tier (10k req/day, ample for 50 players)
-- Claude: $50-100/month (assuming 5-10 games)
+- Venice AI: similar or lower (assuming 5-10 games)
 - Vercel: Free tier
 - **Total**: ~$50-100/month
 
