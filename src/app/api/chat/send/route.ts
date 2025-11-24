@@ -1,8 +1,6 @@
 // src/app/api/chat/send/route.ts
 import { NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
-import { generateBotResponse, getBotResponseTiming } from "@/lib/inference";
-import { Bot } from "@/lib/types";
 
 /**
  * API route to send a message in a match.

@@ -8,6 +8,7 @@ import {
   detectConversationPattern,
   shouldAddRedHerring,
   applyRedHerring,
+  ResponseTiming,
 } from "./botBehavior";
 
 const VENICE_API_KEY = process.env.VENICE_API_KEY;
@@ -270,8 +271,9 @@ Respond EXACTLY as this person would. Don't overthink it. Be natural, even if th
         botResponse = applyRedHerring(botResponse, true);
       } else {
         // Add human imperfections based on style
-        const isMobile =
-          metadata.avg_length && parseInt(metadata.avg_length) < 100;
+        const isMobile = metadata.avg_length
+          ? parseInt(metadata.avg_length) < 100
+          : false;
         botResponse = addImperfections(botResponse, baseStyle, isMobile);
 
         // Add emojis if appropriate (but sparingly)
