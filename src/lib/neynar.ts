@@ -1,26 +1,36 @@
 // src/lib/neynar.ts
 import { UserProfile } from "./types";
+import { inferWritingStyle } from "./inference";
 
 const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
-const NEYNAR_API_URL = "https://api.neynar.com/v2/farcaster/user/bulk";
 
 // As per the docs, the quality score required to play.
 const NEYNAR_SCORE_THRESHOLD = 0.8;
 
+interface FarcasterUserData {
+  isValid: boolean;
+  userProfile: UserProfile | null;
+  recentCasts: { text: string }[];
+  style: string;
+}
+
 /**
- * Validates a user against the Neynar quality score threshold.
+ * Fetches all necessary Farcaster data for a user, including profile,
+ * validation, recent casts, and inferred writing style.
  *
- * @param fid The Farcaster ID of the user to validate.
- * @returns A boolean indicating if the user is valid, and the user's profile.
+ * @param fid The Farcaster ID of the user.
+ * @returns A comprehensive object with all user data for the game.
  */
-export async function validateUser(
+export async function getFarcasterUserData(
   fid: number
-): Promise<{ isValid: boolean; userProfile: UserProfile | null }> {
+): Promise<FarcasterUserData> {
+  // For local development without an API key, return mock data.
   if (!NEYNAR_API_KEY) {
-    console.warn(
-      "NEYNAR_API_KEY is not set. Returning mock validation success."
-    );
-    // Return a mock success response for local development without an API key.
+    console.warn("NEYNAR_API_KEY is not set. Returning mock user data.");
+    const mockCasts = [
+      { text: "Just enjoying a cup of coffee and coding." },
+      { text: "Farcaster is a really interesting platform." },
+    ];
     return {
       isValid: true,
       userProfile: {
@@ -29,63 +39,53 @@ export async function validateUser(
         displayName: `Test User ${fid}`,
         pfpUrl: "https://i.imgur.com/vL43u65.jpg",
       },
+      recentCasts: mockCasts,
+      style: await inferWritingStyle(mockCasts.map(c => c.text)),
     };
   }
 
   try {
-    const response = await fetch(`${NEYNAR_API_URL}?fids=${fid}`, {
+    // 1. Fetch user profile for validation and basic info
+    const userResponse = await fetch(`https://api.neynar.com/v2/farcaster/user/bulk?fids=${fid}`, {
       method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        "api_key": NEYNAR_API_KEY,
-      },
+      headers: { "Content-Type": "application/json", api_key: NEYNAR_API_KEY },
     });
 
-    if (!response.ok) {
-      throw new Error(`Neynar API error: ${response.statusText}`);
-    }
+    if (!userResponse.ok) throw new Error(`Neynar user API error: ${userResponse.statusText}`);
+    const userData = await userResponse.json();
+    const user = userData.users?.[0];
 
-    const data = await response.json();
-    const user = data.users?.[0];
+    if (!user) return { isValid: false, userProfile: null, recentCasts: [], style: "" };
 
-    if (!user) {
-      return { isValid: false, userProfile: null };
-    }
-
-    // This is a placeholder for the actual score calculation.
-    // The Neynar bulk user endpoint doesn't directly provide the same "score"
-    // as other endpoints might. For this MVP, we'll simulate a check.
-    // A more robust implementation might need a different endpoint or logic.
-    const mockScore = user.follower_count > 100 ? 0.9 : 0.7; // Example logic
+    // 2. Perform validation (using mock logic as before)
+    const mockScore = user.follower_count > 100 ? 0.9 : 0.7;
     const isValid = mockScore >= NEYNAR_SCORE_THRESHOLD;
 
-    return {
-      isValid,
-      userProfile: {
-        fid: user.fid,
-        username: user.username,
-        displayName: user.display_name,
-        pfpUrl: user.pfp_url,
-      },
-    };
-  } catch (error) {
-    console.error("Error validating user with Neynar:", error);
-    return { isValid: false, userProfile: null };
-  }
-}
+    if (!isValid) return { isValid: false, userProfile: null, recentCasts: [], style: "" };
 
-/**
- * Fetches recent casts for a user to be used in bot training.
- * NOTE: This is a placeholder and would need a real implementation.
- *
- * @param fid The Farcaster ID of the user.
- * @returns An array of recent casts.
- */
-export async function getRecentCasts(fid: number): Promise<any[]> {
-  console.log(`Fetching recent casts for fid: ${fid} (mock)`);
-  return [
-    { text: "Just enjoying a cup of coffee and coding." },
-    { text: "Farcaster is a really interesting platform." },
-    { text: "Has anyone tried the new Next.js 15 features yet?" },
-  ];
+    const userProfile: UserProfile = {
+      fid: user.fid,
+      username: user.username,
+      displayName: user.display_name,
+      pfpUrl: user.pfp_url,
+    };
+
+    // 3. Fetch user's recent casts
+    const feedResponse = await fetch(`https://api.neynar.com/v2/farcaster/feed?feed_type=filter&filter_type=fids&fids=${fid}&limit=15`, {
+        method: "GET",
+        headers: { "Content-Type": "application/json", api_key: NEYNAR_API_KEY },
+    });
+    if (!feedResponse.ok) throw new Error(`Neynar feed API error: ${feedResponse.statusText}`);
+    const feedData = await feedResponse.json();
+    const recentCasts: { text: string }[] = feedData.casts.map((c: any) => ({ text: c.text }));
+
+    // 4. Infer writing style from casts
+    const style = await inferWritingStyle(recentCasts.map(c => c.text));
+
+    return { isValid: true, userProfile, recentCasts, style };
+
+  } catch (error) {
+    console.error("Error fetching Farcaster user data:", error);
+    return { isValid: false, userProfile: null, recentCasts: [], style: "" };
+  }
 }

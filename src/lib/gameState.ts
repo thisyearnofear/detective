@@ -8,7 +8,6 @@ import {
   LeaderboardEntry,
   UserProfile,
 } from "./types";
-import { USERS } from "@/lib/users"; // Hardcoded user data
 
 const GAME_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 const REGISTRATION_DURATION = 1 * 60 * 60 * 1000; // 1 hour
@@ -24,7 +23,6 @@ class GameManager {
 
   private constructor() {
     this.state = this.initializeGameState();
-    this.populateInitialBots();
   }
 
   /**
@@ -55,34 +53,21 @@ class GameManager {
   }
 
   /**
-   * Populates the game with bots based on a hardcoded list of users.
-   */
-  private populateInitialBots(): void {
-    USERS.forEach((user) => {
-      const bot: Bot = {
-        ...user,
-        type: "BOT",
-        originalAuthor: user,
-        recentCasts: [], // This would be populated by Neynar
-        style: "Direct and to the point.", // This would be inferred
-      };
-      this.state.bots.set(user.fid, bot);
-    });
-  }
-
-  /**
    * Returns the current game state.
    */
   public getGameState(): GameState {
-    // Periodically update the cycle state based on time
     this.updateCycleState();
     return this.state;
   }
 
   /**
-   * Registers a new player for the current game cycle.
+   * Registers a new player and creates a corresponding bot for them.
    */
-  public registerPlayer(userProfile: UserProfile): Player | null {
+  public registerPlayer(
+    userProfile: UserProfile,
+    recentCasts: { text: string }[],
+    style: string
+  ): Player | null {
     if (this.state.players.size >= MAX_PLAYERS) {
       console.warn("Max players reached. Cannot register new player.");
       return null;
@@ -91,6 +76,7 @@ class GameManager {
       return this.state.players.get(userProfile.fid)!;
     }
 
+    // Create and add the real player
     const newPlayer: Player = {
       ...userProfile,
       type: "REAL",
@@ -98,8 +84,18 @@ class GameManager {
       score: 0,
       voteHistory: [],
     };
-
     this.state.players.set(userProfile.fid, newPlayer);
+
+    // Create and add the corresponding bot
+    const newBot: Bot = {
+        ...userProfile,
+        type: "BOT",
+        originalAuthor: userProfile,
+        recentCasts,
+        style,
+    };
+    this.state.bots.set(userProfile.fid, newBot);
+
     return newPlayer;
   }
 
@@ -115,11 +111,16 @@ class GameManager {
 
     let opponent: Player | Bot | undefined;
 
-    if (playAgainstBot) {
-      const availableBots = Array.from(this.state.bots.values());
-      opponent =
-        availableBots[Math.floor(Math.random() * availableBots.length)];
-    } else {
+    if (playAgainstBot && this.state.bots.size > 0) {
+      // Pick a bot that is not impersonating the current player
+      const availableBots = Array.from(this.state.bots.values()).filter(b => b.fid !== fid);
+      if (availableBots.length > 0) {
+        opponent = availableBots[Math.floor(Math.random() * availableBots.length)];
+      }
+    }
+    
+    // Fallback or if it's the 50% chance to play a real person
+    if (!opponent) {
       const availablePlayers = Array.from(this.state.players.values()).filter(
         (p) => p.fid !== fid
       );
@@ -128,7 +129,7 @@ class GameManager {
           availablePlayers[
             Math.floor(Math.random() * availablePlayers.length)
           ];
-      } else {
+      } else if (this.state.bots.size > 0) {
         // Fallback to a bot if no other players are available
         const availableBots = Array.from(this.state.bots.values());
         opponent =

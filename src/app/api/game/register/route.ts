@@ -1,7 +1,7 @@
 // src/app/api/game/register/route.ts
 import { NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
-import { validateUser } from "@/lib/neynar";
+import { getFarcasterUserData } from "@/lib/neynar";
 
 /**
  * API route to register a user for the current game cycle.
@@ -24,8 +24,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Validate the user with Neynar
-    const { isValid, userProfile } = await validateUser(fid);
+    // Fetch all user data from Neynar, including validation, profile, and casts
+    const { isValid, userProfile, recentCasts, style } = await getFarcasterUserData(fid);
 
     if (!isValid || !userProfile) {
       return NextResponse.json(
@@ -34,8 +34,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Register the player in the game state
-    const player = gameManager.registerPlayer(userProfile);
+    // Register the player and create the corresponding bot in the game state
+    const player = gameManager.registerPlayer(userProfile, recentCasts, style);
 
     if (!player) {
       return NextResponse.json(
