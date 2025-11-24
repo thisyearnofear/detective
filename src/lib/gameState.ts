@@ -130,8 +130,8 @@ class GameManager {
         activeMatches: new Map(),
         completedMatchIds: new Set(),
         facedOpponents: new Map(),
-        currentRound: 1,
-        nextRoundStartTime: Date.now(),
+        currentRound: 0,
+        nextRoundStartTime: undefined,
       });
     }
     return this.state.playerSessions.get(fid)!;
@@ -162,10 +162,27 @@ class GameManager {
       return [];
     }
 
-    // Check if we should start a new round
-    if (session.nextRoundStartTime && now >= session.nextRoundStartTime) {
-      // Clear old matches and start new round
-      session.activeMatches.clear();
+    // Check existing matches and see if any have expired
+    let hasExpiredMatches = false;
+    let activeMatchCount = 0;
+
+    for (const [slotNum, matchId] of session.activeMatches) {
+      const match = this.state.matches.get(matchId);
+      if (!match || match.endTime <= now) {
+        hasExpiredMatches = true;
+        session.activeMatches.delete(slotNum);
+      } else {
+        matches.push(match);
+        activeMatchCount++;
+      }
+    }
+
+    // If all matches from current round have expired, start new round
+    if (
+      hasExpiredMatches &&
+      activeMatchCount === 0 &&
+      session.currentRound <= maxRounds
+    ) {
       session.currentRound++;
       session.nextRoundStartTime = now + this.state.config.matchDurationMs;
 
@@ -181,11 +198,20 @@ class GameManager {
           matches.push(match);
         }
       }
-    } else {
-      // Return existing active matches
-      for (const [_slotNum, matchId] of session.activeMatches) {
-        const match = this.state.matches.get(matchId);
-        if (match && match.endTime > now) {
+    } else if (!session.nextRoundStartTime && activeMatchCount === 0) {
+      // First time getting matches - start round 1
+      session.currentRound = 1;
+      session.nextRoundStartTime = now + this.state.config.matchDurationMs;
+
+      // Create matches for both slots
+      for (
+        let slotNum = 1;
+        slotNum <= this.state.config.simultaneousMatches;
+        slotNum++
+      ) {
+        const match = this.createMatchForSlot(fid, slotNum as 1 | 2, session);
+        if (match) {
+          session.activeMatches.set(slotNum, match.id);
           matches.push(match);
         }
       }
@@ -382,6 +408,7 @@ class GameManager {
 
     match.voteLocked = true;
     match.isVotingComplete = true;
+    match.isFinished = true;
 
     const player = match.player;
     const guess = match.currentVote || "REAL"; // Default to REAL if no vote
