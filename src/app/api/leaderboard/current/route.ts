@@ -18,7 +18,7 @@ export async function GET() {
         : gameManager.getLeaderboard();
 
     return NextResponse.json(leaderboard);
-  } catch (error)_ {
+  } catch (error) {
     console.error("Error fetching leaderboard:", error);
     return NextResponse.json(
       { error: "An unexpected error occurred." },

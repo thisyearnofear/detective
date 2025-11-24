@@ -1,7 +1,6 @@
 // src/lib/gameState.ts
 import {
   GameState,
-  GameCycleState,
   Player,
   Bot,
   Match,
@@ -88,11 +87,11 @@ class GameManager {
 
     // Create and add the corresponding bot
     const newBot: Bot = {
-        ...userProfile,
-        type: "BOT",
-        originalAuthor: userProfile,
-        recentCasts,
-        style,
+      ...userProfile,
+      type: "BOT",
+      originalAuthor: userProfile,
+      recentCasts,
+      style,
     };
     this.state.bots.set(userProfile.fid, newBot);
 
@@ -118,7 +117,7 @@ class GameManager {
         opponent = availableBots[Math.floor(Math.random() * availableBots.length)];
       }
     }
-    
+
     // Fallback or if it's the 50% chance to play a real person
     if (!opponent) {
       const availablePlayers = Array.from(this.state.players.values()).filter(
@@ -127,7 +126,7 @@ class GameManager {
       if (availablePlayers.length > 0) {
         opponent =
           availablePlayers[
-            Math.floor(Math.random() * availablePlayers.length)
+          Math.floor(Math.random() * availablePlayers.length)
           ];
       } else if (this.state.bots.size > 0) {
         // Fallback to a bot if no other players are available
@@ -249,7 +248,7 @@ class GameManager {
       const avgSpeed =
         correctVotes.length > 0
           ? correctVotes.reduce((sum, v) => sum + v.speed, 0) /
-            correctVotes.length
+          correctVotes.length
           : 0;
 
       return {
@@ -273,6 +272,47 @@ class GameManager {
     });
 
     return leaderboard;
+  }
+
+  // ========== ADMIN METHODS (Dev/Testing Only) ==========
+
+  /**
+   * Manually force a state transition (for testing).
+   * @param newState The state to transition to
+   */
+  public forceStateTransition(newState: "REGISTRATION" | "LIVE" | "FINISHED"): void {
+    this.state.state = newState;
+    if (newState === "FINISHED") {
+      this.state.leaderboard = this.getLeaderboard();
+    }
+  }
+
+  /**
+   * Reset the entire game state (for testing).
+   */
+  public resetGame(): void {
+    this.state = this.initializeGameState();
+  }
+
+  /**
+   * Get all players (for admin view).
+   */
+  public getAllPlayers(): Player[] {
+    return Array.from(this.state.players.values());
+  }
+
+  /**
+   * Get all bots (for admin view).
+   */
+  public getAllBots(): Bot[] {
+    return Array.from(this.state.bots.values());
+  }
+
+  /**
+   * Get all matches (for admin view).
+   */
+  public getAllMatches(): Match[] {
+    return Array.from(this.state.matches.values());
   }
 }
 

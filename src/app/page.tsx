@@ -6,12 +6,13 @@ import { sdk } from "@farcaster/miniapp-sdk";
 import ChatWindow from "@/components/ChatWindow";
 import GameRegister from "@/components/GameRegister";
 import Leaderboard from "@/components/Leaderboard";
+import AuthInput from "@/components/AuthInput";
 import { GameCycleState } from "@/lib/types";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 // This component handles the logic when the game is LIVE
-const LiveGameView = ({ fid, username }: { fid: number; username: string }) => {
+const LiveGameView = ({ fid }: { fid: number }) => {
   const [match, setMatch] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,8 +55,8 @@ const LiveGameView = ({ fid, username }: { fid: number; username: string }) => {
 // Main component for the application's home page
 export default function Home() {
   const [sdkUser, setSdkUser] = useState<any>(null);
+  const [authMode, setAuthMode] = useState<'sdk' | 'web' | null>(null);
   const [isSdkLoading, setIsSdkLoading] = useState(true);
-  const [sdkError, setSdkError] = useState<string | null>(null);
 
   // Use SWR for polling the game state every 3 seconds
   const { data: gameState, error: gameStateError } = useSWR(
@@ -65,24 +66,36 @@ export default function Home() {
   );
 
   useEffect(() => {
-    const initSdk = async () => {
+    const initAuth = async () => {
       try {
         const context = await sdk.context;
         if (context) {
           setSdkUser((context as any).user);
+          setAuthMode('sdk');
+          await sdk.actions.ready();
         } else {
-          setSdkError("Could not initialize Farcaster context. Are you in Warpcast?");
+          // SDK context unavailable, fallback to web mode
+          setAuthMode('web');
         }
-        await sdk.actions.ready();
       } catch (err) {
-        console.error("Error initializing mini app:", err);
-        setSdkError("Failed to initialize. Make sure you are on Farcaster.");
+        console.log("Farcaster SDK not available, using web mode");
+        // Gracefully fallback to web authentication
+        setAuthMode('web');
       } finally {
         setIsSdkLoading(false);
       }
     };
-    initSdk();
+    initAuth();
   }, []);
+
+  const handleWebAuth = (userProfile: {
+    fid: number;
+    username: string;
+    displayName: string;
+    pfpUrl: string;
+  }) => {
+    setSdkUser(userProfile);
+  };
 
   const renderGameState = () => {
     if (!gameState || !sdkUser) return null;
@@ -91,7 +104,7 @@ export default function Home() {
       case "REGISTRATION":
         return <GameRegister fid={sdkUser.fid} isRegistrationOpen={true} />;
       case "LIVE":
-        return <LiveGameView fid={sdkUser.fid} username={sdkUser.username} />;
+        return <LiveGameView fid={sdkUser.fid} />;
       case "FINISHED":
         return (
           <div>
@@ -110,19 +123,19 @@ export default function Home() {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <h1 className="text-3xl font-bold mb-4">🔍 Detective</h1>
-          <p className="text-gray-400">Connecting to Farcaster...</p>
+          <p className="text-gray-400">Loading...</p>
         </div>
       </div>
     );
   }
 
-  // Error state for SDK or game state fetching
-  if (sdkError || gameStateError) {
+  // Show game state error
+  if (gameStateError) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center text-red-400">
           <h1 className="text-2xl font-bold mb-2">Error</h1>
-          <p>{sdkError || "Failed to load game status."}</p>
+          <p>Failed to load game status.</p>
         </div>
       </div>
     );
@@ -138,25 +151,38 @@ export default function Home() {
           </p>
         </div>
 
-        {sdkUser && (
-          <div className="bg-slate-800 rounded-lg p-4 mb-8">
-            <p className="text-sm text-center text-gray-400">
-              Logged in as{" "}
-              <strong className="text-white">@{sdkUser.username}</strong> (FID: {sdkUser.fid})
-            </p>
-          </div>
+        {/* Show AuthInput for web users who haven't authenticated */}
+        {authMode === 'web' && !sdkUser && (
+          <AuthInput onAuthSuccess={handleWebAuth} />
         )}
 
-        {/* Game Status Display */}
-        {gameState && (
-            <div className="bg-slate-800/50 rounded-lg p-4 mb-8 text-center">
+        {/* Show user info and game when authenticated */}
+        {sdkUser && (
+          <>
+            <div className="bg-slate-800 rounded-lg p-4 mb-8">
+              <p className="text-sm text-center text-gray-400">
+                Logged in as{" "}
+                <strong className="text-white">@{sdkUser.username}</strong> (FID: {sdkUser.fid})
+                {authMode === 'web' && (
+                  <span className="ml-2 text-xs bg-blue-900/30 text-blue-400 px-2 py-1 rounded">
+                    Web Mode
+                  </span>
+                )}
+              </p>
+            </div>
+
+            {/* Game Status Display */}
+            {gameState && (
+              <div className="bg-slate-800/50 rounded-lg p-4 mb-8 text-center">
                 <p className="text-lg font-semibold uppercase tracking-widest text-blue-400">{gameState.state}</p>
                 <p className="text-sm text-gray-400">{gameState.playerCount} players registered</p>
-            </div>
-        )}
+              </div>
+            )}
 
-        {/* Conditionally Rendered Game Component */}
-        {renderGameState()}
+            {/* Conditionally Rendered Game Component */}
+            {renderGameState()}
+          </>
+        )}
 
         {/* How to Play Section (always visible) */}
         <div className="bg-slate-800 rounded-lg p-6 mt-12">
@@ -174,6 +200,16 @@ export default function Home() {
               </li>
             ))}
           </ol>
+        </div>
+
+        {/* Admin Link (Dev Mode) */}
+        <div className="mt-6 text-center">
+          <a
+            href="/admin"
+            className="inline-block bg-slate-700 hover:bg-slate-600 text-gray-300 hover:text-white px-4 py-2 rounded-lg text-sm transition-colors"
+          >
+            🔧 Admin Panel
+          </a>
         </div>
       </div>
     </main>
