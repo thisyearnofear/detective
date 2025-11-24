@@ -27,7 +27,18 @@ export interface Player extends UserProfile {
   type: "REAL";
   isRegistered: boolean;
   score: number; // Player's accuracy score
-  voteHistory: { matchId: string; correct: boolean; speed: number }[];
+  voteHistory: VoteRecord[];
+  inactivityStrikes: number; // Track inactivity violations
+  lastActiveTime: number;
+}
+
+// Represents a single vote record
+export interface VoteRecord {
+  matchId: string;
+  correct: boolean;
+  speed: number; // Time in ms from match start to final vote
+  voteChanges: number; // Number of times vote was toggled
+  forfeit?: boolean; // If match was forfeited due to inactivity
 }
 
 // Represents a single conversation match
@@ -40,6 +51,20 @@ export interface Match {
   messages: ChatMessage[];
   isVotingComplete: boolean;
   isFinished: boolean;
+
+  // New fields for multi-chat support
+  slotNumber: 1 | 2; // Which chat slot (1 or 2)
+  roundNumber: number; // Which round (1-5 for 5-minute game)
+  currentVote?: "REAL" | "BOT"; // Current toggle state
+  voteHistory: VoteChange[]; // Track all vote changes
+  voteLocked: boolean; // Locked when chat ends
+  lastPlayerMessageTime: number; // For inactivity tracking
+}
+
+// Tracks each vote change during a match
+export interface VoteChange {
+  vote: "REAL" | "BOT";
+  timestamp: number;
 }
 
 // Represents a single message in a chat
@@ -57,6 +82,16 @@ export interface LeaderboardEntry {
   avgSpeed: number; // Average time to vote correctly
 }
 
+// Tracks a player's current game session
+export interface PlayerGameSession {
+  fid: number;
+  activeMatches: Map<number, string>; // slot number -> match ID
+  completedMatchIds: Set<string>; // All completed match IDs
+  facedOpponents: Map<number, number>; // opponent fid -> times faced
+  currentRound: number;
+  nextRoundStartTime?: number;
+}
+
 // Defines the structure for the overall in-memory game state
 export interface GameState {
   cycleId: string;
@@ -66,5 +101,19 @@ export interface GameState {
   players: Map<number, Player>; // Map of fid -> Player
   bots: Map<number, Bot>; // Map of fid -> Bot (impersonating that fid)
   matches: Map<string, Match>; // Map of matchId -> Match
+  playerSessions: Map<number, PlayerGameSession>; // Map of fid -> session
   leaderboard: LeaderboardEntry[];
+
+  // Game configuration
+  config: GameConfig;
+}
+
+// Game configuration parameters
+export interface GameConfig {
+  gameDurationMs: number; // Total game duration (5 minutes = 300000)
+  matchDurationMs: number; // Each match duration (1 minute = 60000)
+  simultaneousMatches: number; // Number of concurrent chats (2)
+  inactivityWarningMs: number; // Warning after this time (30000)
+  inactivityForfeitMs: number; // Auto-forfeit after this time (45000)
+  maxInactivityStrikes: number; // Max strikes before cooldown (3)
 }
