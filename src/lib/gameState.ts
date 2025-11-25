@@ -166,50 +166,42 @@ class GameManager {
     let hasExpiredMatches = false;
     let activeMatchCount = 0;
 
+    console.log(`[getActiveMatches] Player ${fid}: activeMatches.size=${session.activeMatches.size}, currentRound=${session.currentRound}`);
     for (const [slotNum, matchId] of session.activeMatches) {
       const match = this.state.matches.get(matchId);
+      console.log(`[getActiveMatches] Slot ${slotNum}: matchId=${matchId}, exists=${!!match}, endTime=${match?.endTime}, now=${now}, expired=${match && match.endTime <= now}, voteLocked=${match?.voteLocked}`);
       if (!match) {
+        console.log(`[getActiveMatches] Match ${matchId} not found, marking as expired`);
         hasExpiredMatches = true;
         session.activeMatches.delete(slotNum);
       } else if (match.endTime <= now && !match.voteLocked) {
         // Auto-lock vote when time expires (backend is source of truth)
+        console.log(`[getActiveMatches] Match ${matchId} expired without lock, auto-locking`);
         this.lockMatchVote(matchId);
         hasExpiredMatches = true;
         session.activeMatches.delete(slotNum);
       } else if (match.endTime <= now && match.voteLocked) {
         // Already locked, clean up
+        console.log(`[getActiveMatches] Match ${matchId} already locked, cleaning up`);
         hasExpiredMatches = true;
         session.activeMatches.delete(slotNum);
       } else {
         // Match still active
+        console.log(`[getActiveMatches] Match ${matchId} still active`);
         matches.push(match);
         activeMatchCount++;
       }
     }
 
-    // If all matches from current round have expired, start new round
-    if (
-      hasExpiredMatches &&
-      activeMatchCount === 0 &&
-      session.currentRound <= maxRounds
-    ) {
-      session.currentRound++;
-      session.nextRoundStartTime = now + this.state.config.matchDurationMs;
-
-      // Create matches for both slots
-      for (
-        let slotNum = 1;
-        slotNum <= this.state.config.simultaneousMatches;
-        slotNum++
-      ) {
-        const match = this.createMatchForSlot(fid, slotNum as 1 | 2, session);
-        if (match) {
-          session.activeMatches.set(slotNum, match.id);
-          matches.push(match);
-        }
-      }
-    } else if (!session.nextRoundStartTime && activeMatchCount === 0) {
+    // Check if it's time to start a new round
+    const isRoundComplete = activeMatchCount === 0 && (hasExpiredMatches || session.activeMatches.size === 0);
+    const isTimeForNextRound = session.nextRoundStartTime && now >= session.nextRoundStartTime;
+    
+    console.log(`[getActiveMatches] Round check: activeMatchCount=${activeMatchCount}, currentRound=${session.currentRound}, maxRounds=${maxRounds}, hasExpiredMatches=${hasExpiredMatches}, activeMatches.size=${session.activeMatches.size}, isRoundComplete=${isRoundComplete}, isTimeForNextRound=${isTimeForNextRound}`);
+    
+    if (!session.nextRoundStartTime && activeMatchCount === 0) {
       // First time getting matches - start round 1
+      console.log(`[getActiveMatches] Starting first round for player ${fid}. Players: ${Array.from(this.state.players.keys()).join(', ')}, Bots: ${Array.from(this.state.bots.keys()).join(', ')}`);
       session.currentRound = 1;
       session.nextRoundStartTime = now + this.state.config.matchDurationMs;
 
@@ -225,9 +217,33 @@ class GameManager {
           matches.push(match);
         }
       }
+      console.log(`[getActiveMatches] Created ${matches.length} matches for player ${fid}`);
+    } else if (isRoundComplete && session.currentRound < maxRounds) {
+      // Round finished - advance to next round
+      console.log(`[getActiveMatches] Round ${session.currentRound} complete, starting round ${session.currentRound + 1}. MaxRounds: ${maxRounds}`);
+      session.currentRound++;
+      session.nextRoundStartTime = now + this.state.config.matchDurationMs;
+
+      // Create matches for both slots
+      for (
+        let slotNum = 1;
+        slotNum <= this.state.config.simultaneousMatches;
+        slotNum++
+      ) {
+        const match = this.createMatchForSlot(fid, slotNum as 1 | 2, session);
+        if (match) {
+          session.activeMatches.set(slotNum, match.id);
+          matches.push(match);
+        }
+      }
+      console.log(`[getActiveMatches] Created ${matches.length} matches for round ${session.currentRound}`);
+    } else if (isRoundComplete && session.currentRound === maxRounds) {
+      // Last round finished - increment to signal game completion
+      console.log(`[getActiveMatches] Final round ${session.currentRound} complete. Game finished for player ${fid}.`);
+      session.currentRound++;
     }
 
-    return matches;
+      return matches;
   }
 
   /**
@@ -251,10 +267,16 @@ class GameManager {
     session: PlayerGameSession,
   ): Match | null {
     const player = this.state.players.get(fid);
-    if (!player) return null;
+    if (!player) {
+      console.error(`[createMatchForSlot] Player ${fid} not found`);
+      return null;
+    }
 
     const opponent = this.selectOpponent(fid, session);
-    if (!opponent) return null;
+    if (!opponent) {
+      console.error(`[createMatchForSlot] No opponent found for player ${fid}. Available players: ${Array.from(this.state.players.keys()).join(', ')} | Available bots: ${Array.from(this.state.bots.keys()).join(', ')}`);
+      return null;
+    }
 
     const now = Date.now();
     const match: Match = {
