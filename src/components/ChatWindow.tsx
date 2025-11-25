@@ -87,10 +87,10 @@ export default function ChatWindow({
     },
   });
 
-  // Polling mode (HTTP)
-  const shouldPoll =
-    (!USE_WEBSOCKET || !!wsError || (!isConnecting && !isConnected)) &&
-    !match.messages;
+  const webSocketAvailable = USE_WEBSOCKET && isConnected;
+  const shouldFallbackToPolling = USE_WEBSOCKET && (wsError || (!isConnecting && !isConnected));
+
+  const shouldPoll = (shouldFallbackToPolling || !USE_WEBSOCKET) && !match.messages;
   const {
     data: chatData,
     error: pollError,
@@ -99,17 +99,16 @@ export default function ChatWindow({
     shouldPoll ? `/api/chat/batch-poll?matchIds=${match.id}` : null,
     fetcher,
     {
-      refreshInterval: 2000,
+      refreshInterval: shouldFallbackToPolling ? 1000 : 2000,
       refreshWhenHidden: false,
     }
   );
 
-  // Unified message source
-  const messages = USE_WEBSOCKET
+  const messages = webSocketAvailable
     ? wsMessages
     : match.messages || chatData?.chats?.[match.id]?.messages || [];
 
-  const error = USE_WEBSOCKET ? wsError : pollError;
+  const error = webSocketAvailable ? null : (shouldFallbackToPolling ? wsError : pollError);
 
   // Load initial messages for WebSocket mode
   useEffect(() => {
@@ -208,7 +207,8 @@ export default function ChatWindow({
   // Unified send message handler (WebSocket or HTTP)
   const handleSend = async () => {
     if (!input.trim()) return;
-    if (USE_WEBSOCKET && !isConnected) return;
+    if (webSocketAvailable && !isConnected) return;
+    if (!webSocketAvailable && shouldFallbackToPolling) return;
 
     const text = input;
     setInput("");
@@ -216,12 +216,10 @@ export default function ChatWindow({
     setWarningLevel("none");
 
     try {
-      if (USE_WEBSOCKET) {
-        // Send via WebSocket
+      if (webSocketAvailable) {
         await wsSendMessage(text, { fid, username });
       }
 
-      // Always persist to server for game state
       await fetch("/api/chat/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -295,7 +293,13 @@ export default function ChatWindow({
               Connecting...
             </div>
           )}
-          {!isConnected && !isConnecting && (
+          {shouldFallbackToPolling && !isConnecting && (
+            <div className="absolute top-2 right-2 flex items-center gap-2 bg-amber-500/20 px-2 py-1 rounded text-xs text-amber-300 z-10">
+              <span>●</span>
+              Polling
+            </div>
+          )}
+          {!isConnected && !isConnecting && !shouldFallbackToPolling && (
             <div className="absolute top-2 right-2 flex items-center gap-2 bg-red-500/20 px-2 py-1 rounded text-xs text-red-300 z-10">
               <span>●</span>
               Offline
