@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import useSWR from "swr";
+import { useAblyGameEvents } from "@/hooks/useAblyChat";
 import ChatWindow from "./ChatWindow";
 import ResultsCard from "./ResultsCard";
 import RoundStartLoader from "./RoundStartLoader";
@@ -63,15 +64,17 @@ export default function MultiChatContainer({ fid }: Props) {
   // Track round transitions for loading state
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [lastRound, setLastRound] = useState(0);
+  const [ablyCycleId, setAblyCycleId] = useState<string>("");
   const transitionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Poll for active matches
+  // Poll for active matches - but at a much slower rate now since we have events
+  // Only poll occasionally for periodic sync (every 5 seconds instead of 1 second)
   const {
     data: matchData,
     error,
     mutate,
   } = useSWR(`/api/match/active?fid=${fid}`, fetcher, {
-    refreshInterval: 1000, // Faster polling for better responsiveness
+    refreshInterval: 5000, // Reduced from 1000ms - events keep us in sync
     refreshWhenHidden: false,
     revalidateOnFocus: true,
     // Keep previous data on error to prevent UI flicker
@@ -82,15 +85,39 @@ export default function MultiChatContainer({ fid }: Props) {
     errorRetryInterval: 1000,
   });
 
-  // Track successful loads and errors
+  // Subscribe to game events (when cycleId is available)
+  useAblyGameEvents({
+    fid,
+    cycleId: ablyCycleId,
+    onEvent: (event) => {
+      console.log("[MultiChatContainer] Received game event:", event.type);
+      // When match_end event arrives, refresh to get new matches
+      if (event.type === "match_end" || event.type === "round_end") {
+        mutate();
+      }
+      // When game state changes, also refresh
+      if (event.type === "game_start" || event.type === "game_end") {
+        mutate();
+      }
+    },
+    onError: (err) => {
+      console.error("[MultiChatContainer] Game event error:", err);
+    },
+  });
+
+  // Track successful loads and errors, and update ablyCycleId when available
   useEffect(() => {
     if (matchData && !error) {
       setHasLoadedOnce(true);
       setConsecutiveErrors(0);
+      // Update cycleId if provided (enables Ably events)
+      if (matchData.cycleId && matchData.cycleId !== ablyCycleId) {
+        setAblyCycleId(matchData.cycleId);
+      }
     } else if (error) {
       setConsecutiveErrors(prev => prev + 1);
     }
-  }, [matchData, error]);
+  }, [matchData, error, ablyCycleId]);
 
   // Check if game is finished (all rounds completed and no active matches)
   // Add safeguards to prevent premature game ending

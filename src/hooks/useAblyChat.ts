@@ -9,6 +9,7 @@ import {
     shouldReceiveMessage,
     getChannelStrategy,
 } from "../lib/ablyChannelManager";
+import { getAblyChannelService } from "../lib/ablyChannelService";
 
 export type ChatMessage = {
     id: string;
@@ -32,24 +33,14 @@ type AblyChatOptions = {
     onError?: (error: Error) => void;
 };
 
-// Global Ably cache - defined outside the hook to ensure single instance
-const getGlobalAblyCache = () => {
-    if (!(globalThis as any).__ABLY_CACHE__) {
-        (globalThis as any).__ABLY_CACHE__ = {
-            clients: new Map<number, Ably.Realtime>(),
-            initialTokens: new Map<number, any>(),
-            tokenRequests: new Map<number, Promise<any>>(),
-            channels: new Map<string, Ably.RealtimeChannel>(),
-            channelSubscribers: new Map<string, Set<string>>(), // channelKey -> Set of subscriber IDs
+// Global cache for shared channel match tracking (separate from channel service)
+const getGlobalMatchIdCache = () => {
+    if (!(globalThis as any).__ABLY_MATCH_IDS__) {
+        (globalThis as any).__ABLY_MATCH_IDS__ = {
             sharedChannelMatchIds: new Map<number, Set<string>>(), // fid -> Set of matchIds for shared channel filtering
         };
     }
-    return (globalThis as any).__ABLY_CACHE__ as {
-        clients: Map<number, Ably.Realtime>;
-        initialTokens: Map<number, any>;
-        tokenRequests: Map<number, Promise<any>>;
-        channels: Map<string, Ably.RealtimeChannel>;
-        channelSubscribers: Map<string, Set<string>>;
+    return (globalThis as any).__ABLY_MATCH_IDS__ as {
         sharedChannelMatchIds: Map<number, Set<string>>;
     };
 };
@@ -123,8 +114,9 @@ export function useAblyChat({
     useEffect(() => {
         let mounted = true;
         const subscriberId = subscriberIdRef.current;
-        const globalAblyCache = getGlobalAblyCache();
         const currentStrategy = strategyRef.current;
+        const channelService = getAblyChannelService();
+        const matchIdCache = getGlobalMatchIdCache();
 
         const initializeAbly = async () => {
             // Prevent duplicate initialization
@@ -138,81 +130,8 @@ export function useAblyChat({
                 setIsConnecting(true);
                 setError(null);
 
-                let client = globalAblyCache.clients.get(fid) || null;
-
-                if (!client) {
-                    console.log(`[Ably] Creating new client for FID ${fid}`);
-                    let initialToken: any | null = null;
-                    try {
-                        // Check if there's already a pending token request
-                        let tokenPromise = globalAblyCache.tokenRequests.get(fid);
-                        if (!tokenPromise) {
-                            tokenPromise = fetch(`/api/ably/auth?fid=${fid}&rnd=${Math.random()}`, {
-                                cache: "no-store",
-                                headers: { "Cache-Control": "no-store" }
-                            }).then(res => {
-                                if (!res.ok) {
-                                    throw new Error(`Auth endpoint unavailable (${res.status})`);
-                                }
-                                return res.json();
-                            });
-                            globalAblyCache.tokenRequests.set(fid, tokenPromise);
-                        }
-
-                        initialToken = await tokenPromise;
-                        globalAblyCache.tokenRequests.delete(fid);
-                        globalAblyCache.initialTokens.set(fid, initialToken);
-                    } catch (prefetchErr: any) {
-                        const err = new Error(prefetchErr.message || "Failed to initialize Ably");
-                        globalAblyCache.tokenRequests.delete(fid);
-                        if (mounted) {
-                            setError(err);
-                            setIsConnecting(false);
-                            onErrorRef.current?.(err);
-                        }
-                        initializingRef.current = false;
-                        return;
-                    }
-
-                    client = new Ably.Realtime({
-                        authCallback: async (_tokenParams: any, callback: any) => {
-                            try {
-                                const cached = globalAblyCache.initialTokens.get(fid);
-                                if (cached) {
-                                    globalAblyCache.initialTokens.delete(fid);
-                                    callback(null, cached);
-                                    return;
-                                }
-                                const res = await fetch(`/api/ably/auth?fid=${fid}&rnd=${Date.now()}-${Math.random()}`, {
-                                    cache: "no-store",
-                                    headers: {
-                                        "Cache-Control": "no-store",
-                                        "Pragma": "no-cache"
-                                    }
-                                });
-                                if (!res.ok) {
-                                    throw new Error(`Auth failed (${res.status})`);
-                                }
-                                const token = await res.json();
-                                callback(null, token);
-                            } catch (err) {
-                                const errorInfo = { message: (err as Error).message, code: 500, statusCode: 500 };
-                                callback(errorInfo, null);
-                            }
-                        },
-                        clientId: `fid:${fid}`,
-                        disconnectedRetryTimeout: 3000,
-                        suspendedRetryTimeout: 10000,
-                        transportParams: {
-                            remainConnectedAfterSuspend: true,
-                        },
-                    });
-
-                    globalAblyCache.clients.set(fid, client);
-                } else {
-                    console.log(`[Ably] Reusing existing client for FID ${fid}`);
-                }
-
+                // Get or create client through service
+                const client = await channelService.getOrCreateClient(fid);
                 clientRef.current = client;
 
                 const handleConnected = () => {
@@ -267,30 +186,16 @@ export function useAblyChat({
                     ? ChannelNames.chat(cycleId)
                     : `match:${matchId}`;
 
-                let channel = globalAblyCache.channels.get(channelKey);
-
-                if (!channel) {
-                    console.log(`[Ably] Creating new channel for ${channelKey} (strategy: ${currentStrategy})`);
-                    channel = client.channels.get(channelKey);
-                    globalAblyCache.channels.set(channelKey, channel);
-                } else {
-                    console.log(`[Ably] Reusing existing channel for ${channelKey}`);
-                }
-
+                // Get or attach channel through service
+                const channel = await channelService.getOrAttachChannel(fid, channelKey);
                 channelRef.current = channel;
-
-                // Track this subscriber
-                if (!globalAblyCache.channelSubscribers.has(channelKey)) {
-                    globalAblyCache.channelSubscribers.set(channelKey, new Set());
-                }
-                globalAblyCache.channelSubscribers.get(channelKey)!.add(subscriberId);
 
                 // For shared channels, track which matchIds this FID is interested in
                 if (currentStrategy === "shared") {
-                    if (!globalAblyCache.sharedChannelMatchIds.has(fid)) {
-                        globalAblyCache.sharedChannelMatchIds.set(fid, new Set());
+                    if (!matchIdCache.sharedChannelMatchIds.has(fid)) {
+                        matchIdCache.sharedChannelMatchIds.set(fid, new Set());
                     }
-                    globalAblyCache.sharedChannelMatchIds.get(fid)!.add(matchId);
+                    matchIdCache.sharedChannelMatchIds.get(fid)!.add(matchId);
                 }
 
                 // Extended timeout for slower connections
@@ -302,28 +207,6 @@ export function useAblyChat({
                         console.warn("[Ably] Connection timeout after 15s");
                     }
                 }, 15000);
-
-                // Attach channel if not already attached
-                if (channel.state !== "attached" && channel.state !== "attaching") {
-                    console.log(`[Ably] Attaching channel ${channelKey}, current state: ${channel.state}`);
-                    await channel.attach();
-                } else if (channel.state === "attaching") {
-                    console.log(`[Ably] Channel ${channelKey} is already attaching, waiting...`);
-                    await new Promise<void>((resolve, reject) => {
-                        const timeout = setTimeout(() => {
-                            reject(new Error("Channel attach timeout"));
-                        }, 10000);
-
-                        channel!.once("attached", () => {
-                            clearTimeout(timeout);
-                            resolve();
-                        });
-                        channel!.once("failed", (err) => {
-                            clearTimeout(timeout);
-                            reject(err);
-                        });
-                    });
-                }
 
                 if (!mounted) {
                     initializingRef.current = false;
@@ -371,8 +254,9 @@ export function useAblyChat({
                     }
                 };
 
-                channel.subscribe("message", messageHandler);
-                console.log(`[Ably] Subscribed to ${channelKey} (subscriber: ${subscriberId}, strategy: ${currentStrategy})`);
+                // Subscribe through service
+                await channelService.subscribe(fid, channelKey, subscriberId, messageHandler, "message");
+                console.log(`[Ably] Subscribed via service to ${channelKey} (subscriber: ${subscriberId}, strategy: ${currentStrategy})`);
 
                 initializingRef.current = false;
             } catch (err) {
@@ -401,60 +285,17 @@ export function useAblyChat({
 
             // For shared channels, remove this matchId from tracking
             if (currentStrategy === "shared") {
-                const matchIds = globalAblyCache.sharedChannelMatchIds.get(fid);
+                const matchIds = matchIdCache.sharedChannelMatchIds.get(fid);
                 if (matchIds) {
                     matchIds.delete(matchId);
                     if (matchIds.size === 0) {
-                        globalAblyCache.sharedChannelMatchIds.delete(fid);
+                        matchIdCache.sharedChannelMatchIds.delete(fid);
                     }
                 }
             }
 
-            const subscribers = globalAblyCache.channelSubscribers.get(channelKey);
-
-            if (subscribers) {
-                subscribers.delete(subscriberId);
-                console.log(`[Ably] Removed subscriber ${subscriberId} from ${channelKey}, remaining: ${subscribers.size}`);
-
-                // Only detach channel if no more subscribers
-                if (subscribers.size === 0) {
-                    const channel = globalAblyCache.channels.get(channelKey);
-                    if (channel) {
-                        const st = channel.state as string;
-                        console.log(`[Ably] No more subscribers for ${channelKey}, state=${st}`);
-
-                        // Delay cleanup to handle rapid re-renders
-                        setTimeout(() => {
-                            const currentSubscribers = globalAblyCache.channelSubscribers.get(channelKey);
-                            if (!currentSubscribers || currentSubscribers.size === 0) {
-                                const currentChannel = globalAblyCache.channels.get(channelKey);
-                                if (currentChannel) {
-                                    const currentState = currentChannel.state as string;
-                                    if (currentState === "attached") {
-                                        console.log(`[Ably] Detaching channel ${channelKey}`);
-                                        currentChannel.unsubscribe();
-                                        currentChannel.detach().catch((err) => {
-                                            console.warn(`[Ably] Error detaching channel ${channelKey}:`, err);
-                                        });
-                                        globalAblyCache.channels.delete(channelKey);
-                                    } else if (currentState === "attaching") {
-                                        currentChannel.once("attached", () => {
-                                            const stillNoSubscribers = !globalAblyCache.channelSubscribers.get(channelKey)?.size;
-                                            if (stillNoSubscribers) {
-                                                console.log(`[Ably] Detaching channel ${channelKey} after attach completed`);
-                                                currentChannel.unsubscribe();
-                                                currentChannel.detach().catch(() => { });
-                                                globalAblyCache.channels.delete(channelKey);
-                                            }
-                                        });
-                                    }
-                                }
-                                globalAblyCache.channelSubscribers.delete(channelKey);
-                            }
-                        }, 500);
-                    }
-                }
-            }
+            // Unsubscribe through service - this handles all detach logic
+            channelService.unsubscribe(channelKey, subscriberId);
         };
     }, [fid, matchId, cycleId, strategy]);
 
@@ -473,6 +314,10 @@ export function useAblyChat({
             };
 
             try {
+                const channelKey = strategyRef.current === "shared" && cycleId
+                    ? ChannelNames.chat(cycleId)
+                    : `match:${matchIdRef.current}`;
+
                 if (strategyRef.current === "shared") {
                     // For shared channels, wrap message in ChatMessagePayload format
                     // The server will handle routing, but we need to include metadata
@@ -482,10 +327,10 @@ export function useAblyChat({
                         targetFids: [fid], // Will be expanded by server to include opponent
                         message,
                     };
-                    await channelRef.current.publish("message", payload);
+                    await getAblyChannelService().publish(channelKey, "message", payload);
                 } else {
                     // Per-match channel: direct message
-                    await channelRef.current.publish("message", message);
+                    await getAblyChannelService().publish(channelKey, "message", message);
                 }
                 return message;
             } catch (err) {
@@ -495,7 +340,7 @@ export function useAblyChat({
                 throw error;
             }
         },
-        [isConnected, fid]
+        [isConnected, fid, cycleId]
     );
 
     // Load initial messages (from game state)
@@ -553,18 +398,12 @@ export function useAblyGameEvents({
 
     useEffect(() => {
         let mounted = true;
-        const globalAblyCache = getGlobalAblyCache();
+        const channelService = getAblyChannelService();
 
         const initialize = async () => {
             try {
                 // Reuse existing client
-                let client = globalAblyCache.clients.get(fid);
-                if (!client) {
-                    // Wait for chat to create the client
-                    console.log(`[Ably Events] Waiting for client to be created by chat hook`);
-                    return;
-                }
-
+                let client = await channelService.getOrCreateClient(fid);
                 clientRef.current = client;
 
                 if (client.connection.state === "connected") {
@@ -572,18 +411,8 @@ export function useAblyGameEvents({
                 }
 
                 const channelKey = ChannelNames.events(cycleId);
-                let channel = globalAblyCache.channels.get(channelKey);
-
-                if (!channel) {
-                    channel = client.channels.get(channelKey);
-                    globalAblyCache.channels.set(channelKey, channel);
-                }
-
+                const channel = await channelService.getOrAttachChannel(fid, channelKey);
                 channelRef.current = channel;
-
-                if (channel.state !== "attached" && channel.state !== "attaching") {
-                    await channel.attach();
-                }
 
                 channel.subscribe("event", (message) => {
                     if (mounted && message.data) {
