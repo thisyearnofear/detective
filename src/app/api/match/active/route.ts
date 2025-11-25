@@ -2,6 +2,9 @@
 import { NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
 import { NextRequest } from "next/server";
+import { getScheduledBotResponse, markBotResponseDelivered, recordBotDeliveryFailure } from "@/lib/botScheduler";
+import { getGameEventPublisher } from "@/lib/gameEventPublisher";
+import { getAblyServerManager } from "@/lib/ablyChannelManager";
 
 /**
  * API route to get all active matches for a player.
@@ -21,11 +24,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Invalid FID." }, { status: 400 });
     }
 
-    // Use async version for proper Redis loading in production
-    const gameState = await gameManager.getGameStateAsync();
+    const gameState = await gameManager.getGameState();
+    const rawState = await gameManager.getRawState();
+    const config = await gameManager.getConfig();
 
-    // Debug logging
-    console.log(`[/api/match/active] FID: ${playerFid}, State: ${gameState.state}, Players: ${gameState.players.size}, GameEnds: ${new Date(gameState.gameEnds).toISOString()}`);
+    console.log(`[/api/match/active] FID: ${playerFid}, State: ${gameState.state}, Players: ${gameState.playerCount}, GameEnds: ${new Date(gameState.gameEnds).toISOString()}`);
 
     if (gameState.state !== "LIVE") {
       console.log(`[/api/match/active] Returning 403 - game state is ${gameState.state}, not LIVE`);
@@ -37,6 +40,58 @@ export async function GET(request: NextRequest) {
 
     // Get all active matches for the player
     const matches = await gameManager.getActiveMatches(playerFid);
+
+    // Deliver any scheduled bot responses that are ready
+    const eventPublisher = getGameEventPublisher();
+    const ablyManager = getAblyServerManager();
+    
+    for (const match of matches) {
+      const scheduledBot = await getScheduledBotResponse(match.id);
+      if (scheduledBot) {
+        console.log(`[/api/match/active] Found scheduled bot response for match ${match.id}, bot FID ${scheduledBot.botFid}`);
+        try {
+          // Verify match still exists before attempting delivery
+          const currentMatch = await gameManager.getMatch(match.id);
+          if (!currentMatch) {
+            // Match was cleaned up, just mark as delivered
+            await markBotResponseDelivered(match.id);
+            console.log(`[/api/match/active] Match ${match.id} no longer exists, cleaned up scheduled response`);
+            continue;
+          }
+
+          // Add the scheduled bot response to the match
+          console.log(`[/api/match/active] Attempting to deliver: "${scheduledBot.response.substring(0, 50)}${scheduledBot.response.length > 50 ? '...' : ''}"`);
+          await gameManager.addMessageToMatch(match.id, scheduledBot.response, scheduledBot.botFid);
+          await markBotResponseDelivered(match.id);
+          
+          // Publish to the match channel so connected clients get notified immediately
+          const chatMessage = {
+            id: `${Date.now()}-${scheduledBot.botFid}-${Math.random().toString(36).substr(2, 9)}`,
+            text: scheduledBot.response,
+            sender: {
+              fid: scheduledBot.botFid,
+              username: currentMatch.opponent.username,
+            },
+            timestamp: Date.now(),
+          };
+          await ablyManager.publishToMatchChannel(match.id, chatMessage);
+          
+          // Also publish game event for monitoring
+          await eventPublisher.publishChatMessage(
+            gameState.cycleId,
+            match.id,
+            playerFid,
+            scheduledBot.botFid,
+            scheduledBot.response
+          );
+          console.log(`[/api/match/active] ✓ Published bot response via Ably for match ${match.id}`);
+        } catch (error) {
+          // Record failure for retry logic
+          await recordBotDeliveryFailure(match.id, error instanceof Error ? error : new Error(String(error)));
+          console.error(`[/api/match/active] ✗ FAILED to deliver bot response for match ${match.id}:`, error);
+        }
+      }
+    }
 
     // Sanitize matches before sending to client
     const sanitizedMatches = matches.map((match) => ({
@@ -63,13 +118,15 @@ export async function GET(request: NextRequest) {
     }
 
     // Calculate total rounds dynamically based on player pool
-    const totalPlayers = gameState.players.size;
-    const totalBots = gameState.bots.size;
+    const players = await gameManager.getAllPlayers();
+    const bots = await gameManager.getAllBots();
+    const totalPlayers = players.length;
+    const totalBots = bots.length;
     const totalOpponents = totalPlayers - 1 + (totalBots - 1);
-    const matchesPerRound = gameState.config.simultaneousMatches;
+    const matchesPerRound = config.simultaneousMatches;
     const maxPossibleRounds = Math.floor(
-      gameState.config.gameDurationMs /
-      gameState.config.matchDurationMs,
+      config.gameDurationMs /
+      config.matchDurationMs,
     );
     const totalRounds = Math.min(
       maxPossibleRounds,
@@ -78,23 +135,23 @@ export async function GET(request: NextRequest) {
 
     // Calculate leaderboard position for this player (only available after game ends)
     let playerRank = 0;
-    if (gameState.leaderboard && gameState.leaderboard.length > 0) {
-      const rankIndex = gameState.leaderboard.findIndex(
+    if (rawState.leaderboard && rawState.leaderboard.length > 0) {
+      const rankIndex = rawState.leaderboard.findIndex(
         (entry) => entry.player.fid === playerFid
       );
       playerRank = rankIndex >= 0 ? rankIndex + 1 : 0;
     }
 
-    const player = gameState.players.get(playerFid);
+    const player = rawState.players.get(playerFid);
     const voteHistory = player ? player.voteHistory : [];
 
     return NextResponse.json({
       matches: sanitizedMatches,
       slots,
-      currentRound: gameState.playerSessions.get(playerFid)?.currentRound || 1,
+      currentRound: rawState.playerSessions.get(playerFid)?.currentRound || 1,
       totalRounds,
       nextRoundStartTime:
-        gameState.playerSessions.get(playerFid)?.nextRoundStartTime,
+        rawState.playerSessions.get(playerFid)?.nextRoundStartTime,
       playerPool: {
         totalPlayers,
         totalBots,

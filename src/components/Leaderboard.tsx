@@ -33,7 +33,25 @@ const getRankColor = (rank: number) => {
   return 'text-gray-500';
 };
 
-export default function Leaderboard({ fid, mode: initialMode = 'current' }: { fid?: number; mode?: LeaderboardMode } = {}) {
+interface GameResultsProps {
+  isGameEnd?: boolean;
+  accuracy?: number;
+  roundResults?: Array<{ roundNumber: number; correct: boolean; opponentUsername: string; opponentType: "REAL" | "BOT" }>;
+  playerRank?: number;
+  totalPlayers?: number;
+  onPlayAgain?: () => void;
+}
+
+export default function Leaderboard({ 
+  fid, 
+  mode: initialMode = 'current',
+  isGameEnd = false,
+  accuracy = 0,
+  roundResults = [],
+  playerRank = 1,
+  totalPlayers = 1,
+  onPlayAgain,
+}: { fid?: number; mode?: LeaderboardMode } & GameResultsProps = {}) {
   const [mode, setMode] = useState<LeaderboardMode>(initialMode);
   
   const { data: leaderboard, error } = useSWR<LeaderboardEntry[]>(
@@ -52,6 +70,92 @@ export default function Leaderboard({ fid, mode: initialMode = 'current' }: { fi
       dedupingInterval: 5000,
     }
   );
+
+  // Game end mode - show results with current leaderboard
+  if (isGameEnd) {
+    const percentile = totalPlayers > 0 ? Math.round(((totalPlayers - playerRank) / totalPlayers) * 100) : 0;
+    
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-4 relative z-10">
+        {/* Results Summary */}
+        <div className="max-w-2xl w-full mb-8">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-black text-white mb-2">🎮 Mission Complete</h1>
+            <p className="text-xl font-bold text-slate-300">GAME OVER</p>
+            <p className="text-sm text-gray-400 mt-2">Here's how you performed</p>
+          </div>
+
+          {/* Stats Grid */}
+          <div className="grid grid-cols-3 gap-4 mb-8">
+            <div className="bg-slate-800/50 rounded-lg p-6 text-center border border-slate-700">
+              <div className="text-4xl font-bold text-purple-400 mb-2">{accuracy.toFixed(0)}%</div>
+              <div className="text-xs text-gray-400 uppercase">Accuracy</div>
+              <div className="text-sm text-gray-500 mt-1">
+                {roundResults.filter(r => r.correct).length}/{roundResults.length} correct
+              </div>
+            </div>
+
+            <div className="bg-slate-800/50 rounded-lg p-6 text-center border border-slate-700">
+              <div className="text-4xl font-bold text-yellow-400 mb-2">#{playerRank}</div>
+              <div className="text-xs text-gray-400 uppercase">Rank</div>
+              <div className="text-sm text-gray-500 mt-1">of {totalPlayers}</div>
+            </div>
+
+            <div className="bg-slate-800/50 rounded-lg p-6 text-center border border-slate-700">
+              <div className="text-4xl font-bold text-blue-400 mb-2">{percentile}%</div>
+              <div className="text-xs text-gray-400 uppercase">Percentile</div>
+              <div className="text-sm text-gray-500 mt-1">top players</div>
+            </div>
+          </div>
+
+          {/* Motivation */}
+          <div className="bg-slate-900/50 rounded-lg p-4 text-center border border-slate-700 mb-8">
+            <p className="text-gray-300 text-sm">
+              {accuracy >= 80 ? "🔥 Incredible detective work! You're a natural." :
+               accuracy >= 60 ? "💪 Nice work! Keep playing to improve." :
+               accuracy >= 40 ? "📈 Not bad! You'll get better with practice." :
+               "🎯 Keep playing - You'll improve"}
+            </p>
+          </div>
+
+          {/* Round Breakdown */}
+          {roundResults.length > 0 && (
+            <div className="mb-8">
+              <h3 className="font-bold text-white mb-4 text-center">Round Breakdown</h3>
+              <div className="space-y-2">
+                {roundResults.map((result, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-3 bg-slate-800/50 rounded border border-slate-700/50">
+                    <div className="text-sm text-gray-400">
+                      Round {result.roundNumber} <span className="text-gray-600">vs @{result.opponentUsername}</span> <span className={result.opponentType === 'BOT' ? 'text-red-400' : 'text-green-400'}>{result.opponentType}</span>
+                    </div>
+                    <div className="text-lg">{result.correct ? '✅' : '❌'}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex gap-4 justify-center">
+            <button
+              onClick={onPlayAgain}
+              className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors"
+            >
+              Register for Next Game
+            </button>
+            <a
+              href="/"
+              className="px-8 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg transition-colors"
+            >
+              Back to Home
+            </a>
+          </div>
+
+          <p className="text-center text-xs text-gray-500 mt-6">Stats saved automatically</p>
+        </div>
+      </div>
+    );
+  }
 
   if (error) {
     return <div className="bg-slate-800 rounded-lg p-6 mt-8 text-center text-red-400">Failed to load leaderboard.</div>;

@@ -1,6 +1,18 @@
 // src/app/api/game/status/route.ts
 import { NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
+import { startBotResponseDelivery } from "@/lib/botResponseDelivery";
+
+/**
+ * Start bot response delivery service on first request
+ */
+if (typeof globalThis !== "undefined" && typeof window === "undefined") {
+  const globalAny = globalThis as any;
+  if (!globalAny.__BOT_DELIVERY_STARTED__) {
+    globalAny.__BOT_DELIVERY_STARTED__ = true;
+    startBotResponseDelivery();
+  }
+}
 
 /**
  * API route to get the current status of the game cycle.
@@ -10,24 +22,24 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const fidParam = searchParams.get("fid");
-    // Use async version for proper Redis loading in production
-    const fullState = await gameManager.getGameStateAsync();
+    const gameState = await gameManager.getGameState();
+    const rawState = await gameManager.getRawState();
 
     let isRegistered = false;
     if (fidParam) {
       const fid = parseInt(fidParam, 10);
       if (!isNaN(fid)) {
-        isRegistered = fullState.players.has(fid);
+        isRegistered = rawState.players.has(fid);
       }
     }
 
     // Return a simplified version of the state for clients
     const clientState = {
-      cycleId: fullState.cycleId,
-      state: fullState.state,
-      playerCount: fullState.players.size,
-      registrationEnds: fullState.registrationEnds,
-      gameEnds: fullState.gameEnds,
+      cycleId: gameState.cycleId,
+      state: gameState.state,
+      playerCount: gameState.playerCount,
+      registrationEnds: gameState.registrationEnds,
+      gameEnds: gameState.gameEnds,
       isRegistered, // Add this field
     };
 

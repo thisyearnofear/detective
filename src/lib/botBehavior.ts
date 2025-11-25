@@ -83,8 +83,8 @@ export function calculateResponseTiming(
     initialDelay = 1000 + Math.random() * 2000; // 1-3 seconds
   } else {
     const lastMessage = messageHistory[messageHistory.length - 1];
-    const readingTime = lastMessage.text.length * 30; // 30ms per character to read
-    const thinkingTime = 500 + Math.random() * 2000; // 0.5-2.5 seconds to think
+    const readingTime = lastMessage.text.length * 15; // 15ms per character to read (faster)
+    const thinkingTime = 200 + Math.random() * 600; // 0.2-0.8 seconds to think (game speed)
     initialDelay = readingTime + thinkingTime;
   }
 

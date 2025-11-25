@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
 
 /**
- * API route to submit a vote for a match.
+ * API route to submit a vote for a match (legacy endpoint).
+ * Use /api/match/vote instead for new code.
  * Expects `voterFid`, `matchId`, and `guess` ('REAL' or 'BOT').
  */
 export async function POST(request: Request) {
@@ -22,7 +23,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid guess." }, { status: 400 });
     }
 
-    const isCorrect = gameManager.recordVote(voterFid, matchId, guess);
+    // Update vote and lock it
+    await gameManager.updateMatchVote(matchId, guess);
+    const isCorrect = await gameManager.lockMatchVote(matchId);
 
     if (isCorrect === null) {
       return NextResponse.json(

@@ -302,17 +302,22 @@ Respond EXACTLY as this person would. Don't overthink it. Be natural, even if th
           : false;
         botResponse = addImperfections(botResponse, baseStyle, isMobile);
 
-        // Add emojis if appropriate (but sparingly)
-        if (
-          shouldUseEmojis(
-            baseStyle,
-            messageHistory,
-            messageHistory.length === 0,
-          )
-        ) {
-          const conservative = metadata.emojis !== "true";
-          botResponse = addEmojis(botResponse, conservative);
+        // Add emojis only if the bot's style indicates they use emojis
+        // metadata.emojis === "true" means the bot uses emojis in their posts
+        const botUsesEmojis = metadata.emojis === "true";
+        if (botUsesEmojis) {
+          if (
+            shouldUseEmojis(
+              baseStyle,
+              messageHistory,
+              messageHistory.length === 0,
+            )
+          ) {
+            // true = use multiple emojis (non-conservative), false = use just 1 emoji (conservative)
+            botResponse = addEmojis(botResponse, false);
+          }
         }
+        // If bot doesn't use emojis, don't add any
       }
 
       // Ensure it stays under character limit

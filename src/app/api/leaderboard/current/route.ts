@@ -8,15 +8,15 @@ import { gameManager } from "@/lib/gameState";
  */
 export async function GET() {
   try {
-    // Use async version for proper Redis loading in production
-    const gameState = await gameManager.getGameStateAsync();
+    const gameState = await gameManager.getGameState();
+    const rawState = await gameManager.getRawState();
 
     // If the game is finished, return the stored final leaderboard.
     // Otherwise, calculate and return a provisional one.
     const leaderboard =
       gameState.state === "FINISHED"
-        ? gameState.leaderboard
-        : gameManager.getLeaderboard();
+        ? rawState.leaderboard
+        : await gameManager.getLeaderboard();
 
     return NextResponse.json(leaderboard);
   } catch (error) {

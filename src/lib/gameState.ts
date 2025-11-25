@@ -1,4 +1,16 @@
 // src/lib/gameState.ts
+/**
+ * Game State Manager - Single Source of Truth
+ * 
+ * Unified async interface for all game operations.
+ * Works with both Redis (production) and in-memory (development).
+ * 
+ * Core Principles:
+ * - All methods are async (Promise-based)
+ * - Single initialization pattern
+ * - Clear state lifecycle management
+ */
+
 import {
   GameState,
   Player,
@@ -8,12 +20,14 @@ import {
   UserProfile,
   PlayerGameSession,
   VoteRecord,
+  ChatMessage,
 } from "./types";
-import { redis, getJSON, setJSON } from "./redis";
+import * as persistence from "./gamePersistence";
 import { database } from "./database";
 import { getGameEventPublisher } from "./gameEventPublisher";
 import { inferPersonality } from "./botProactive";
 
+// Game configuration constants
 const GAME_DURATION = 5 * 60 * 1000; // 5 minutes
 const REGISTRATION_DURATION = 1 * 60 * 1000; // 1 minute for testing
 const MAX_PLAYERS = 50;
@@ -21,48 +35,20 @@ const MATCH_DURATION = 60 * 1000; // 1 minute per match
 const SIMULTANEOUS_MATCHES = 2; // 2 concurrent chats
 const INACTIVITY_WARNING = 30 * 1000; // 30 seconds
 const INACTIVITY_FORFEIT = 45 * 1000; // 45 seconds
-
-// Dynamic round calculation based on game and match duration
-const MAX_ROUNDS = Math.floor(
-  GAME_DURATION / MATCH_DURATION / SIMULTANEOUS_MATCHES,
-);
-
-// Check if Redis is available for state persistence
+const MAX_ROUNDS = Math.floor(GAME_DURATION / MATCH_DURATION / SIMULTANEOUS_MATCHES);
 const USE_REDIS = process.env.USE_REDIS === "true";
 
-// Redis key constants
-const REDIS_KEYS = {
-  gameState: "game:state",
-  players: "game:players",
-  bots: "game:bots",
-  matches: "game:matches",
-  sessions: "game:sessions",
-};
-
-// TTL for Redis keys (1 hour)
-const REDIS_TTL = 60 * 60;
-
 /**
- * Manages the in-memory state of the game.
- * Implemented as a singleton to ensure a single source of truth.
- *
- * When USE_REDIS=true, critical state is synced to Redis for
- * horizontal scaling across serverless function instances.
+ * Manages the complete game state.
+ * Singleton pattern with lazy initialization.
  */
 class GameManager {
   private static instance: GameManager;
-  private state: GameState;
-  private initialized: boolean = false;
-  private lastSyncTime: number = 0;
-  private syncInterval: number = 1000; // Sync every 1 second max
+  private state: GameState | null = null;
+  private initializing = false;
 
-  private constructor() {
-    this.state = this.initializeGameState();
-  }
+  private constructor() {}
 
-  /**
-   * Gets the singleton instance of the GameManager.
-   */
   public static getInstance(): GameManager {
     if (!GameManager.instance) {
       GameManager.instance = new GameManager();
@@ -71,20 +57,83 @@ class GameManager {
   }
 
   /**
-   * Initializes or resets the game state to its default.
+   * Initialize or retrieve current game state.
+   * Loads from Redis on first call if available.
    */
-  private initializeGameState(): GameState {
+  private async ensureInitialized(): Promise<void> {
+    if (this.state) return;
+    if (this.initializing) {
+      // Wait for initialization to complete
+      while (this.initializing) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      return;
+    }
+
+    this.initializing = true;
+    try {
+      // Try loading from Redis first
+      const stateMeta = await persistence.loadGameStateMeta();
+
+      if (stateMeta) {
+        // Load existing cycle from Redis
+        const players = await persistence.loadAllPlayers();
+        const bots = await persistence.loadAllBots();
+        const matches = await persistence.loadAllMatches();
+        const sessions = await persistence.loadAllSessions();
+
+        this.state = {
+          cycleId: stateMeta.cycleId,
+          state: stateMeta.state,
+          registrationEnds: stateMeta.registrationEnds,
+          gameEnds: stateMeta.gameEnds,
+          players,
+          bots,
+          matches,
+          playerSessions: sessions,
+          leaderboard: [],
+          extensionCount: 0,
+          maxExtensions: 2,
+          config: {
+            gameDurationMs: GAME_DURATION,
+            matchDurationMs: MATCH_DURATION,
+            simultaneousMatches: SIMULTANEOUS_MATCHES,
+            inactivityWarningMs: INACTIVITY_WARNING,
+            inactivityForfeitMs: INACTIVITY_FORFEIT,
+            maxInactivityStrikes: 3,
+          },
+        };
+        console.log(`[GameManager] Loaded cycle ${stateMeta.cycleId} from Redis`);
+      } else {
+        // Create new cycle
+        this.state = this.createNewGameState();
+        await persistence.saveGameStateMeta({
+          cycleId: this.state.cycleId,
+          state: this.state.state,
+          registrationEnds: this.state.registrationEnds,
+          gameEnds: this.state.gameEnds,
+        });
+        console.log(`[GameManager] Created new cycle ${this.state.cycleId}`);
+      }
+    } finally {
+      this.initializing = false;
+    }
+  }
+
+  private createNewGameState(): GameState {
     const now = Date.now();
     return {
       cycleId: `cycle-${now}`,
       state: "REGISTRATION",
       registrationEnds: now + REGISTRATION_DURATION,
       gameEnds: now + GAME_DURATION,
-      players: new Map<number, Player>(),
-      bots: new Map<number, Bot>(),
-      matches: new Map<string, Match>(),
-      playerSessions: new Map<number, PlayerGameSession>(),
+      players: new Map(),
+      bots: new Map(),
+      matches: new Map(),
+      playerSessions: new Map(),
       leaderboard: [],
+      extensionCount: 0,
+      maxExtensions: 2,
       config: {
         gameDurationMs: GAME_DURATION,
         matchDurationMs: MATCH_DURATION,
@@ -96,319 +145,46 @@ class GameManager {
     };
   }
 
-  // ========== REDIS SYNC METHODS ==========
-
   /**
-   * Load state from Redis (called on first access in production)
+   * Get the current game state, updating cycle state as needed.
    */
-  private async loadFromRedis(): Promise<void> {
-    if (!USE_REDIS || this.initialized) return;
+  async getGameState() {
+    await this.ensureInitialized();
+    await this.updateCycleState();
+    await this.cleanupOldMatches();
 
-    try {
-      console.log("[GameManager] Loading state from Redis...");
-
-      // Load core game state
-      const savedState = await getJSON<{
-        cycleId: string;
-        state: "REGISTRATION" | "LIVE" | "FINISHED";
-        registrationEnds: number;
-        gameEnds: number;
-      }>(REDIS_KEYS.gameState);
-
-      if (savedState) {
-        this.state.cycleId = savedState.cycleId;
-        this.state.state = savedState.state;
-        this.state.registrationEnds = savedState.registrationEnds;
-        this.state.gameEnds = savedState.gameEnds;
-        console.log(`[GameManager] Loaded state: ${savedState.state}, cycleId: ${savedState.cycleId}`);
-      }
-
-      // Load players
-      const playersData = await redis.hgetall(REDIS_KEYS.players);
-      if (playersData && Object.keys(playersData).length > 0) {
-        this.state.players.clear();
-        for (const [fid, data] of Object.entries(playersData)) {
-          try {
-            const player = JSON.parse(data) as Player;
-            // Reconstruct voteHistory array
-            player.voteHistory = player.voteHistory || [];
-            this.state.players.set(parseInt(fid, 10), player);
-          } catch (e) {
-            console.error(`[GameManager] Failed to parse player ${fid}:`, e);
-          }
-        }
-        console.log(`[GameManager] Loaded ${this.state.players.size} players from Redis`);
-      }
-
-      // Load bots
-      const botsData = await redis.hgetall(REDIS_KEYS.bots);
-      if (botsData && Object.keys(botsData).length > 0) {
-        this.state.bots.clear();
-        for (const [fid, data] of Object.entries(botsData)) {
-          try {
-            const bot = JSON.parse(data) as Bot;
-            this.state.bots.set(parseInt(fid, 10), bot);
-          } catch (e) {
-            console.error(`[GameManager] Failed to parse bot ${fid}:`, e);
-          }
-        }
-        console.log(`[GameManager] Loaded ${this.state.bots.size} bots from Redis`);
-      }
-
-      // Load matches
-      const matchesData = await redis.hgetall(REDIS_KEYS.matches);
-      if (matchesData && Object.keys(matchesData).length > 0) {
-        this.state.matches.clear();
-        for (const [matchId, data] of Object.entries(matchesData)) {
-          try {
-            const match = JSON.parse(data) as Match;
-            this.state.matches.set(matchId, match);
-          } catch (e) {
-            console.error(`[GameManager] Failed to parse match ${matchId}:`, e);
-          }
-        }
-        console.log(`[GameManager] Loaded ${this.state.matches.size} matches from Redis`);
-      }
-
-      // Load sessions
-      const sessionsData = await redis.hgetall(REDIS_KEYS.sessions);
-      if (sessionsData && Object.keys(sessionsData).length > 0) {
-        this.state.playerSessions.clear();
-        for (const [fid, data] of Object.entries(sessionsData)) {
-          try {
-            const sessionData = JSON.parse(data);
-            // Reconstruct Maps and Sets from arrays
-            const session: PlayerGameSession = {
-              fid: sessionData.fid,
-              activeMatches: new Map(sessionData.activeMatches || []),
-              completedMatchIds: new Set(sessionData.completedMatchIds || []),
-              facedOpponents: new Map(sessionData.facedOpponents || []),
-              currentRound: sessionData.currentRound || 0,
-              nextRoundStartTime: sessionData.nextRoundStartTime,
-            };
-            this.state.playerSessions.set(parseInt(fid, 10), session);
-          } catch (e) {
-            console.error(`[GameManager] Failed to parse session ${fid}:`, e);
-          }
-        }
-        console.log(`[GameManager] Loaded ${this.state.playerSessions.size} sessions from Redis`);
-      }
-
-      this.initialized = true;
-    } catch (error) {
-      console.error("[GameManager] Failed to load from Redis:", error);
-      // Continue with in-memory state
-      this.initialized = true;
-    }
+    return {
+      cycleId: this.state!.cycleId,
+      state: this.state!.state,
+      registrationEnds: this.state!.registrationEnds,
+      gameEnds: this.state!.gameEnds,
+      playerCount: this.state!.players.size,
+      config: this.state!.config,
+      isRegistered: false, // Will be set by routes if needed
+    };
   }
 
   /**
-   * Save core state to Redis
+   * Register a player and create their bot counterpart.
    */
-  private async saveStateToRedis(): Promise<void> {
-    if (!USE_REDIS) return;
-
-    const now = Date.now();
-    if (now - this.lastSyncTime < this.syncInterval) return;
-    this.lastSyncTime = now;
-
-    try {
-      // Save core game state
-      await setJSON(REDIS_KEYS.gameState, {
-        cycleId: this.state.cycleId,
-        state: this.state.state,
-        registrationEnds: this.state.registrationEnds,
-        gameEnds: this.state.gameEnds,
-      }, REDIS_TTL);
-    } catch (error) {
-      console.error("[GameManager] Failed to save state to Redis:", error);
-    }
-  }
-
-  /**
-   * Save a player to Redis
-   */
-  private async savePlayerToRedis(player: Player): Promise<void> {
-    if (!USE_REDIS) return;
-    try {
-      await redis.hset(REDIS_KEYS.players, player.fid.toString(), JSON.stringify(player));
-      await redis.expire(REDIS_KEYS.players, REDIS_TTL);
-    } catch (error) {
-      console.error(`[GameManager] Failed to save player ${player.fid} to Redis:`, error);
-    }
-  }
-
-  /**
-   * Save a bot to Redis
-   */
-  private async saveBotToRedis(bot: Bot): Promise<void> {
-    if (!USE_REDIS) return;
-    try {
-      await redis.hset(REDIS_KEYS.bots, bot.fid.toString(), JSON.stringify(bot));
-      await redis.expire(REDIS_KEYS.bots, REDIS_TTL);
-    } catch (error) {
-      console.error(`[GameManager] Failed to save bot ${bot.fid} to Redis:`, error);
-    }
-  }
-
-  /**
-   * Save a match to Redis
-   */
-  private async saveMatchToRedis(match: Match): Promise<void> {
-    if (!USE_REDIS) return;
-    try {
-      await redis.hset(REDIS_KEYS.matches, match.id, JSON.stringify(match));
-      await redis.expire(REDIS_KEYS.matches, REDIS_TTL);
-    } catch (error) {
-      console.error(`[GameManager] Failed to save match ${match.id} to Redis:`, error);
-    }
-  }
-
-  /**
-   * Save a session to Redis
-   */
-  private async saveSessionToRedis(session: PlayerGameSession): Promise<void> {
-    if (!USE_REDIS) return;
-    try {
-      // Convert Maps and Sets to arrays for JSON serialization
-      const serializable = {
-        fid: session.fid,
-        activeMatches: Array.from(session.activeMatches.entries()),
-        completedMatchIds: Array.from(session.completedMatchIds),
-        facedOpponents: Array.from(session.facedOpponents.entries()),
-        currentRound: session.currentRound,
-        nextRoundStartTime: session.nextRoundStartTime,
-      };
-      await redis.hset(REDIS_KEYS.sessions, session.fid.toString(), JSON.stringify(serializable));
-      await redis.expire(REDIS_KEYS.sessions, REDIS_TTL);
-    } catch (error) {
-      console.error(`[GameManager] Failed to save session ${session.fid} to Redis:`, error);
-    }
-  }
-
-  /**
-   * Load a match from Redis
-   */
-  private async loadMatchFromRedis(matchId: string): Promise<Match | null> {
-    if (!USE_REDIS) return null;
-    try {
-      const data = await redis.hget(REDIS_KEYS.matches, matchId);
-      if (!data) return null;
-      
-      const parsed = JSON.parse(data);
-      // Reconstruct the match object with proper types
-      return {
-        ...parsed,
-        messages: parsed.messages || [],
-        startTime: parsed.startTime,
-        endTime: parsed.endTime,
-        nextRoundStartTime: parsed.nextRoundStartTime,
-      } as Match;
-    } catch (error) {
-      console.error(`[GameManager] Failed to load match ${matchId} from Redis:`, error);
-      return null;
-    }
-  }
-
-  /**
-   * Delete a match from Redis
-   */
-  private async deleteMatchFromRedis(matchId: string): Promise<void> {
-    if (!USE_REDIS) return;
-    try {
-      await redis.hdel(REDIS_KEYS.matches, matchId);
-    } catch (error) {
-      console.error(`[GameManager] Failed to delete match ${matchId} from Redis:`, error);
-    }
-  }
-
-  /**
-   * Clear all Redis state (for reset)
-   */
-  private async clearRedisState(): Promise<void> {
-    if (!USE_REDIS) return;
-    try {
-      await redis.del(REDIS_KEYS.gameState);
-      await redis.del(REDIS_KEYS.players);
-      await redis.del(REDIS_KEYS.bots);
-      await redis.del(REDIS_KEYS.matches);
-      await redis.del(REDIS_KEYS.sessions);
-      console.log("[GameManager] Cleared all Redis state");
-    } catch (error) {
-      console.error("[GameManager] Failed to clear Redis state:", error);
-    }
-  }
-
-  /**
-   * Returns the current game state.
-   * In production with Redis, this loads state from Redis first.
-   */
-  public getGameState(): GameState {
-    // Sync load from Redis (blocking for first call)
-    if (USE_REDIS && !this.initialized) {
-      // Use a sync wrapper for the async load
-      // This is a workaround for the sync API - in production,
-      // the state should be loaded before this is called
-      this.loadFromRedisSync();
-    }
-
-    this.updateCycleState();
-    this.cleanupOldMatches();
-
-    // Save state to Redis (async, non-blocking)
-    this.saveStateToRedis().catch(console.error);
-
-    return this.state;
-  }
-
-  /**
-   * Synchronous wrapper for loading from Redis
-   * Uses a blocking approach for initial load
-   */
-  private loadFromRedisSync(): void {
-    if (!USE_REDIS || this.initialized) return;
-
-    // Mark as initialized to prevent multiple loads
-    this.initialized = true;
-
-    // Schedule async load - state will be available on next call
-    this.loadFromRedis().catch(console.error);
-  }
-
-  /**
-   * Async version of getGameState for use in async contexts
-   */
-  public async getGameStateAsync(): Promise<GameState> {
-    if (USE_REDIS && !this.initialized) {
-      await this.loadFromRedis();
-    }
-
-    this.updateCycleState();
-    this.cleanupOldMatches();
-
-    await this.saveStateToRedis();
-
-    return this.state;
-  }
-
-  /**
-   * Registers a new player and creates a corresponding bot for them.
-   */
-  public registerPlayer(
+  async registerPlayer(
     userProfile: UserProfile,
     recentCasts: { text: string }[],
     style: string,
-  ): Player | null {
-    if (this.state.players.size >= MAX_PLAYERS) {
-      console.warn("Max players reached. Cannot register new player.");
+  ): Promise<Player | null> {
+    await this.ensureInitialized();
+
+    if (this.state!.players.size >= MAX_PLAYERS) {
+      console.warn("[registerPlayer] Max players reached");
       return null;
     }
-    if (this.state.players.has(userProfile.fid)) {
-      return this.state.players.get(userProfile.fid)!;
+
+    if (this.state!.players.has(userProfile.fid)) {
+      return this.state!.players.get(userProfile.fid)!;
     }
 
-    // Create and add the real player
-    const newPlayer: Player = {
+    // Create player
+    const player: Player = {
       ...userProfile,
       type: "REAL",
       isRegistered: true,
@@ -417,375 +193,141 @@ class GameManager {
       inactivityStrikes: 0,
       lastActiveTime: Date.now(),
     };
-    this.state.players.set(userProfile.fid, newPlayer);
 
-    // Create and add the corresponding bot
-    // Create bot object first
-    const newBot: Bot = {
+    // Create bot
+    const bot: Bot = {
       ...userProfile,
       type: "BOT",
       originalAuthor: userProfile,
       recentCasts,
       style,
+      personality: inferPersonality({
+        ...userProfile,
+        type: "BOT",
+        originalAuthor: userProfile,
+        recentCasts,
+        style,
+      } as Bot),
     };
 
-    // Infer personality for proactive behavior based on cast patterns
-    const personality = inferPersonality(newBot);
-    newBot.personality = personality;
+    this.state!.players.set(userProfile.fid, player);
+    this.state!.bots.set(userProfile.fid, bot);
 
-    this.state.bots.set(userProfile.fid, newBot);
+    // Persist
+    await persistence.savePlayer(player);
+    await persistence.saveBot(bot);
 
-    // Save to Redis (async, non-blocking)
-    this.savePlayerToRedis(newPlayer).catch(console.error);
-    this.saveBotToRedis(newBot).catch(console.error);
-
-    return newPlayer;
+    return player;
   }
 
   /**
-   * Get or create a player's game session
+   * Get active matches for a player, creating new ones as needed.
    */
-  private getOrCreateSession(fid: number): PlayerGameSession {
-    if (!this.state.playerSessions.has(fid)) {
-      this.state.playerSessions.set(fid, {
-        fid,
-        activeMatches: new Map(),
-        completedMatchIds: new Set(),
-        facedOpponents: new Map(),
-        currentRound: 0,
-        nextRoundStartTime: undefined,
-      });
-    }
-    return this.state.playerSessions.get(fid)!;
-  }
+  async getActiveMatches(fid: number): Promise<Match[]> {
+    await this.ensureInitialized();
 
-  /**
-   * Get all active matches for a player (creates new ones as needed)
-   */
-  public getActiveMatches(fid: number): Match[] {
-    const player = this.state.players.get(fid);
-    if (!player) {
-      console.log(`[getActiveMatches] Player ${fid} not found in state`);
+    const player = this.state!.players.get(fid);
+    if (!player || this.state!.state !== "LIVE") {
       return [];
     }
-    if (this.state.state !== "LIVE") {
-      console.log(`[getActiveMatches] Game not in LIVE state. Current state: ${this.state.state}`);
-      return [];
-    }
-
-    console.log(`[getActiveMatches] Processing player ${fid}. Game state: ${this.state.state}. Total players: ${this.state.players.size}, Total bots: ${this.state.bots.size}`);
 
     const session = this.getOrCreateSession(fid);
     const now = Date.now();
     const matches: Match[] = [];
 
-    // Calculate maximum possible matches based on available opponents
+    // Calculate max rounds
     const totalOpponents = this.getAvailableOpponentsCount(fid);
-    const maxPossibleMatches =
-      totalOpponents * this.state.config.simultaneousMatches;
+    const maxPossibleMatches = totalOpponents * SIMULTANEOUS_MATCHES;
     const maxRounds = Math.min(
       MAX_ROUNDS,
-      Math.ceil(maxPossibleMatches / this.state.config.simultaneousMatches),
+      Math.ceil(maxPossibleMatches / SIMULTANEOUS_MATCHES),
     );
 
-    // Check if game should end for this player
     if (session.currentRound > maxRounds) {
       return [];
     }
 
-    // Check existing matches and see if any have expired
-    let hasExpiredMatches = false;
+    // Check existing matches
     let activeMatchCount = 0;
+    let hasExpiredMatches = false;
 
-    console.log(`[getActiveMatches] Player ${fid}: activeMatches.size=${session.activeMatches.size}, currentRound=${session.currentRound}`);
     for (const [slotNum, matchId] of session.activeMatches) {
-      const match = this.state.matches.get(matchId);
-      console.log(`[getActiveMatches] Slot ${slotNum}: matchId=${matchId}, exists=${!!match}, endTime=${match?.endTime}, now=${now}, expired=${match && match.endTime <= now}, voteLocked=${match?.voteLocked}`);
+      const match = this.state!.matches.get(matchId);
       if (!match) {
-        console.log(`[getActiveMatches] Match ${matchId} not found, marking as expired`);
+        session.activeMatches.delete(slotNum);
+        hasExpiredMatches = true;
+      } else if (match.endTime <= now && !match.voteLocked) {
+        // Auto-lock expired match
+        this.lockMatchVote(matchId);
+        hasExpiredMatches = true;
+      } else if (match.endTime <= now && match.voteLocked) {
+        // Already locked
         hasExpiredMatches = true;
         session.activeMatches.delete(slotNum);
-      } else if (match.endTime <= now && !match.voteLocked) {
-        // Auto-lock vote when time expires (backend is source of truth)
-        console.log(`[getActiveMatches] Match ${matchId} expired without lock, auto-locking`);
-        this.lockMatchVote(matchId);
-        // Mark as expired but don't count in activeMatchCount
-        hasExpiredMatches = true;
-        // Don't add to matches array - let frontend know round is over
-      } else if (match.endTime <= now && match.voteLocked) {
-        // Already locked, don't show to frontend anymore
-        console.log(`[getActiveMatches] Match ${matchId} already locked, removing from active display`);
-        hasExpiredMatches = true; // Mark for cleanup
-        session.activeMatches.delete(slotNum); // Remove from session immediately
-        // Don't add to matches array or increment activeMatchCount
       } else {
-        // Match still active
-        console.log(`[getActiveMatches] Match ${matchId} still active`);
+        // Still active
         matches.push(match);
         activeMatchCount++;
       }
     }
 
-    // Check if it's time to start a new round
-    const GRACE_PERIOD_MS = 5000; // 5 seconds grace period for vote submission
+    // Round progression logic
+    const GRACE_PERIOD_MS = 5000;
     const isGracePeriodOver = session.nextRoundStartTime && now >= (session.nextRoundStartTime + GRACE_PERIOD_MS);
-    const isRoundComplete = activeMatchCount === 0 && (hasExpiredMatches && isGracePeriodOver || session.activeMatches.size === 0);
+    const isRoundComplete = activeMatchCount === 0 && (session.activeMatches.size === 0 || (hasExpiredMatches && isGracePeriodOver));
     const isTimeForNextRound = session.nextRoundStartTime && now >= (session.nextRoundStartTime + GRACE_PERIOD_MS);
 
-    console.log(`[getActiveMatches] Round check: activeMatchCount=${activeMatchCount}, currentRound=${session.currentRound}, maxRounds=${maxRounds}, hasExpiredMatches=${hasExpiredMatches}, activeMatches.size=${session.activeMatches.size}, isRoundComplete=${isRoundComplete}, isTimeForNextRound=${isTimeForNextRound}`);
-
     if (!session.nextRoundStartTime && activeMatchCount === 0) {
-      // First time getting matches - start round 1
-      console.log(`[getActiveMatches] Starting first round for player ${fid}. Players: ${Array.from(this.state.players.keys()).join(', ')}, Bots: ${Array.from(this.state.bots.keys()).join(', ')}`);
+      // Start round 1
       session.currentRound = 1;
-      session.nextRoundStartTime = now + this.state.config.matchDurationMs;
+      session.nextRoundStartTime = now + MATCH_DURATION;
 
-      // Create matches for both slots
-      for (
-        let slotNum = 1;
-        slotNum <= this.state.config.simultaneousMatches;
-        slotNum++
-      ) {
+      for (let slotNum = 1; slotNum <= SIMULTANEOUS_MATCHES; slotNum++) {
         const match = this.createMatchForSlot(fid, slotNum as 1 | 2, session);
         if (match) {
           session.activeMatches.set(slotNum, match.id);
           matches.push(match);
         }
       }
-      console.log(`[getActiveMatches] Created ${matches.length} matches for player ${fid}`);
     } else if (isRoundComplete && session.currentRound < maxRounds && isTimeForNextRound) {
-      // Round finished - advance to next round (after grace period)
-      console.log(`[getActiveMatches] Round ${session.currentRound} complete, starting round ${session.currentRound + 1}. MaxRounds: ${maxRounds}`);
+      // Advance to next round
       session.currentRound++;
-      session.nextRoundStartTime = now + this.state.config.matchDurationMs;
-
-      // Clean up old matches from session (but keep them in global state)
+      session.nextRoundStartTime = now + MATCH_DURATION;
       session.activeMatches.clear();
 
-      // Create matches for both slots
-      for (
-        let slotNum = 1;
-        slotNum <= this.state.config.simultaneousMatches;
-        slotNum++
-      ) {
+      for (let slotNum = 1; slotNum <= SIMULTANEOUS_MATCHES; slotNum++) {
         const match = this.createMatchForSlot(fid, slotNum as 1 | 2, session);
         if (match) {
           session.activeMatches.set(slotNum, match.id);
           matches.push(match);
         }
       }
-      console.log(`[getActiveMatches] Created ${matches.length} matches for round ${session.currentRound}`);
     } else if (isRoundComplete && session.currentRound === maxRounds && isTimeForNextRound) {
-      // Last round finished - increment to signal game completion
-      console.log(`[getActiveMatches] Final round ${session.currentRound} complete. Game finished for player ${fid}.`);
+      // Last round complete
       session.currentRound++;
-      // Clean up matches from session
       session.activeMatches.clear();
     }
 
+    await persistence.saveSession(session);
     return matches;
   }
 
   /**
-   * Get count of available opponents for a player
+   * Add a message to a match.
    */
-  private getAvailableOpponentsCount(_fid: number): number {
-    const totalPlayers = this.state.players.size;
-    const totalBots = this.state.bots.size;
+  async addMessageToMatch(
+    matchId: string,
+    text: string,
+    senderFid: number,
+  ): Promise<ChatMessage | null> {
+    await this.ensureInitialized();
 
-    // Subtract 1 to exclude the player themselves
-    // Note: A player's own bot clone is excluded from their opponent pool
-    return totalPlayers - 1 + (totalBots - 1);
-  }
+    const match = this.state!.matches.get(matchId);
+    const sender = this.state!.players.get(senderFid) || this.state!.bots.get(senderFid);
 
-  /**
-   * Create a single match for a specific slot
-   */
-  private createMatchForSlot(
-    fid: number,
-    slotNumber: 1 | 2,
-    session: PlayerGameSession,
-  ): Match | null {
-    const player = this.state.players.get(fid);
-    if (!player) {
-      console.error(`[createMatchForSlot] Player ${fid} not found`);
-      return null;
-    }
-
-    const opponent = this.selectOpponent(fid, session);
-    if (!opponent) {
-      console.error(`[createMatchForSlot] No opponent found for player ${fid}. Available players: ${Array.from(this.state.players.keys()).join(', ')} | Available bots: ${Array.from(this.state.bots.keys()).join(', ')}`);
-      console.log(`[createMatchForSlot] Total players: ${this.state.players.size}, Total bots: ${this.state.bots.size}`);
-      return null;
-    }
-
-    const now = Date.now();
-    const match: Match = {
-      id: `match-${player.fid}-${opponent.fid}-${now}-s${slotNumber}`,
-      player,
-      opponent,
-      startTime: now,
-      endTime: now + this.state.config.matchDurationMs,
-      messages: [],
-      isVotingComplete: false,
-      isFinished: false,
-      slotNumber: slotNumber,
-      roundNumber: session.currentRound,
-      voteHistory: [],
-      voteLocked: false,
-      lastPlayerMessageTime: now,
-    };
-
-    this.state.matches.set(match.id, match);
-
-    // Save match to Redis (async, non-blocking)
-    this.saveMatchToRedis(match).catch(console.error);
-
-    // If opponent is a bot, check if it should send a proactive opening message
-    if (opponent.type === "BOT" && opponent.personality) {
-      const { generateProactiveOpening } = require("./botProactive");
-      const openingMessage = generateProactiveOpening(opponent.personality);
-
-      if (openingMessage) {
-        // Bot sends first message
-        console.log(`[createMatchForSlot] Bot ${opponent.username} sending proactive opening: "${openingMessage}"`);
-        this.addMessageToMatch(match.id, openingMessage, opponent.fid);
-      }
-    }
-
-    // Update faced opponents tracking
-    const facedCount = session.facedOpponents.get(opponent.fid) || 0;
-    session.facedOpponents.set(opponent.fid, facedCount + 1);
-
-    // Save session to Redis (async, non-blocking)
-    this.saveSessionToRedis(session).catch(console.error);
-
-    return match;
-  }
-
-  /**
-   * Select an appropriate opponent for a player
-   */
-  private selectOpponent(
-    playerFid: number,
-    session: PlayerGameSession,
-  ): Player | Bot | null {
-    const allOpponents = [
-      ...Array.from(this.state.players.values()).filter(
-        (p) => p.fid !== playerFid,
-      ),
-      ...Array.from(this.state.bots.values()).filter(
-        (b) => b.fid !== playerFid,
-      ),
-    ];
-
-    console.log(`[selectOpponent] Player ${playerFid}: Found ${allOpponents.length} opponents (players: ${allOpponents.filter(o => o.type === 'REAL').length}, bots: ${allOpponents.filter(o => o.type === 'BOT').length})`);
-    console.log(`[selectOpponent] Available FIDs: ${allOpponents.map(o => o.fid).join(', ')}`);
-
-    if (allOpponents.length === 0) {
-      console.log(`[selectOpponent] No opponents available for player ${playerFid}`);
-      return null;
-    }
-
-    // Calculate repeat threshold based on total opponents
-    // Allow repeats only when necessary
-    const totalOpponents = allOpponents.length;
-    const matchesPlayed = session.completedMatchIds.size;
-    const allowRepeats = matchesPlayed >= totalOpponents;
-
-    // Filter out opponents who have been faced too many times
-    const maxFaceCount = allowRepeats
-      ? Math.ceil(matchesPlayed / totalOpponents)
-      : 1;
-    const availableOpponents = allOpponents.filter(
-      (o) => (session.facedOpponents.get(o.fid) || 0) < maxFaceCount,
-    );
-
-    // If no available opponents due to repeat restrictions, use all opponents
-    const opponentsToChooseFrom =
-      availableOpponents.length > 0 ? availableOpponents : allOpponents;
-
-    // Sort by least faced first
-    opponentsToChooseFrom.sort((a, b) => {
-      const aFaced = session.facedOpponents.get(a.fid) || 0;
-      const bFaced = session.facedOpponents.get(b.fid) || 0;
-      return aFaced - bFaced;
-    });
-
-    // Dynamic balancing based on player pool size
-    const realPlayers = opponentsToChooseFrom.filter((o) => o.type === "REAL");
-    const bots = opponentsToChooseFrom.filter((o) => o.type === "BOT");
-
-    // Calculate ideal bot ratio (aim for 40-60% bots depending on pool)
-    const idealBotRatio = Math.min(
-      0.6,
-      Math.max(0.4, bots.length / opponentsToChooseFrom.length),
-    );
-    const currentBotRatio = this.calculateBotRatio(session);
-
-    // Select based on maintaining balance
-    if (currentBotRatio < idealBotRatio && bots.length > 0) {
-      return bots[0];
-    } else if (realPlayers.length > 0) {
-      return realPlayers[0];
-    }
-
-    // Return least faced opponent
-    return opponentsToChooseFrom[0];
-  }
-
-  /**
-   * Calculate the ratio of bot opponents faced by a player
-   */
-  private calculateBotRatio(session: PlayerGameSession): number {
-    const matches = Array.from(session.completedMatchIds)
-      .map((id) => this.state.matches.get(id))
-      .filter(Boolean);
-
-    if (matches.length === 0) return 0;
-
-    const botMatches = matches.filter((m) => m!.opponent.type === "BOT").length;
-    return botMatches / matches.length;
-  }
-
-  /**
-   * Retrieves a match by its ID (synchronous, memory only).
-   * For Redis-aware retrieval, use getMatchAsync().
-   */
-  public getMatch(matchId: string): Match | undefined {
-    return this.state.matches.get(matchId);
-  }
-
-  /**
-   * Retrieves a match by its ID (async, checks Redis if not in memory).
-   */
-  public async getMatchAsync(matchId: string): Promise<Match | undefined> {
-    // Check memory first
-    let match = this.state.matches.get(matchId);
-    if (match) return match;
-
-    // Try Redis
-    const redisMatch = await this.loadMatchFromRedis(matchId);
-    if (redisMatch) {
-      // Cache in memory
-      this.state.matches.set(matchId, redisMatch);
-      console.log(`[GameManager] Loaded match ${matchId} from Redis into memory`);
-      return redisMatch;
-    }
-
-    return undefined;
-  }
-
-  /**
-   * Adds a message to a match's chat history.
-   */
-  public addMessageToMatch(matchId: string, text: string, senderFid: number) {
-    const match = this.getMatch(matchId);
-    const sender =
-      this.state.players.get(senderFid) || this.state.bots.get(senderFid);
     if (!match || !sender) return null;
 
-    const message = {
+    const message: ChatMessage = {
       id: `msg-${Date.now()}`,
       sender: { fid: sender.fid, username: sender.username },
       text,
@@ -793,39 +335,38 @@ class GameManager {
     };
 
     match.messages.push(message);
-
-    // Save to Redis (async, non-blocking)
-    this.saveMatchToRedis(match).catch(console.error);
+    await persistence.saveMatch(match);
 
     return message;
   }
 
   /**
-   * Update the current vote for a match (can be called multiple times)
+   * Update vote for a match (multiple times allowed).
    */
-  public updateMatchVote(matchId: string, vote: "REAL" | "BOT"): Match | null {
-    const match = this.state.matches.get(matchId);
+  async updateMatchVote(matchId: string, vote: "REAL" | "BOT"): Promise<Match | null> {
+    await this.ensureInitialized();
+
+    const match = this.state!.matches.get(matchId);
     if (!match || match.voteLocked) return null;
 
     match.currentVote = vote;
-    match.voteHistory.push({
-      vote,
-      timestamp: Date.now(),
-    });
+    match.voteHistory.push({ vote, timestamp: Date.now() });
 
-    // Auto-lock if time is up
     if (Date.now() >= match.endTime) {
       this.lockMatchVote(matchId);
     }
 
+    await persistence.saveMatch(match);
     return match;
   }
 
   /**
-   * Lock the vote for a match and record the result
+   * Lock vote for a match and record result.
    */
-  public lockMatchVote(matchId: string): boolean | null {
-    const match = this.state.matches.get(matchId);
+  async lockMatchVote(matchId: string): Promise<boolean | null> {
+    await this.ensureInitialized();
+
+    const match = this.state!.matches.get(matchId);
     if (!match || match.voteLocked) return null;
 
     match.voteLocked = true;
@@ -833,7 +374,7 @@ class GameManager {
     match.isFinished = true;
 
     const player = match.player;
-    const guess = match.currentVote || "REAL"; // Default to REAL if no vote
+    const guess = match.currentVote || "REAL";
     const actualType = match.opponent.type;
     const isCorrect = guess === actualType;
 
@@ -853,50 +394,426 @@ class GameManager {
 
     player.voteHistory.push(voteRecord);
 
-    // Mark session as completed
-    const session = this.state.playerSessions.get(player.fid);
+    const session = this.state!.playerSessions.get(player.fid);
     if (session) {
       session.completedMatchIds.add(matchId);
-      // Remove from active matches (but keep in global state for vote submission)
       for (const [slot, id] of session.activeMatches) {
         if (id === matchId) {
           session.activeMatches.delete(slot);
           break;
         }
       }
-      // Save session to Redis
-      this.saveSessionToRedis(session).catch(console.error);
+      await persistence.saveSession(session);
     }
 
-    // Save match and player to Redis
-    this.saveMatchToRedis(match).catch(console.error);
-    this.savePlayerToRedis(player).catch(console.error);
+    await persistence.saveMatch(match);
+    await persistence.savePlayer(player);
 
-    // Save match result to database (async, non-blocking)
+    // Save to database (async, non-blocking)
     this.saveMatchToDatabase(match, isCorrect, voteSpeed).catch(console.error);
 
-    // Publish game event to notify client (async, non-blocking)
+    // Publish event (async, non-blocking)
     getGameEventPublisher()
-      .publishMatchEnd(this.state.cycleId, match, isCorrect, actualType)
-      .catch((err) => console.error("[lockMatchVote] Failed to publish event:", err));
-
-    // Don't delete from global matches immediately - allow grace period
-    console.log(`[lockMatchVote] Match ${matchId} locked. Keeping in global state for grace period.`);
+      .publishMatchEnd(this.state!.cycleId, match, isCorrect, actualType)
+      .catch(err => console.error("[lockMatchVote] Failed to publish event:", err));
 
     return isCorrect;
   }
 
   /**
-   * Save match result to the database
+   * Get leaderboard.
    */
-  private async saveMatchToDatabase(match: Match, isCorrect: boolean, voteSpeedMs: number): Promise<void> {
+  async getLeaderboard(): Promise<LeaderboardEntry[]> {
+    await this.ensureInitialized();
+
+    const leaderboard: LeaderboardEntry[] = Array.from(this.state!.players.values()).map(player => {
+      const correctVotes = player.voteHistory.filter(v => v.correct && !v.forfeit);
+      const accuracy = player.voteHistory.length > 0
+        ? (correctVotes.length / player.voteHistory.length) * 100
+        : 0;
+      const avgSpeed = correctVotes.length > 0
+        ? correctVotes.reduce((sum, v) => sum + v.speed, 0) / correctVotes.length
+        : 0;
+
+      return {
+        player: {
+          fid: player.fid,
+          username: player.username,
+          displayName: player.displayName,
+          pfpUrl: player.pfpUrl,
+        },
+        accuracy,
+        avgSpeed,
+      };
+    });
+
+    leaderboard.sort((a, b) => {
+      if (b.accuracy !== a.accuracy) return b.accuracy - a.accuracy;
+      return a.avgSpeed - b.avgSpeed;
+    });
+
+    return leaderboard;
+  }
+
+  /**
+   * Get a specific match.
+   */
+  async getMatch(matchId: string): Promise<Match | null> {
+    await this.ensureInitialized();
+
+    let match = this.state!.matches.get(matchId);
+    if (!match && USE_REDIS) {
+      const loaded = await persistence.loadMatch(matchId);
+      if (loaded) {
+        match = loaded;
+        this.state!.matches.set(matchId, match);
+      }
+    }
+
+    return match ?? null;
+  }
+
+  /**
+   * Get all matches (admin only).
+   */
+  async getAllMatches(): Promise<Match[]> {
+    await this.ensureInitialized();
+    return Array.from(this.state!.matches.values());
+  }
+
+  /**
+   * Get all players (admin only).
+   */
+  async getAllPlayers(): Promise<Player[]> {
+    await this.ensureInitialized();
+    return Array.from(this.state!.players.values());
+  }
+
+  /**
+   * Get all bots.
+   */
+  async getAllBots(): Promise<Bot[]> {
+    await this.ensureInitialized();
+    return Array.from(this.state!.bots.values());
+  }
+
+  /**
+   * Get game config.
+   */
+  async getConfig() {
+    await this.ensureInitialized();
+    return this.state!.config;
+  }
+
+  /**
+   * Get full state (for routes that need raw access).
+   */
+  async getRawState() {
+    await this.ensureInitialized();
+    return this.state!;
+  }
+
+  /**
+   * Check if player is registered.
+   */
+  async isPlayerRegistered(fid: number): Promise<boolean> {
+    await this.ensureInitialized();
+    return this.state!.players.has(fid);
+  }
+
+  /**
+   * Force state transition (admin/testing only).
+   */
+  async forceStateTransition(newState: "REGISTRATION" | "LIVE" | "FINISHED"): Promise<void> {
+    await this.ensureInitialized();
+
+    const now = Date.now();
+    this.state!.state = newState;
+
+    if (newState === "REGISTRATION") {
+      this.state!.registrationEnds = now + REGISTRATION_DURATION;
+      this.state!.gameEnds = now + GAME_DURATION;
+      this.state!.extensionCount = 0;
+    } else if (newState === "LIVE") {
+      this.state!.registrationEnds = now - 1;
+      this.state!.gameEnds = now + GAME_DURATION;
+      this.state!.extensionCount = 0;
+    } else if (newState === "FINISHED") {
+      this.state!.leaderboard = await this.getLeaderboard();
+    }
+
+    await persistence.saveGameStateMeta({
+      cycleId: this.state!.cycleId,
+      state: this.state!.state,
+      registrationEnds: this.state!.registrationEnds,
+      gameEnds: this.state!.gameEnds,
+    });
+  }
+
+  /**
+   * Reset the entire game (admin/testing only).
+   */
+  async resetGame(): Promise<void> {
+    await persistence.clearAll();
+    this.state = null;
+    this.initializing = false;
+    console.log("[GameManager] Game reset complete");
+  }
+
+  // ========== PRIVATE HELPERS ==========
+
+  private getOrCreateSession(fid: number): PlayerGameSession {
+    if (!this.state!.playerSessions.has(fid)) {
+      this.state!.playerSessions.set(fid, {
+        fid,
+        activeMatches: new Map(),
+        completedMatchIds: new Set(),
+        facedOpponents: new Map(),
+        currentRound: 0,
+        nextRoundStartTime: undefined,
+      });
+    }
+    return this.state!.playerSessions.get(fid)!;
+  }
+
+  private getAvailableOpponentsCount(_fid: number): number {
+    return this.state!.players.size - 1 + (this.state!.bots.size - 1);
+  }
+
+  private createMatchForSlot(
+    fid: number,
+    slotNumber: 1 | 2,
+    session: PlayerGameSession,
+  ): Match | null {
+    const player = this.state!.players.get(fid);
+    if (!player) return null;
+
+    const opponent = this.selectOpponent(fid, session);
+    if (!opponent) return null;
+
+    const now = Date.now();
+    const match: Match = {
+      id: `match-${player.fid}-${opponent.fid}-${now}-s${slotNumber}`,
+      player,
+      opponent,
+      startTime: now,
+      endTime: now + MATCH_DURATION,
+      messages: [],
+      isVotingComplete: false,
+      isFinished: false,
+      slotNumber,
+      roundNumber: session.currentRound,
+      voteHistory: [],
+      voteLocked: false,
+      lastPlayerMessageTime: now,
+    };
+
+    this.state!.matches.set(match.id, match);
+    persistence.saveMatch(match).catch(console.error);
+
+    // Bot proactive opening
+    if (opponent.type === "BOT" && opponent.personality) {
+      const { generateProactiveOpening } = require("./botProactive");
+      const openingMessage = generateProactiveOpening(opponent.personality);
+      if (openingMessage) {
+        this.addMessageToMatch(match.id, openingMessage, opponent.fid).catch(console.error);
+      }
+    }
+
+    const facedCount = session.facedOpponents.get(opponent.fid) || 0;
+    session.facedOpponents.set(opponent.fid, facedCount + 1);
+
+    return match;
+  }
+
+  private selectOpponent(
+    playerFid: number,
+    session: PlayerGameSession,
+  ): Player | Bot | null {
+    const allOpponents = [
+      ...Array.from(this.state!.players.values()).filter(p => p.fid !== playerFid),
+      ...Array.from(this.state!.bots.values()).filter(b => b.fid !== playerFid),
+    ];
+
+    if (allOpponents.length === 0) return null;
+
+    const totalOpponents = allOpponents.length;
+    const matchesPlayed = session.completedMatchIds.size;
+    const allowRepeats = matchesPlayed >= totalOpponents;
+    const maxFaceCount = allowRepeats ? Math.ceil(matchesPlayed / totalOpponents) : 1;
+
+    let availableOpponents = allOpponents.filter(
+      o => (session.facedOpponents.get(o.fid) || 0) < maxFaceCount,
+    );
+
+    if (availableOpponents.length === 0) {
+      availableOpponents = allOpponents;
+    }
+
+    availableOpponents.sort((a, b) => {
+      const aFaced = session.facedOpponents.get(a.fid) || 0;
+      const bFaced = session.facedOpponents.get(b.fid) || 0;
+      return aFaced - bFaced;
+    });
+
+    const realPlayers = availableOpponents.filter(o => o.type === "REAL");
+    const bots = availableOpponents.filter(o => o.type === "BOT");
+
+    const idealBotRatio = Math.min(0.6, Math.max(0.4, bots.length / availableOpponents.length));
+    const currentBotRatio = this.calculateBotRatio(session);
+
+    if (currentBotRatio < idealBotRatio && bots.length > 0) {
+      return bots[0];
+    } else if (realPlayers.length > 0) {
+      return realPlayers[0];
+    }
+
+    return availableOpponents[0];
+  }
+
+  private calculateBotRatio(session: PlayerGameSession): number {
+    const matches = Array.from(session.completedMatchIds)
+      .map(id => this.state!.matches.get(id))
+      .filter(Boolean);
+
+    if (matches.length === 0) return 0;
+
+    const botMatches = matches.filter(m => m!.opponent.type === "BOT").length;
+    return botMatches / matches.length;
+  }
+
+  private async updateCycleState(): Promise<void> {
+    const now = Date.now();
+
+    // REGISTRATION -> LIVE
+    if (
+      this.state!.state === "REGISTRATION" &&
+      now > this.state!.registrationEnds
+    ) {
+      const totalOpponents = this.getAvailableOpponentsCount(0);
+
+      if (totalOpponents < 1) {
+        this.state!.registrationEnds = now + 30000;
+        return;
+      }
+
+      this.state!.state = "LIVE";
+      this.state!.gameEnds = now + GAME_DURATION;
+      this.state!.extensionCount = 0;
+
+      const playerFids = Array.from(this.state!.players.keys());
+      getGameEventPublisher()
+        .publishGameStart(this.state!.cycleId, playerFids)
+        .catch(err => console.error("[updateCycleState] Failed to publish game_start:", err));
+    }
+
+    // FINISHED state cleanup
+    if (this.state!.state === "FINISHED") {
+      const CLEANUP_GRACE_PERIOD = 5000;
+      if (this.state!.finishedAt && now - this.state!.finishedAt > CLEANUP_GRACE_PERIOD) {
+        this.state!.players.clear();
+        this.state!.bots.clear();
+        this.state!.playerSessions.clear();
+        this.state!.matches.clear();
+        this.state!.leaderboard = [];
+        this.state!.finishedAt = undefined;
+      }
+      return;
+    }
+
+    // LIVE -> FINISHED
+    if (this.state!.state === "LIVE" && now > this.state!.gameEnds) {
+      const totalPlayers = this.state!.players.size;
+
+      if (totalPlayers === 0 || this.state!.matches.size === 0) {
+        this.state!.gameEnds = now + 60000;
+        return;
+      }
+
+      let completedPlayers = 0;
+      for (const [_fid, session] of this.state!.playerSessions) {
+        const maxRounds = Math.floor(GAME_DURATION / MATCH_DURATION / SIMULTANEOUS_MATCHES);
+        if (session.currentRound > maxRounds) {
+          completedPlayers++;
+        }
+      }
+
+      const hasPlayerSessions = this.state!.playerSessions.size > 0;
+      const allPlayersComplete = hasPlayerSessions && completedPlayers === totalPlayers;
+      const extensionLimitReached = this.state!.extensionCount >= this.state!.maxExtensions;
+      const maxTotalDuration = GAME_DURATION + (this.state!.maxExtensions * 60 * 1000);
+      const hardDeadlineExceeded = now > this.state!.gameEnds - GAME_DURATION + maxTotalDuration;
+
+      let shouldFinish = false;
+
+      if (allPlayersComplete) {
+        shouldFinish = true;
+      } else if (extensionLimitReached || hardDeadlineExceeded) {
+        shouldFinish = true;
+      }
+
+      if (shouldFinish) {
+        this.state!.state = "FINISHED";
+        this.state!.finishedAt = now;
+        this.state!.leaderboard = await this.getLeaderboard();
+
+        this.saveGameResultsToDatabase().catch(console.error);
+
+        const playerFids = Array.from(this.state!.players.keys());
+        const leaderboardData = this.state!.leaderboard.map((entry, index) => ({
+          fid: entry.player.fid,
+          score: index + 1,
+        }));
+
+        getGameEventPublisher()
+          .publishGameEnd(this.state!.cycleId, leaderboardData, playerFids)
+          .catch(err => console.error("[updateCycleState] Failed to publish game_end:", err));
+      } else if (this.state!.extensionCount < this.state!.maxExtensions) {
+        this.state!.extensionCount++;
+        this.state!.gameEnds = now + 60000;
+      }
+    }
+
+    await persistence.saveGameStateMeta({
+      cycleId: this.state!.cycleId,
+      state: this.state!.state,
+      registrationEnds: this.state!.registrationEnds,
+      gameEnds: this.state!.gameEnds,
+    });
+  }
+
+  private async cleanupOldMatches(): Promise<void> {
+    const now = Date.now();
+    const GRACE_PERIOD_MS = 10000;
+    const matchesToDelete: string[] = [];
+
+    for (const [matchId, match] of this.state!.matches) {
+      const timeSinceEnd = now - match.endTime;
+
+      if (match.voteLocked && match.isFinished && timeSinceEnd > GRACE_PERIOD_MS) {
+        matchesToDelete.push(matchId);
+      }
+    }
+
+    if (matchesToDelete.length > 0) {
+      matchesToDelete.forEach(matchId => {
+        this.state!.matches.delete(matchId);
+        persistence.deleteMatch(matchId).catch(console.error);
+      });
+    }
+  }
+
+  private async saveMatchToDatabase(
+    match: Match,
+    isCorrect: boolean,
+    voteSpeedMs: number,
+  ): Promise<void> {
     try {
       const player = match.player;
 
-      // Save match to database
       await database.saveMatch({
         id: match.id,
-        cycle_id: this.state.cycleId,
+        cycle_id: this.state!.cycleId,
         player_fid: player.fid,
         opponent_fid: match.opponent.fid,
         opponent_type: match.opponent.type,
@@ -911,52 +828,44 @@ class GameManager {
         ended_at: new Date(match.endTime),
       });
 
-      // Update player stats in database
       await database.updatePlayerStats(
         player.fid,
         player.username,
         player.displayName,
         player.pfpUrl,
-        { correct: isCorrect, speedMs: voteSpeedMs }
+        { correct: isCorrect, speedMs: voteSpeedMs },
       );
-
-      console.log(`[saveMatchToDatabase] Saved match ${match.id} to database`);
     } catch (error) {
       console.error(`[saveMatchToDatabase] Failed to save match ${match.id}:`, error);
     }
   }
 
-  /**
-   * Save final game results to the database when game finishes
-   */
   private async saveGameResultsToDatabase(): Promise<void> {
     try {
-      const leaderboard = this.state.leaderboard;
+      const leaderboard = this.state!.leaderboard;
       const totalPlayers = leaderboard.length;
 
-      // Save game cycle to database
       await database.saveGameCycle({
-        id: this.state.cycleId,
-        chain: 'local', // Will be updated when blockchain integration is added
-        state: this.state.state,
-        started_at: new Date(this.state.registrationEnds), // Game started when registration ended
+        id: this.state!.cycleId,
+        chain: "local",
+        state: this.state!.state,
+        started_at: new Date(this.state!.registrationEnds),
         ended_at: new Date(),
         player_count: totalPlayers,
         entry_fee_wei: null,
         prize_pool_wei: null,
       });
 
-      // Save individual game results for each player
       for (let i = 0; i < leaderboard.length; i++) {
         const entry = leaderboard[i];
-        const player = this.state.players.get(entry.player.fid);
+        const player = this.state!.players.get(entry.player.fid);
         if (!player) continue;
 
         const correctVotes = player.voteHistory.filter(v => v.correct && !v.forfeit).length;
         const totalVotes = player.voteHistory.length;
 
         await database.saveGameResult({
-          cycle_id: this.state.cycleId,
+          cycle_id: this.state!.cycleId,
           player_fid: entry.player.fid,
           accuracy: entry.accuracy,
           correct_votes: correctVotes,
@@ -964,313 +873,17 @@ class GameManager {
           avg_speed_ms: Math.round(entry.avgSpeed),
           rank: i + 1,
           total_players: totalPlayers,
-          prize_won_wei: null, // Will be updated when blockchain integration is added
+          prize_won_wei: null,
         });
 
-        // Increment total games for player
         await database.incrementPlayerGames(entry.player.fid);
       }
-
-      console.log(`[saveGameResultsToDatabase] Saved game results for ${totalPlayers} players in cycle ${this.state.cycleId}`);
     } catch (error) {
-      console.error(`[saveGameResultsToDatabase] Failed to save game results:`, error);
+      console.error("[saveGameResultsToDatabase] Failed to save game results:", error);
     }
-  }
-
-  /**
-   * Records a player's vote for a given match (legacy support).
-   * @returns A boolean indicating if the guess was correct, or null if vote failed.
-   */
-  public recordVote(
-    voterFid: number,
-    matchId: string,
-    guess: "REAL" | "BOT",
-  ): boolean | null {
-    const player = this.state.players.get(voterFid);
-    const match = this.state.matches.get(matchId);
-
-    if (!player || !match || match.isVotingComplete) {
-      return null;
-    }
-
-    // Ensure voting happens only after the match is over
-    if (Date.now() < match.endTime) {
-      return null;
-    }
-
-    const actualType = match.opponent.type;
-    const isCorrect = guess === actualType;
-    const voteSpeed = Date.now() - match.endTime; // Time in ms since match ended
-
-    player.voteHistory.push({
-      matchId,
-      correct: isCorrect,
-      speed: voteSpeed,
-      voteChanges: 0,
-    });
-
-    match.isVotingComplete = true;
-
-    return isCorrect;
-  }
-
-  /**
-   * Updates the game state based on the current time.
-   */
-  private updateCycleState(): void {
-    const now = Date.now();
-    if (
-      this.state.state === "REGISTRATION" &&
-      now > this.state.registrationEnds
-    ) {
-      // Check if we have enough players to start a meaningful game
-      const totalPlayers = this.state.players.size;
-      const totalBots = this.state.bots.size;
-      const totalOpponents = totalPlayers - 1 + (totalBots - 1);
-
-      console.log(`[updateCycleState] Registration ending. Players: ${totalPlayers}, Bots: ${totalBots}, Available opponents: ${totalOpponents}`);
-
-      if (totalOpponents < 1) {
-        console.warn(`[updateCycleState] Not enough opponents (${totalOpponents}) to start game. Need at least 1 opponent. Keeping in REGISTRATION state.`);
-        // Extend registration by 30 seconds to allow more players
-        this.state.registrationEnds = now + 30000;
-        return;
-      }
-
-      console.log(`[updateCycleState] Starting LIVE state with ${totalOpponents} available opponents`);
-      this.state.state = "LIVE";
-      // IMPORTANT: Reset gameEnds to start from NOW when going LIVE
-      // This ensures the full game duration is available regardless of registration time
-      this.state.gameEnds = now + GAME_DURATION;
-      console.log(`[updateCycleState] Game will end at ${new Date(this.state.gameEnds).toISOString()}`);
-
-      // Publish game_start event to all players
-      const playerFids = Array.from(this.state.players.keys());
-      getGameEventPublisher()
-        .publishGameStart(this.state.cycleId, playerFids)
-        .catch((err) => console.error("[updateCycleState] Failed to publish game_start:", err));
-    }
-    if (this.state.state === "LIVE" && now > this.state.gameEnds) {
-      // Check if all players have completed their rounds before finishing
-      const totalPlayers = this.state.players.size;
-      let completedPlayers = 0;
-
-      // SAFEGUARD: Don't end game if there are no players (edge case)
-      if (totalPlayers === 0) {
-        console.warn(`[updateCycleState] No players in LIVE game. Extending game time.`);
-        this.state.gameEnds = now + (60 * 1000);
-        return;
-      }
-
-      // SAFEGUARD: Don't end game if no matches have been created yet
-      // This prevents the game from ending before players have a chance to play
-      if (this.state.matches.size === 0) {
-        console.warn(`[updateCycleState] No matches created yet. Extending game time.`);
-        this.state.gameEnds = now + (60 * 1000);
-        return;
-      }
-
-      for (const [fid, session] of this.state.playerSessions) {
-        const player = this.state.players.get(fid);
-        if (player) {
-          const maxRounds = Math.floor(
-            GAME_DURATION / MATCH_DURATION / SIMULTANEOUS_MATCHES
-          );
-          if (session.currentRound > maxRounds) {
-            completedPlayers++;
-          }
-        }
-      }
-
-      // Only finish game if all players are done (or if game duration is significantly exceeded)
-      const gameDurationExceeded = now > this.state.gameEnds + (2 * 60 * 1000); // 2 extra minutes
-
-      // SAFEGUARD: Require at least some player sessions before considering game complete
-      const hasPlayerSessions = this.state.playerSessions.size > 0;
-      const allPlayersComplete = hasPlayerSessions && completedPlayers === totalPlayers;
-
-      if (allPlayersComplete || gameDurationExceeded) {
-        console.log(`[updateCycleState] Game ending. Completed players: ${completedPlayers}/${totalPlayers}, Duration exceeded: ${gameDurationExceeded}, Has sessions: ${hasPlayerSessions}, Matches: ${this.state.matches.size}`);
-        this.state.state = "FINISHED";
-        // Calculate and store the final leaderboard once the game is finished.
-        this.state.leaderboard = this.getLeaderboard();
-        // Save final game results to database (async, non-blocking)
-        this.saveGameResultsToDatabase().catch(console.error);
-
-        // Publish game_end event to all players
-        const playerFids = Array.from(this.state.players.keys());
-        const leaderboardData = this.state.leaderboard.map((entry, index) => ({
-          fid: entry.player.fid,
-          score: index + 1, // Rank (1st, 2nd, 3rd, etc.)
-        }));
-        getGameEventPublisher()
-          .publishGameEnd(this.state.cycleId, leaderboardData, playerFids)
-          .catch((err) => console.error("[updateCycleState] Failed to publish game_end:", err));
-      } else {
-        console.log(`[updateCycleState] Waiting for players to finish. Completed: ${completedPlayers}/${totalPlayers}, Sessions: ${this.state.playerSessions.size}, Matches: ${this.state.matches.size}. Extending game time.`);
-        // Extend game time by 1 minute to allow stragglers to finish
-        this.state.gameEnds = now + (60 * 1000);
-      }
-    }
-  }
-
-  /**
-   * Calculates and returns the current leaderboard, sorted by score.
-   * This can be used for both provisional and final leaderboards.
-   */
-  public getLeaderboard(): LeaderboardEntry[] {
-    const leaderboard: LeaderboardEntry[] = Array.from(
-      this.state.players.values(),
-    ).map((player) => {
-      const correctVotes = player.voteHistory.filter(
-        (v) => v.correct && !v.forfeit,
-      );
-      const accuracy =
-        player.voteHistory.length > 0
-          ? (correctVotes.length / player.voteHistory.length) * 100
-          : 0;
-      const avgSpeed =
-        correctVotes.length > 0
-          ? correctVotes.reduce((sum, v) => sum + v.speed, 0) /
-          correctVotes.length
-          : 0;
-
-      return {
-        player: {
-          fid: player.fid,
-          username: player.username,
-          displayName: player.displayName,
-          pfpUrl: player.pfpUrl,
-        },
-        accuracy,
-        avgSpeed,
-      };
-    });
-
-    // Sort by accuracy (desc), then by speed (asc)
-    leaderboard.sort((a, b) => {
-      if (b.accuracy !== a.accuracy) {
-        return b.accuracy - a.accuracy;
-      }
-      return a.avgSpeed - b.avgSpeed;
-    });
-
-    return leaderboard;
-  }
-
-  /**
-   * Clean up old matches that are no longer needed
-   * Called periodically to prevent memory leaks
-   */
-  private cleanupOldMatches(): void {
-    const now = Date.now();
-    const GRACE_PERIOD_MS = 10000; // 10 seconds grace period
-    const matchesToDelete: string[] = [];
-
-    for (const [matchId, match] of this.state.matches) {
-      const timeSinceEnd = now - match.endTime;
-      const isPastGrace = timeSinceEnd > GRACE_PERIOD_MS;
-      
-      // Delete matches that are old, locked, and past grace period
-      if (
-        match.voteLocked &&
-        match.isFinished &&
-        isPastGrace
-      ) {
-        console.log(`[cleanupOldMatches] Match ${matchId} eligible for cleanup: voteLocked=${match.voteLocked}, isFinished=${match.isFinished}, timeSinceEnd=${timeSinceEnd}ms, gracePeriod=${GRACE_PERIOD_MS}ms`);
-        matchesToDelete.push(matchId);
-      } else if (match.voteLocked) {
-        console.log(`[cleanupOldMatches] Match ${matchId} locked but not ready for cleanup: isFinished=${match.isFinished}, timeSinceEnd=${timeSinceEnd}ms, isPastGrace=${isPastGrace}`);
-      }
-    }
-
-    if (matchesToDelete.length > 0) {
-      console.log(`[cleanupOldMatches] Cleaning up ${matchesToDelete.length} old matches`);
-      matchesToDelete.forEach(matchId => {
-        this.state.matches.delete(matchId);
-        // Also delete from Redis
-        this.deleteMatchFromRedis(matchId).catch(console.error);
-      });
-    }
-  }
-
-  // ========== ADMIN METHODS (Dev/Testing Only) ==========
-
-  /**
-   * Manually force a state transition (for testing).
-   * @param newState The state to transition to
-   */
-  public forceStateTransition(
-    newState: "REGISTRATION" | "LIVE" | "FINISHED",
-  ): void {
-    const now = Date.now();
-    console.log(`[forceStateTransition] Transitioning from ${this.state.state} to ${newState}`);
-    console.log(`[forceStateTransition] Current players: ${this.state.players.size}, bots: ${this.state.bots.size}`);
-
-    this.state.state = newState;
-    if (newState === "REGISTRATION") {
-      this.state.registrationEnds = now + REGISTRATION_DURATION;
-      this.state.gameEnds = now + GAME_DURATION;
-      console.log(`[forceStateTransition] Registration ends: ${new Date(this.state.registrationEnds).toISOString()}`);
-    } else if (newState === "LIVE") {
-      this.state.registrationEnds = now - 1;
-      this.state.gameEnds = now + GAME_DURATION;
-      console.log(`[forceStateTransition] Game ends: ${new Date(this.state.gameEnds).toISOString()} (${GAME_DURATION}ms from now)`);
-    } else if (newState === "FINISHED") {
-      this.state.leaderboard = this.getLeaderboard();
-    }
-
-    // IMPORTANT: Save to Redis immediately for production
-    this.saveStateToRedis().catch(console.error);
-  }
-
-  /**
-   * Reset the entire game state (for testing).
-   * Returns a promise that resolves when Redis is cleared.
-   */
-  public async resetGame(): Promise<void> {
-    console.log("[GameManager] Resetting game state...");
-
-    // Clear Redis state FIRST (before resetting in-memory state)
-    await this.clearRedisState();
-
-    // Then reset in-memory state
-    this.state = this.initializeGameState();
-    this.initialized = false;
-
-    // Reset the sync time to force immediate save
-    this.lastSyncTime = 0;
-
-    // Save the fresh state to Redis
-    await this.saveStateToRedis();
-
-    console.log("[GameManager] Game reset complete. New cycleId:", this.state.cycleId);
-  }
-
-  /**
-   * Get all players (for admin view).
-   */
-  public getAllPlayers(): Player[] {
-    return Array.from(this.state.players.values());
-  }
-
-  /**
-   * Get all bots (for admin view).
-   */
-  public getAllBots(): Bot[] {
-    return Array.from(this.state.bots.values());
-  }
-
-  /**
-   * Get all matches (for admin view).
-   */
-  public getAllMatches(): Match[] {
-    return Array.from(this.state.matches.values());
   }
 }
 
-// Export a singleton instance of the GameManager (per serverless instance)
-// Redis is the source of truth for horizontal scaling across instances
 const globalForGame = global as unknown as { gameManager: GameManager };
 
 export const gameManager =

@@ -32,10 +32,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify the match belongs to this player (check Redis if not in memory)
-    const match = await gameManager.getMatchAsync(matchId);
+    const match = await gameManager.getMatch(matchId);
     if (!match) {
       console.error(`[/api/match/vote POST] Match ${matchId} not found for FID ${playerFid}. Match was likely deleted or never existed.`);
-      const allMatches = Array.from(gameManager.getGameState().matches.keys());
+      const rawState = await gameManager.getRawState();
+      const allMatches = Array.from(rawState.matches.keys());
       console.log(`[/api/match/vote POST] Currently available matches in memory: ${allMatches.length > 0 ? allMatches.join(', ') : 'NONE'}`);
       return NextResponse.json(
         { error: "Match not found." },
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Update the vote
-    const updatedMatch = gameManager.updateMatchVote(matchId, vote);
+    const updatedMatch = await gameManager.updateMatchVote(matchId, vote);
 
     if (!updatedMatch) {
       return NextResponse.json(
@@ -65,7 +66,7 @@ export async function POST(request: NextRequest) {
     let isCorrect = null;
 
     if (now >= updatedMatch.endTime && !updatedMatch.voteLocked) {
-      isCorrect = gameManager.lockMatchVote(matchId);
+      isCorrect = await gameManager.lockMatchVote(matchId);
     }
 
     return NextResponse.json({
@@ -108,10 +109,11 @@ export async function PUT(request: NextRequest) {
     }
 
     // Verify the match belongs to this player (check Redis if not in memory)
-    const match = await gameManager.getMatchAsync(matchId);
+    const match = await gameManager.getMatch(matchId);
     if (!match) {
       console.error(`[/api/match/vote PUT] Match ${matchId} not found for FID ${playerFid}. Match was likely deleted or never existed.`);
-      const allMatches = Array.from(gameManager.getGameState().matches.keys());
+      const rawState = await gameManager.getRawState();
+      const allMatches = Array.from(rawState.matches.keys());
       console.log(`[/api/match/vote PUT] Currently available matches in memory: ${allMatches.length > 0 ? allMatches.join(', ') : 'NONE'}`);
       return NextResponse.json(
         { error: "Match not found." },
@@ -143,7 +145,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // If vote is not locked yet (shouldn't happen with auto-lock), lock it now
-    const isCorrect = gameManager.lockMatchVote(matchId);
+    const isCorrect = await gameManager.lockMatchVote(matchId);
     if (isCorrect === null) {
       return NextResponse.json(
         { error: "Failed to lock vote." },

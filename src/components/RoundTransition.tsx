@@ -1,103 +1,192 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+
+type RevealData = {
+  opponent: {
+    fid: number;
+    username: string;
+    displayName: string;
+    pfpUrl: string;
+  };
+  actualType: "REAL" | "BOT";
+};
 
 interface RoundTransitionProps {
   isVisible: boolean;
+  phase?: "reveal" | "loading"; // reveal: show opponent(s) + stats, loading: show next round prep
+  reveals?: RevealData[]; // Multiple reveals for batch display
+  stats?: {
+    accuracy: number;
+    correct: number;
+    total: number;
+    playerRank?: number;
+    totalPlayers?: number;
+  };
+  nextRoundNumber?: number;
+  displayDuration?: number; // Reveal duration in ms (5-8s recommended)
   onComplete?: () => void;
 }
 
 export default function RoundTransition({
   isVisible,
+  phase = "loading",
+  reveals = [],
+  stats,
+  nextRoundNumber,
+  displayDuration = 6000,
   onComplete,
 }: RoundTransitionProps) {
-  const [phase, setPhase] = useState<"exit" | "transition" | "enter">("exit");
+  const [mounted, setMounted] = useState(false);
+  const [countdown, setCountdown] = useState(displayDuration / 1000);
 
   useEffect(() => {
-    if (!isVisible) {
-      setPhase("exit");
-      return;
-    }
+    setMounted(true);
+  }, []);
 
-    // Exit phase (current content fades out and scales down)
-    setPhase("exit");
-    const exitTimer = setTimeout(() => {
-      setPhase("transition");
-    }, 300);
+  // Reveal display timer
+  useEffect(() => {
+    if (!isVisible || phase !== "reveal") return;
 
-    // Transition phase (background color shift)
-    const transitionTimer = setTimeout(() => {
-      setPhase("enter");
-    }, 600);
+    setCountdown(displayDuration / 1000);
+    const interval = setInterval(() => {
+      setCountdown((prev) => {
+        const next = Math.max(0, prev - 0.1);
+        if (next <= 0) {
+          onComplete?.();
+          return 0;
+        }
+        return next;
+      });
+    }, 100);
 
-    // Enter phase completes
-    const enterTimer = setTimeout(() => {
-      onComplete?.();
-    }, 900);
+    return () => clearInterval(interval);
+  }, [isVisible, phase, displayDuration, onComplete]);
 
-    return () => {
-      clearTimeout(exitTimer);
-      clearTimeout(transitionTimer);
-      clearTimeout(enterTimer);
-    };
-  }, [isVisible, onComplete]);
+  if (!isVisible || !mounted) return null;
 
-  if (!isVisible) return null;
+  const renderInPortal = (content: React.ReactNode) => {
+    if (typeof document === "undefined") return null;
+    return createPortal(content, document.body);
+  };
 
-  return (
-    <div className="fixed inset-0 z-40 pointer-events-none">
-      {/* Fade overlay during transition */}
-      <div
-        className={`absolute inset-0 transition-opacity duration-300 ${
-          phase === "transition" ? "opacity-100" : "opacity-0"
-        }`}
-        style={{
-          background: "linear-gradient(135deg, rgba(15, 23, 42, 0.8), rgba(30, 41, 59, 0.8))",
-        }}
-      />
+  // Reveal phase: show opponent reveals + stats
+  if (phase === "reveal" && reveals.length > 0) {
+    return renderInPortal(
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-fade-in">
+        <div className="max-w-2xl w-full">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <h2 className="text-3xl font-bold text-white mb-2">Round Complete</h2>
+            <p className="text-gray-400">Opponents Revealed</p>
+          </div>
 
-      {/* Center glow effect */}
-      <div
-        className={`absolute inset-0 flex items-center justify-center transition-opacity duration-500 ${
-          phase === "transition" ? "opacity-100" : "opacity-0"
-        }`}
-      >
-        <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-500/30 to-violet-500/30 blur-3xl" />
-      </div>
+          {/* Reveals Grid */}
+          <div className={`grid ${reveals.length === 2 ? "grid-cols-2" : "grid-cols-1"} gap-4 mb-8`}>
+            {reveals.map((reveal, idx) => {
+              const isBot = reveal.actualType === "BOT";
+              const borderColor = isBot ? "border-red-500" : "border-green-500";
+              const bgGradient = isBot
+                ? "from-red-900/20 to-red-800/10"
+                : "from-green-900/20 to-green-800/10";
 
-      {/* Exiting content shrink */}
-      {phase === "exit" && (
-        <div
-          className="absolute inset-0 transition-transform duration-300"
-          style={{
-            transform: "scale(0.98)",
-            opacity: 0,
-          }}
-        />
-      )}
+              return (
+                <div
+                  key={idx}
+                  className={`bg-slate-900 rounded-lg border ${borderColor} overflow-hidden animate-scale-in`}
+                  style={{ animationDelay: `${idx * 100}ms` }}
+                >
+                  <div className={`bg-gradient-to-r ${bgGradient} border-b border-slate-700 px-4 py-3`}>
+                    <h3 className="text-lg font-bold text-white text-center">
+                      {isBot ? "🤖 Bot Detected" : "👤 Real Person"}
+                    </h3>
+                  </div>
 
-      {/* Entering content grow */}
-      {phase === "enter" && (
-        <div
-          className="absolute inset-0 transition-transform duration-300"
-          style={{
-            transform: "scale(1)",
-            opacity: 1,
-          }}
-        />
-      )}
+                  <div className="p-4 text-center space-y-3">
+                    <img
+                      src={reveal.opponent.pfpUrl}
+                      alt={reveal.opponent.displayName}
+                      className="w-16 h-16 rounded-full mx-auto border-3 border-slate-700 object-cover"
+                    />
 
-      {/* Animated progress indicator */}
-      <div className="absolute bottom-1/2 left-1/2 transform -translate-x-1/2 translate-y-1/2">
-        <div className={`transition-opacity duration-300 ${
-          phase === "transition" ? "opacity-100" : "opacity-0"
-        }`}>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-            <div className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" style={{ animationDelay: "0.1s" }} />
-            <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" style={{ animationDelay: "0.2s" }} />
+                    <div>
+                      <h4 className="font-bold text-white text-sm">{reveal.opponent.displayName}</h4>
+                      <p className="text-xs text-gray-400">@{reveal.opponent.username}</p>
+                    </div>
+
+                    <div className={`bg-gradient-to-r ${bgGradient} border ${borderColor} rounded px-3 py-2`}>
+                      <p className="text-xs font-semibold text-white">
+                        {isBot ? "AI Bot" : "Farcaster User"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Stats Section */}
+          {stats && (
+            <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700 mb-6">
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-purple-400">{stats.accuracy.toFixed(0)}%</div>
+                  <div className="text-xs text-gray-400 mt-1">Accuracy</div>
+                  <div className="text-xs text-gray-500">{stats.correct}/{stats.total}</div>
+                </div>
+
+                {stats.playerRank !== undefined && (
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-yellow-400">#{stats.playerRank}</div>
+                    <div className="text-xs text-gray-400 mt-1">Rank</div>
+                    <div className="text-xs text-gray-500">of {stats.totalPlayers || "?"}</div>
+                  </div>
+                )}
+
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-400">{reveals.length}</div>
+                  <div className="text-xs text-gray-400 mt-1">Matches</div>
+                  <div className="text-xs text-gray-500">this round</div>
+                </div>
+              </div>
+
+              {nextRoundNumber && (
+                <div className="text-center pt-3 border-t border-slate-700">
+                  <p className="text-sm text-gray-300">
+                    Next Round: <span className="font-bold text-blue-300">Round {nextRoundNumber}</span>
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Auto-dismiss countdown */}
+          <div className="text-center">
+            <div className="w-full bg-slate-700 rounded-full h-1 mb-2">
+              <div
+                className="bg-gradient-to-r from-blue-500 to-blue-400 h-1 rounded-full transition-all duration-100"
+                style={{ width: `${(countdown / (displayDuration / 1000)) * 100}%` }}
+              />
+            </div>
+            <p className="text-xs text-gray-400">Proceeding to next round in {countdown.toFixed(1)}s</p>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // Loading phase: show next round prep
+  return renderInPortal(
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-fade-in">
+      <div className="text-center">
+        <div className="mb-6">
+          <div className="inline-block">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-violet-500 animate-spin" />
+          </div>
+        </div>
+        <h2 className="text-2xl font-bold text-white mb-2">Preparing Round {nextRoundNumber}</h2>
+        <p className="text-gray-400">Finding opponents...</p>
       </div>
     </div>
   );

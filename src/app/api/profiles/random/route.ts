@@ -14,8 +14,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "fid must be a number" }, { status: 400 });
     }
 
-    const players = gameManager.getAllPlayers();
-    const bots = gameManager.getAllBots();
+    const players = await gameManager.getAllPlayers();
+    const bots = await gameManager.getAllBots();
 
     const foundPlayer = players.find((p) => p.fid === fid);
     const foundBot = bots.find((b) => b.fid === fid);

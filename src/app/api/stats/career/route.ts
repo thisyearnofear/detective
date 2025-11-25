@@ -1,6 +1,6 @@
 // src/app/api/stats/career/route.ts
 import { NextResponse } from "next/server";
-import { unifiedGameManager as gameManager } from "@/lib/gameManagerUnified";
+import { gameManager } from "@/lib/gameState";
 import { NextRequest } from "next/server";
 
 /**
