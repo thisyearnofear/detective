@@ -44,10 +44,33 @@ Detective is an AI-powered social deduction game on Farcaster. Players engage in
 
 ### Bot Intelligence
 
-- Venice AI (Llama 3.3 70B) via OpenAI SDK-compatible client
-- System prompt injects: username, display name, top 10 recent casts, inferred tone and writing style
+**AI Model**: Venice AI (Llama 3.3 70B) via OpenAI SDK-compatible client
+
+**Training Data**:
+- Username, display name, top 30 recent casts
+- Inferred writing style (tone, length, emoji usage, capitalization)
+- **Cast-pattern personality** (NEW):
+  - Analyzes if user initiates conversations (15%+ greetings)
+  - Analyzes if user asks questions (25%+ question marks)
+  - Analyzes if user is a debater (uses "imo", "tbh", "disagree")
+  - Extracts their actual greetings and questions for reuse
+
+**Proactive Behavior**:
+- Bots can now **initiate conversations** based on user's actual patterns
+- If user frequently posts "gm" → bot might say "gm" first (30-50% chance)
+- If user rarely initiates → bot waits for human (10% chance)
+- Uses their ACTUAL phrases, not templates
+
+**Response Generation**:
+- System prompt includes communication traits
+- Adaptive follow-ups based on human behavior:
+  - Counter-testing: "lol good question, i am a bot" (reverse psychology)
+  - Evasive: "sus", "hmm" (if bot is a questioner)
+  - Agreeable: Uses their actual questions as follow-ups
 - Constraint: Stay under 240 characters (Farcaster limit)
 - Never acknowledge being an AI
+
+**Philosophy**: Don't model status (high/low). Model **actual communication patterns**.
 
 ### Voting & Scoring
 
@@ -274,6 +297,45 @@ scheduleDetach(channelKey) {
     }
   }, 2000);
 }
+```
+
+---
+
+### Bot Proactive Behavior System
+
+#### Problem Addressed
+Bots were **purely reactive** - never initiating conversations, making them easy to detect.
+
+#### Solution: Cast-Pattern Analysis
+Instead of assuming behavior based on status (followers, Neynar score), we **analyze actual communication patterns**:
+
+**New Module**: `src/lib/botProactive.ts`
+- `inferPersonality(bot)` - Analyzes cast patterns to determine behavior
+- `generateProactiveOpening(personality)` - Uses their actual greetings
+- `generateAdaptiveFollowup(response, personality)` - Context-aware responses
+
+**Integration Points**:
+1. **Match Creation** (`gameState.ts`):
+   - When bot opponent is assigned, check if they should initiate
+   - Send opening message using their actual greeting patterns
+   
+2. **Response Generation** (`inference.ts`):
+   - Check for adaptive follow-up before LLM call
+   - Add personality traits to system prompt
+   - Use their actual questions in responses
+
+**Key Insight**: High-status users are more likely to just vibe (not try-hard). Low-status users are more motivated to test/game the system. **Solution**: Don't model status at all - model how THIS SPECIFIC person actually communicates.
+
+**Example**:
+```typescript
+// User who posts "gm fren" frequently
+personality = {
+  initiatesConversations: true,
+  proactiveRate: 0.45,
+  theirGreetings: ["gm fren", "gm", "wsg"],
+  // ...
+}
+// Bot might say "gm fren" first (45% chance)
 ```
 
 ---

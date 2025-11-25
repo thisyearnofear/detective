@@ -12,6 +12,7 @@ import {
 import { redis, getJSON, setJSON } from "./redis";
 import { database } from "./database";
 import { getGameEventPublisher } from "./gameEventPublisher";
+import { inferPersonality } from "./botProactive";
 
 const GAME_DURATION = 5 * 60 * 1000; // 5 minutes
 const REGISTRATION_DURATION = 1 * 60 * 1000; // 1 minute for testing
@@ -395,6 +396,7 @@ class GameManager {
     this.state.players.set(userProfile.fid, newPlayer);
 
     // Create and add the corresponding bot
+    // Create bot object first
     const newBot: Bot = {
       ...userProfile,
       type: "BOT",
@@ -402,6 +404,11 @@ class GameManager {
       recentCasts,
       style,
     };
+
+    // Infer personality for proactive behavior based on cast patterns
+    const personality = inferPersonality(newBot);
+    newBot.personality = personality;
+
     this.state.bots.set(userProfile.fid, newBot);
 
     // Save to Redis (async, non-blocking)
@@ -610,6 +617,18 @@ class GameManager {
 
     // Save match to Redis (async, non-blocking)
     this.saveMatchToRedis(match).catch(console.error);
+
+    // If opponent is a bot, check if it should send a proactive opening message
+    if (opponent.type === "BOT" && opponent.personality) {
+      const { generateProactiveOpening } = require("./botProactive");
+      const openingMessage = generateProactiveOpening(opponent.personality);
+
+      if (openingMessage) {
+        // Bot sends first message
+        console.log(`[createMatchForSlot] Bot ${opponent.username} sending proactive opening: "${openingMessage}"`);
+        this.addMessageToMatch(match.id, openingMessage, opponent.fid);
+      }
+    }
 
     // Update faced opponents tracking
     const facedCount = session.facedOpponents.get(opponent.fid) || 0;
