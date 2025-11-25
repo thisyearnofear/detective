@@ -85,11 +85,14 @@ export default function MultiChatContainer({ fid }: Props) {
     errorRetryInterval: 1000,
   });
 
-  // Subscribe to game events (when cycleId is available)
+  // Subscribe to game events (only when cycleId is available)
+  // This prevents React hook violations and invalid channel subscriptions
   useAblyGameEvents({
     fid,
-    cycleId: ablyCycleId,
+    cycleId: ablyCycleId || "placeholder", // Provide placeholder to satisfy hook requirements
+    enabled: !!ablyCycleId, // Only actually subscribe when we have a real cycleId
     onEvent: (event) => {
+      if (!ablyCycleId) return; // Extra safety check
       console.log("[MultiChatContainer] Received game event:", event.type);
       // When match_end event arrives, refresh to get new matches
       if (event.type === "match_end" || event.type === "round_end") {
