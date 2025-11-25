@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
+import AnimatedGridBackdrop from '@/components/AnimatedGridBackdrop';
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -112,9 +113,13 @@ export default function AdminPage() {
         }
     };
 
+    // Generate grid images array
+    const gridImages = Array.from({ length: 9 }, (_, i) => `/grid-images/${i + 1}.jpg`);
+
     return (
-        <main className="min-h-screen p-6 bg-slate-900 text-white">
-            <div className="max-w-6xl mx-auto">
+        <main className="min-h-screen p-6 bg-slate-900 text-white relative flex items-center justify-center">
+            <AnimatedGridBackdrop images={gridImages} />
+            <div className="max-w-6xl w-full relative z-10">
                 {/* Header */}
                 <div className="flex justify-between items-center mb-8">
                     <div>
