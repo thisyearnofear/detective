@@ -164,8 +164,24 @@ export function useAblyChat({ fid, matchId, onMessage, onError }: AblyChatOption
         return () => {
             mounted = false;
             if (channelRef.current) {
-                channelRef.current.unsubscribe();
-                Promise.resolve(channelRef.current.detach()).catch(() => {});
+                const ch = channelRef.current;
+                ch.unsubscribe();
+                const st = ch.state as string;
+                console.log(`[Ably] Cleanup for match:${matchId} state=${st}`);
+                if (st === "attached" || st === "attaching") {
+                    if (st === "attaching") {
+                        setTimeout(() => {
+                            if (channelRef.current === ch) {
+                                const nowState = ch.state as string;
+                                if (nowState === "attached" || nowState === "attaching") {
+                                    Promise.resolve(ch.detach()).catch(() => {});
+                                }
+                            }
+                        }, 200);
+                    } else {
+                        Promise.resolve(ch.detach()).catch(() => {});
+                    }
+                }
             }
         };
     }, [fid, matchId]);
