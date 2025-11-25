@@ -9,7 +9,7 @@ import {
   PlayerGameSession,
   VoteRecord,
 } from "./types";
-import { redis, getJSON, setJSON, hgetJSON, hsetJSON } from "./redis";
+import { redis, getJSON, setJSON } from "./redis";
 
 const GAME_DURATION = 5 * 60 * 1000; // 5 minutes
 const REGISTRATION_DURATION = 1 * 60 * 1000; // 1 minute for testing
