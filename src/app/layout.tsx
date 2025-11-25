@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import BottomLinks from '@/components/BottomLinks';
 
 export const metadata: Metadata = {
   title: 'Detective - Is That You?',
@@ -45,6 +46,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="text-white">
         {children}
+        <BottomLinks />
         {/* SVG Filter for Gooey Effect */}
         <svg className="svg-filters" xmlns="http://www.w3.org/2000/svg" version="1.1">
           <defs>
