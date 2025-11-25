@@ -1132,13 +1132,25 @@ class GameManager {
 
   /**
    * Reset the entire game state (for testing).
+   * Returns a promise that resolves when Redis is cleared.
    */
-  public resetGame(): void {
+  public async resetGame(): Promise<void> {
+    console.log("[GameManager] Resetting game state...");
+
+    // Clear Redis state FIRST (before resetting in-memory state)
+    await this.clearRedisState();
+
+    // Then reset in-memory state
     this.state = this.initializeGameState();
     this.initialized = false;
 
-    // Clear Redis state
-    this.clearRedisState().catch(console.error);
+    // Reset the sync time to force immediate save
+    this.lastSyncTime = 0;
+
+    // Save the fresh state to Redis
+    await this.saveStateToRedis();
+
+    console.log("[GameManager] Game reset complete. New cycleId:", this.state.cycleId);
   }
 
   /**

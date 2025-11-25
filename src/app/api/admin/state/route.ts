@@ -25,7 +25,8 @@ export async function POST(request: Request) {
         }
 
         if (action === "reset") {
-            gameManager.resetGame();
+            // Await the async reset to ensure Redis is cleared
+            await gameManager.resetGame();
             return NextResponse.json({
                 success: true,
                 message: "Game reset successfully",
