@@ -567,6 +567,10 @@ class GameManager {
 
       console.log(`[updateCycleState] Starting LIVE state with ${totalOpponents} available opponents`);
       this.state.state = "LIVE";
+      // IMPORTANT: Reset gameEnds to start from NOW when going LIVE
+      // This ensures the full game duration is available regardless of registration time
+      this.state.gameEnds = now + GAME_DURATION;
+      console.log(`[updateCycleState] Game will end at ${new Date(this.state.gameEnds).toISOString()}`);
     }
     if (this.state.state === "LIVE" && now > this.state.gameEnds) {
       // Check if all players have completed their rounds before finishing
