@@ -44,6 +44,9 @@ export default function MultiChatContainer({ fid }: Props) {
     };
     actualType: "REAL" | "BOT";
   } | null>(null);
+  // Track if we've ever successfully loaded matches (to prevent premature error display)
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const [consecutiveErrors, setConsecutiveErrors] = useState(0);
 
   // Poll for active matches
   const {
@@ -54,7 +57,23 @@ export default function MultiChatContainer({ fid }: Props) {
     refreshInterval: 1000, // Faster polling for better responsiveness
     refreshWhenHidden: false,
     revalidateOnFocus: true,
+    // Keep previous data on error to prevent UI flicker
+    keepPreviousData: true,
+    // Don't throw on error, let us handle it gracefully
+    shouldRetryOnError: true,
+    errorRetryCount: 3,
+    errorRetryInterval: 1000,
   });
+
+  // Track successful loads and errors
+  useEffect(() => {
+    if (matchData && !error) {
+      setHasLoadedOnce(true);
+      setConsecutiveErrors(0);
+    } else if (error) {
+      setConsecutiveErrors(prev => prev + 1);
+    }
+  }, [matchData, error]);
 
   // Check if game is finished (all rounds completed and no active matches)
   useEffect(() => {
@@ -189,7 +208,9 @@ export default function MultiChatContainer({ fid }: Props) {
     [fid, mutate, matchData]
   );
 
-  if (error) {
+  // Only show error state if we've never loaded successfully OR we've had multiple consecutive errors
+  // This prevents UI flicker from transient errors
+  if (error && (!hasLoadedOnce || consecutiveErrors >= 3)) {
     const msg = (error as any)?.message || "";
     const isNotLive = msg.includes("403");
     return isNotLive ? (
@@ -200,6 +221,7 @@ export default function MultiChatContainer({ fid }: Props) {
     ) : (
       <div className="bg-red-900/20 border border-red-500 rounded-lg p-6 text-center">
         <p className="text-red-400">Failed to load matches. Please refresh.</p>
+        <p className="text-xs text-gray-500 mt-2">Error: {msg}</p>
       </div>
     );
   }
