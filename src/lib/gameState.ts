@@ -802,6 +802,9 @@ class GameManager {
       correct: isCorrect,
       speed: voteSpeed,
       voteChanges: match.voteHistory.length,
+      opponentUsername: match.opponent.username,
+      opponentType: match.opponent.type,
+      roundNumber: match.roundNumber,
     };
 
     player.voteHistory.push(voteRecord);

@@ -313,8 +313,16 @@ export function useAblyChat({
     // Send message function - strategy-aware
     const sendMessage = useCallback(
         async (text: string, sender: { fid: number; username: string }) => {
-            if (!channelRef.current || !isConnected) {
+            // Check if we have a channel - use more lenient check
+            // Sometimes Ably is connected but isConnected state hasn't updated yet
+            if (!channelRef.current) {
+                console.warn("No channel available, message not sent");
                 throw new Error("Not connected to chat");
+            }
+            
+            // If not connected, try to send anyway - Ably will queue the message
+            if (!isConnected) {
+                console.warn("Sending message while connection state is pending...");
             }
 
             const message: ChatMessage = {

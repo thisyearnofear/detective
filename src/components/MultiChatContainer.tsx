@@ -69,18 +69,19 @@ export default function MultiChatContainer({ fid }: Props) {
 
   // Poll for active matches - but at a much slower rate now since we have events
   // Only poll occasionally for periodic sync (every 5 seconds instead of 1 second)
+  // Stop polling when game is finished to prevent 403 errors
   const {
     data: matchData,
     error,
     mutate,
   } = useSWR(`/api/match/active?fid=${fid}`, fetcher, {
-    refreshInterval: 5000, // Reduced from 1000ms - events keep us in sync
+    refreshInterval: gameFinished ? 0 : 5000, // Stop polling when game ends
     refreshWhenHidden: false,
     revalidateOnFocus: false, // Prevent tab switching from triggering refetch
     // Keep previous data on error to prevent UI flicker
     keepPreviousData: true,
     // Don't throw on error, let us handle it gracefully
-    shouldRetryOnError: true,
+    shouldRetryOnError: !gameFinished, // Stop retrying when game is finished
     errorRetryCount: 3,
     errorRetryInterval: 1000,
   });
@@ -94,14 +95,15 @@ export default function MultiChatContainer({ fid }: Props) {
     onEvent: (event) => {
       if (!ablyCycleId) return; // Extra safety check
       console.log("[MultiChatContainer] Received game event:", event.type);
-      // When match_end event arrives, refresh to get new matches
-      if (event.type === "match_end" || event.type === "round_end") {
+      // When match_end event arrives, refresh to get new matches (but not if game is finished)
+      if ((event.type === "match_end" || event.type === "round_end") && !gameFinished) {
         mutate();
       }
-      // When game state changes, also refresh
-      if (event.type === "game_start" || event.type === "game_end") {
+      // When game starts, refresh. When game ends, don't trigger more fetches
+      if (event.type === "game_start") {
         mutate();
       }
+      // Note: game_end will set gameFinished=true, which stops polling automatically
     },
     onError: (err) => {
       console.error("[MultiChatContainer] Game event error:", err);
@@ -346,7 +348,8 @@ export default function MultiChatContainer({ fid }: Props) {
 
   const stableSlots = useMemo(() => {
     if (!slots || Object.keys(slots).length === 0) {
-      return {};
+      // Keep previous slots during transitions to prevent flicker
+      return previousSlotsRef.current || {};
     }
 
     // Create a new slots object only if the match IDs or critical properties have changed
@@ -358,8 +361,16 @@ export default function MultiChatContainer({ fid }: Props) {
       const previousMatch = previousSlotsRef.current[slotNum];
 
       if (!currentMatch) {
-        if (previousMatch) hasChanges = true;
-        continue; // Don't set undefined slots
+        // Keep previous match during transitions instead of removing it
+        // This prevents chat from disappearing when API briefly returns undefined
+        if (previousMatch && !previousMatch.voteLocked) {
+          // Only preserve if not locked (locked means completed)
+          newSlots[slotNum] = previousMatch;
+        }
+        if (previousMatch && previousMatch.voteLocked) {
+          hasChanges = true; // Mark for update if locked match is being removed
+        }
+        continue;
       }
 
       // Check if this is actually a different match or just a re-render
