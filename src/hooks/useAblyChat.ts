@@ -36,8 +36,17 @@ export function useAblyChat({ fid, matchId, onMessage, onError }: AblyChatOption
     const channelRef = useRef<Ably.RealtimeChannel | null>(null);
     const onMessageRef = useRef<typeof onMessage | undefined>(onMessage);
     const onErrorRef = useRef<typeof onError | undefined>(onError);
+    const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    const globalAblyCache: { clients: Map<number, Ably.Realtime>, initialTokens: Map<number, any> } = (globalThis as any).__ABLY_CACHE__ || { clients: new Map(), initialTokens: new Map() };
+    const globalAblyCache: { 
+        clients: Map<number, Ably.Realtime>
+        initialTokens: Map<number, any>
+        tokenRequests: Map<number, Promise<any>>
+    } = (globalThis as any).__ABLY_CACHE__ || { 
+        clients: new Map(), 
+        initialTokens: new Map(),
+        tokenRequests: new Map()
+    };
     (globalThis as any).__ABLY_CACHE__ = globalAblyCache;
 
     useEffect(() => {
@@ -53,17 +62,29 @@ export function useAblyChat({ fid, matchId, onMessage, onError }: AblyChatOption
                 if (!client) {
                     let initialToken: any | null = null;
                     try {
-                        const res = await fetch(`/api/ably/auth?fid=${fid}`);
-                        if (!res.ok) {
-                            throw new Error(`Auth endpoint unavailable (${res.status})`);
-                        }
-                        initialToken = await res.json();
+                        const tokenPromise = globalAblyCache.tokenRequests.get(fid) || 
+                            fetch(`/api/ably/auth?fid=${fid}&rnd=${Math.random()}`, { 
+                                cache: "no-store", 
+                                headers: { "Cache-Control": "no-store" } 
+                            }).then(res => {
+                                if (!res.ok) {
+                                    throw new Error(`Auth endpoint unavailable (${res.status})`);
+                                }
+                                return res.json();
+                            });
+                        
+                        globalAblyCache.tokenRequests.set(fid, tokenPromise);
+                        initialToken = await tokenPromise;
+                        globalAblyCache.tokenRequests.delete(fid);
                         globalAblyCache.initialTokens.set(fid, initialToken);
                     } catch (prefetchErr: any) {
                         const err = new Error(prefetchErr.message || "Failed to initialize Ably");
-                        setError(err);
-                        setIsConnecting(false);
-                        onError?.(err);
+                        globalAblyCache.tokenRequests.delete(fid);
+                        if (mounted) {
+                            setError(err);
+                            setIsConnecting(false);
+                            onError?.(err);
+                        }
                         return;
                     }
 
@@ -76,7 +97,13 @@ export function useAblyChat({ fid, matchId, onMessage, onError }: AblyChatOption
                                     callback(null, cached);
                                     return;
                                 }
-                                const res = await fetch(`/api/ably/auth?fid=${fid}`);
+                                const res = await fetch(`/api/ably/auth?fid=${fid}&rnd=${Date.now()}-${Math.random()}`, { 
+                                    cache: "no-store", 
+                                    headers: { 
+                                        "Cache-Control": "no-store",
+                                        "Pragma": "no-cache"
+                                    } 
+                                });
                                 if (!res.ok) {
                                     throw new Error(`Auth failed (${res.status})`);
                                 }
@@ -100,42 +127,64 @@ export function useAblyChat({ fid, matchId, onMessage, onError }: AblyChatOption
 
                 clientRef.current = client;
 
-                client.connection.on("connected", () => {
+                const handleConnected = () => {
                     if (mounted) {
                         setIsConnected(true);
                         setIsConnecting(false);
+                        if (timeoutRef.current) clearTimeout(timeoutRef.current);
                         console.log(`[Ably] Connected for FID ${fid}`);
                         (globalThis as any).__ABLY_CONNECTED__ = true;
                     }
-                });
+                };
 
-                client.connection.on("disconnected", () => {
+                const handleDisconnected = () => {
                     if (mounted) {
                         setIsConnected(false);
                         console.log(`[Ably] Disconnected`);
                         (globalThis as any).__ABLY_CONNECTED__ = false;
                     }
-                });
+                };
 
-                client.connection.on("failed", (stateChange: any) => {
+                const handleFailed = (stateChange: any) => {
                     if (mounted) {
                         const err = new Error(`Connection failed: ${stateChange.reason?.message || "Unknown error"}`);
                         setError(err);
                         setIsConnected(false);
                         setIsConnecting(false);
                         onErrorRef.current?.(err);
+                        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+                        console.error("[Ably] Connection failed:", err);
                         (globalThis as any).__ABLY_CONNECTED__ = false;
                     }
-                });
+                };
+
+                client.connection.off("connected", handleConnected);
+                client.connection.off("disconnected", handleDisconnected);
+                client.connection.off("failed", handleFailed);
+
+                client.connection.on("connected", handleConnected);
+                client.connection.on("disconnected", handleDisconnected);
+                client.connection.on("failed", handleFailed);
 
                 const channel = client.channels.get(`match:${matchId}`);
                 channelRef.current = channel;
+
+                timeoutRef.current = setTimeout(() => {
+                    if (mounted && !isConnected) {
+                        const err = new Error("Connection timeout - switching to polling mode");
+                        setError(err);
+                        setIsConnecting(false);
+                        console.error("[Ably] Connection timeout:", err);
+                    }
+                }, 8000);
 
                 if (channel.state !== "attached") {
                     await channel.attach();
                 }
                 if (!mounted) return;
 
+                if (timeoutRef.current) clearTimeout(timeoutRef.current);
+                
                 channel.unsubscribe();
                 channel.subscribe("message", (message: any) => {
                     if (mounted && message.data) {
@@ -157,6 +206,7 @@ export function useAblyChat({ fid, matchId, onMessage, onError }: AblyChatOption
                     setError(error);
                     setIsConnecting(false);
                     onErrorRef.current?.(error);
+                    if (timeoutRef.current) clearTimeout(timeoutRef.current);
                     console.error("[Ably] Initialization error:", error);
                 }
             }
@@ -166,6 +216,7 @@ export function useAblyChat({ fid, matchId, onMessage, onError }: AblyChatOption
 
         return () => {
             mounted = false;
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
             if (channelRef.current) {
                 const ch = channelRef.current;
                 ch.unsubscribe();
