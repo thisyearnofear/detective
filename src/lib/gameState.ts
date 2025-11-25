@@ -76,6 +76,7 @@ class GameManager {
    */
   public getGameState(): GameState {
     this.updateCycleState();
+    this.cleanupOldMatches();
     return this.state;
   }
 
@@ -187,13 +188,16 @@ class GameManager {
         // Auto-lock vote when time expires (backend is source of truth)
         console.log(`[getActiveMatches] Match ${matchId} expired without lock, auto-locking`);
         this.lockMatchVote(matchId);
-        hasExpiredMatches = true;
-        session.activeMatches.delete(slotNum);
+        // Don't immediately delete - allow client time to submit final vote
+        // Set a grace period for vote submission
+        matches.push(match);
+        activeMatchCount++;
       } else if (match.endTime <= now && match.voteLocked) {
-        // Already locked, clean up
-        console.log(`[getActiveMatches] Match ${matchId} already locked, cleaning up`);
-        hasExpiredMatches = true;
-        session.activeMatches.delete(slotNum);
+        // Already locked, but keep for a short grace period
+        console.log(`[getActiveMatches] Match ${matchId} already locked, keeping for grace period`);
+        matches.push(match);
+        activeMatchCount++;
+        hasExpiredMatches = true; // Mark for cleanup after grace period
       } else {
         // Match still active
         console.log(`[getActiveMatches] Match ${matchId} still active`);
@@ -203,8 +207,10 @@ class GameManager {
     }
 
     // Check if it's time to start a new round
-    const isRoundComplete = activeMatchCount === 0 && (hasExpiredMatches || session.activeMatches.size === 0);
-    const isTimeForNextRound = session.nextRoundStartTime && now >= session.nextRoundStartTime;
+    const GRACE_PERIOD_MS = 5000; // 5 seconds grace period for vote submission
+    const isGracePeriodOver = session.nextRoundStartTime && now >= (session.nextRoundStartTime + GRACE_PERIOD_MS);
+    const isRoundComplete = activeMatchCount === 0 && (hasExpiredMatches && isGracePeriodOver || session.activeMatches.size === 0);
+    const isTimeForNextRound = session.nextRoundStartTime && now >= (session.nextRoundStartTime + GRACE_PERIOD_MS);
 
     console.log(`[getActiveMatches] Round check: activeMatchCount=${activeMatchCount}, currentRound=${session.currentRound}, maxRounds=${maxRounds}, hasExpiredMatches=${hasExpiredMatches}, activeMatches.size=${session.activeMatches.size}, isRoundComplete=${isRoundComplete}, isTimeForNextRound=${isTimeForNextRound}`);
 
@@ -227,11 +233,14 @@ class GameManager {
         }
       }
       console.log(`[getActiveMatches] Created ${matches.length} matches for player ${fid}`);
-    } else if (isRoundComplete && session.currentRound < maxRounds) {
-      // Round finished - advance to next round
+    } else if (isRoundComplete && session.currentRound < maxRounds && isTimeForNextRound) {
+      // Round finished - advance to next round (after grace period)
       console.log(`[getActiveMatches] Round ${session.currentRound} complete, starting round ${session.currentRound + 1}. MaxRounds: ${maxRounds}`);
       session.currentRound++;
       session.nextRoundStartTime = now + this.state.config.matchDurationMs;
+
+      // Clean up old matches from session (but keep them in global state)
+      session.activeMatches.clear();
 
       // Create matches for both slots
       for (
@@ -246,10 +255,12 @@ class GameManager {
         }
       }
       console.log(`[getActiveMatches] Created ${matches.length} matches for round ${session.currentRound}`);
-    } else if (isRoundComplete && session.currentRound === maxRounds) {
+    } else if (isRoundComplete && session.currentRound === maxRounds && isTimeForNextRound) {
       // Last round finished - increment to signal game completion
       console.log(`[getActiveMatches] Final round ${session.currentRound} complete. Game finished for player ${fid}.`);
       session.currentRound++;
+      // Clean up matches from session
+      session.activeMatches.clear();
     }
 
     return matches;
@@ -479,7 +490,7 @@ class GameManager {
     const session = this.state.playerSessions.get(player.fid);
     if (session) {
       session.completedMatchIds.add(matchId);
-      // Remove from active matches
+      // Remove from active matches (but keep in global state for vote submission)
       for (const [slot, id] of session.activeMatches) {
         if (id === matchId) {
           session.activeMatches.delete(slot);
@@ -487,6 +498,9 @@ class GameManager {
         }
       }
     }
+
+    // Don't delete from global matches immediately - allow grace period
+    console.log(`[lockMatchVote] Match ${matchId} locked. Keeping in global state for grace period.`);
 
     return isCorrect;
   }
@@ -555,9 +569,35 @@ class GameManager {
       this.state.state = "LIVE";
     }
     if (this.state.state === "LIVE" && now > this.state.gameEnds) {
-      this.state.state = "FINISHED";
-      // Calculate and store the final leaderboard once the game is finished.
-      this.state.leaderboard = this.getLeaderboard();
+      // Check if all players have completed their rounds before finishing
+      const totalPlayers = this.state.players.size;
+      let completedPlayers = 0;
+
+      for (const [fid, session] of this.state.playerSessions) {
+        const player = this.state.players.get(fid);
+        if (player) {
+          const maxRounds = Math.floor(
+            GAME_DURATION / MATCH_DURATION / SIMULTANEOUS_MATCHES
+          );
+          if (session.currentRound > maxRounds) {
+            completedPlayers++;
+          }
+        }
+      }
+
+      // Only finish game if all players are done (or if game duration is significantly exceeded)
+      const gameDurationExceeded = now > this.state.gameEnds + (2 * 60 * 1000); // 2 extra minutes
+
+      if (completedPlayers === totalPlayers || gameDurationExceeded) {
+        console.log(`[updateCycleState] Game ending. Completed players: ${completedPlayers}/${totalPlayers}, Duration exceeded: ${gameDurationExceeded}`);
+        this.state.state = "FINISHED";
+        // Calculate and store the final leaderboard once the game is finished.
+        this.state.leaderboard = this.getLeaderboard();
+      } else {
+        console.log(`[updateCycleState] Waiting for players to finish. Completed: ${completedPlayers}/${totalPlayers}. Extending game time.`);
+        // Extend game time by 1 minute to allow stragglers to finish
+        this.state.gameEnds = now + (60 * 1000);
+      }
     }
   }
 
@@ -603,6 +643,34 @@ class GameManager {
     });
 
     return leaderboard;
+  }
+
+  /**
+   * Clean up old matches that are no longer needed
+   * Called periodically to prevent memory leaks
+   */
+  private cleanupOldMatches(): void {
+    const now = Date.now();
+    const GRACE_PERIOD_MS = 10000; // 10 seconds grace period
+    const matchesToDelete: string[] = [];
+
+    for (const [matchId, match] of this.state.matches) {
+      // Delete matches that are old, locked, and past grace period
+      if (
+        match.voteLocked &&
+        match.isFinished &&
+        (now - match.endTime) > GRACE_PERIOD_MS
+      ) {
+        matchesToDelete.push(matchId);
+      }
+    }
+
+    if (matchesToDelete.length > 0) {
+      console.log(`[cleanupOldMatches] Cleaning up ${matchesToDelete.length} old matches`);
+      matchesToDelete.forEach(matchId => {
+        this.state.matches.delete(matchId);
+      });
+    }
   }
 
   // ========== ADMIN METHODS (Dev/Testing Only) ==========
