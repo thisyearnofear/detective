@@ -323,46 +323,13 @@ export default function MultiChatContainer({ fid }: Props) {
     [fid, mutate, matchData]
   );
 
-  // Only show error state if we've never loaded successfully OR we've had multiple consecutive errors
-  // This prevents UI flicker from transient errors
-  if (error && (!hasLoadedOnce || consecutiveErrors >= 3)) {
-    const msg = (error as any)?.message || "";
-    const isNotLive = msg.includes("403");
-    return isNotLive ? (
-      <div className="bg-slate-800 rounded-lg p-6 text-center">
-        <p className="text-gray-400">Waiting for game to start...</p>
-        <p className="text-sm text-gray-500 mt-2">Registration ongoing</p>
-      </div>
-    ) : (
-      <div className="bg-red-900/20 border border-red-500 rounded-lg p-6 text-center">
-        <p className="text-red-400">Failed to load matches. Please refresh.</p>
-        <p className="text-xs text-gray-500 mt-2">Error: {msg}</p>
-      </div>
-    );
-  }
-
-  if (!matchData) {
-    return (
-      <div className="bg-slate-800 rounded-lg p-6 text-center">
-        <div className="animate-pulse">
-          <div className="h-4 bg-slate-700 rounded w-32 mx-auto mb-2"></div>
-          <div className="h-3 bg-slate-700 rounded w-24 mx-auto"></div>
-        </div>
-      </div>
-    );
-  }
-
-  const {
-    matches = [],
-    slots = {},
-    currentRound = 1,
-    totalRounds = 5,
-    cycleId = "",
-  } = matchData;
-
   // Memoize slots to prevent ChatWindow from re-mounting on every matchData refresh
   // Use a ref to maintain stable references when match content hasn't changed
   const previousSlotsRef = useRef<any>({});
+
+  // Safely access slots for useMemo dependencies
+  const slots = matchData?.slots || {};
+
   const stableSlots = useMemo(() => {
     if (!slots || Object.keys(slots).length === 0) {
       return slots;
@@ -413,8 +380,44 @@ export default function MultiChatContainer({ fid }: Props) {
   ]);
 
   // Calculate player count and active match IDs for shared channel optimization
+  const matches = matchData?.matches || [];
   const playerCount = matchData?.playerPool?.totalPlayers || 0;
   const activeMatchIds = matches.map((m: any) => m.id);
+
+  // Only show error state if we've never loaded successfully OR we've had multiple consecutive errors
+  // This prevents UI flicker from transient errors
+  if (error && (!hasLoadedOnce || consecutiveErrors >= 3)) {
+    const msg = (error as any)?.message || "";
+    const isNotLive = msg.includes("403");
+    return isNotLive ? (
+      <div className="bg-slate-800 rounded-lg p-6 text-center">
+        <p className="text-gray-400">Waiting for game to start...</p>
+        <p className="text-sm text-gray-500 mt-2">Registration ongoing</p>
+      </div>
+    ) : (
+      <div className="bg-red-900/20 border border-red-500 rounded-lg p-6 text-center">
+        <p className="text-red-400">Failed to load matches. Please refresh.</p>
+        <p className="text-xs text-gray-500 mt-2">Error: {msg}</p>
+      </div>
+    );
+  }
+
+  if (!matchData) {
+    return (
+      <div className="bg-slate-800 rounded-lg p-6 text-center">
+        <div className="animate-pulse">
+          <div className="h-4 bg-slate-700 rounded w-32 mx-auto mb-2"></div>
+          <div className="h-3 bg-slate-700 rounded w-24 mx-auto"></div>
+        </div>
+      </div>
+    );
+  }
+
+  const {
+    currentRound = 1,
+    totalRounds = 5,
+    cycleId = "",
+  } = matchData;
 
   if ((matchData as any).gameState && (matchData as any).gameState !== "LIVE") {
     return (
