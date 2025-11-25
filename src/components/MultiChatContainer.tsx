@@ -220,7 +220,12 @@ export default function MultiChatContainer({ fid }: Props) {
     slots = {},
     currentRound = 1,
     totalRounds = 5,
+    cycleId = "",
   } = matchData;
+
+  // Calculate player count and active match IDs for shared channel optimization
+  const playerCount = matchData?.playerPool?.totalPlayers || 0;
+  const activeMatchIds = matches.map((m: any) => m.id);
 
   if ((matchData as any).gameState && (matchData as any).gameState !== "LIVE") {
     return (
@@ -328,6 +333,9 @@ export default function MultiChatContainer({ fid }: Props) {
                 isCompact={true}
                 showVoteToggle={true}
                 isNewMatch={newMatchIds.has(match.id)}
+                cycleId={cycleId}
+                playerCount={playerCount}
+                activeMatchIds={activeMatchIds}
               />
             </div>
           );
@@ -379,6 +387,9 @@ export default function MultiChatContainer({ fid }: Props) {
               isCompact={false}
               showVoteToggle={true}
               isNewMatch={newMatchIds.has(slots[activeTab].id)}
+              cycleId={cycleId}
+              playerCount={playerCount}
+              activeMatchIds={activeMatchIds}
             />
           </div>
         ) : (
