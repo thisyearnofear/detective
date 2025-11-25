@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import useSWR from "swr";
 import ChatWindow from "./ChatWindow";
 import ResultsCard from "./ResultsCard";
+import RoundStartLoader from "./RoundStartLoader";
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -47,6 +48,10 @@ export default function MultiChatContainer({ fid }: Props) {
   // Track if we've ever successfully loaded matches (to prevent premature error display)
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [consecutiveErrors, setConsecutiveErrors] = useState(0);
+  // Track round transitions for loading state
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [lastRound, setLastRound] = useState(0);
+  const transitionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Poll for active matches
   const {
@@ -86,6 +91,45 @@ export default function MultiChatContainer({ fid }: Props) {
       setGameFinished(true);
     }
   }, [matchData, gameFinished]);
+
+  // Track round transitions for loading state
+  useEffect(() => {
+    if (matchData?.currentRound && matchData.currentRound !== lastRound) {
+      // Round changed
+      if (lastRound > 0 && matchData.matches?.length === 0) {
+        // We're between rounds - show transition
+        setIsTransitioning(true);
+        
+        // Clear any existing timeout
+        if (transitionTimeoutRef.current) {
+          clearTimeout(transitionTimeoutRef.current);
+        }
+        
+        // Auto-clear transition after 10 seconds max
+        transitionTimeoutRef.current = setTimeout(() => {
+          setIsTransitioning(false);
+        }, 10000);
+      }
+      setLastRound(matchData.currentRound);
+    }
+    
+    // Clear transition when matches arrive
+    if (matchData?.matches?.length > 0 && isTransitioning) {
+      setIsTransitioning(false);
+      if (transitionTimeoutRef.current) {
+        clearTimeout(transitionTimeoutRef.current);
+      }
+    }
+  }, [matchData?.currentRound, matchData?.matches?.length, lastRound, isTransitioning]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (transitionTimeoutRef.current) {
+        clearTimeout(transitionTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Initialize votes from match data and track new matches
   useEffect(() => {
@@ -284,12 +328,12 @@ export default function MultiChatContainer({ fid }: Props) {
 
   if (matches.length === 0) {
     return (
-      <div className="bg-slate-800 rounded-lg p-6 text-center">
-        <p className="text-gray-400">Waiting for matches to start...</p>
-        <p className="text-sm text-gray-500 mt-2">
-          Round {currentRound} of {totalRounds} beginning soon
-        </p>
-      </div>
+      <RoundStartLoader
+        roundNumber={currentRound}
+        totalRounds={totalRounds}
+        message={isTransitioning ? "Preparing next round..." : "Finding opponents..."}
+        inline={true}
+      />
     );
   }
 

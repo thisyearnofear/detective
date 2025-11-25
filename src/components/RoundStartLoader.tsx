@@ -3,24 +3,41 @@
 import { useEffect, useState } from "react";
 
 interface RoundStartLoaderProps {
-  isVisible: boolean;
-  currentRound?: number;
+  // Can be used as inline component (always visible) or modal (controlled by isVisible)
+  isVisible?: boolean;
+  roundNumber?: number;
+  currentRound?: number; // Alias for roundNumber
   totalRounds?: number;
+  message?: string;
   onComplete?: () => void;
+  // If true, shows as inline component instead of modal overlay
+  inline?: boolean;
 }
 
 export default function RoundStartLoader({
-  isVisible,
-  currentRound = 1,
+  isVisible = true,
+  roundNumber,
+  currentRound,
   totalRounds = 5,
+  message,
   onComplete,
+  inline = false,
 }: RoundStartLoaderProps) {
   const [countdown, setCountdown] = useState(3);
   const [phase, setPhase] = useState<"preparing" | "countdown" | "ready">("preparing");
+  
+  // Support both roundNumber and currentRound props
+  const round = roundNumber ?? currentRound ?? 1;
 
   useEffect(() => {
     if (!isVisible) {
       setCountdown(3);
+      setPhase("preparing");
+      return;
+    }
+
+    // For inline mode, stay in preparing phase
+    if (inline) {
       setPhase("preparing");
       return;
     }
@@ -46,20 +63,72 @@ export default function RoundStartLoader({
       clearTimeout(prepareTimer);
       clearInterval(countdownTimer);
     };
-  }, [isVisible, onComplete]);
+  }, [isVisible, onComplete, inline]);
 
   if (!isVisible) return null;
 
+  // Inline mode - simpler loading state
+  if (inline) {
+    return (
+      <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-8 border border-slate-700 shadow-xl">
+        <div className="text-center">
+          {/* Round indicator */}
+          <div className="mb-6">
+            <span className="bg-blue-600/20 text-blue-400 px-4 py-2 rounded-full text-sm font-medium border border-blue-500/30">
+              Round {round} of {totalRounds}
+            </span>
+          </div>
+
+          {/* Animated icon */}
+          <div className="mb-6">
+            <div className="relative w-20 h-20 mx-auto">
+              <div className="absolute inset-0 rounded-full bg-gradient-to-br from-blue-500/20 to-violet-500/20 animate-pulse" />
+              <div className="absolute inset-2 rounded-full bg-slate-800 flex items-center justify-center">
+                <svg className="w-8 h-8 text-blue-400 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          {/* Message */}
+          <h3 className="text-xl font-bold text-white mb-2">
+            {message || "Finding opponents..."}
+          </h3>
+          <p className="text-gray-400 text-sm mb-6">
+            Matching you with players and bots
+          </p>
+
+          {/* Animated dots */}
+          <div className="flex justify-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: "0ms" }} />
+            <div className="w-2 h-2 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: "150ms" }} />
+            <div className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: "300ms" }} />
+          </div>
+
+          {/* Tips */}
+          <div className="mt-6 pt-6 border-t border-slate-700">
+            <p className="text-xs text-gray-500">
+              💡 Tip: You'll chat with 2 opponents simultaneously
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Modal mode - full screen overlay with countdown
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
       <div className="text-center">
         {phase === "preparing" && (
           <div className="animate-fade-in">
             <h2 className="text-3xl font-bold text-white mb-4">
-              Preparing Round {currentRound}
+              Preparing Round {round}
             </h2>
             <p className="text-gray-400 mb-4">
-              {currentRound} of {totalRounds} • Finding your opponents...
+              {round} of {totalRounds} • {message || "Finding your opponents..."}
             </p>
 
             {/* Animated loading dots */}
