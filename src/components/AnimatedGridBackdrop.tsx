@@ -5,12 +5,10 @@ import styles from './AnimatedGridBackdrop.module.css';
 
 interface AnimatedGridBackdropProps {
   images: string[];
-  gridLayout?: 'layout-1' | 'layout-2' | 'layout-3' | 'layout-4' | 'layout-5';
 }
 
 export default function AnimatedGridBackdrop({
   images,
-  gridLayout = 'layout-1',
 }: AnimatedGridBackdropProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const gridItemsRef = useRef<HTMLDivElement[]>([]);

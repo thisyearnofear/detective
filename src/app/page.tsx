@@ -137,7 +137,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center relative py-12 px-4">
-      <AnimatedGridBackdrop images={gridImages} gridLayout="layout-1" />
+      <AnimatedGridBackdrop images={gridImages} />
       
       {/* Content Container */}
       <div className="relative z-10 w-full max-w-2xl bg-slate-900/80 backdrop-blur-sm rounded-lg p-8 sm:p-12 border border-slate-800/50">
