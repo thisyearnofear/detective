@@ -4,6 +4,15 @@
 
 Can you tell if you're chatting with a real person or an AI bot trained on their posts?
 
+## Documentation
+
+For detailed information about the project, please refer to the following documentation files:
+
+1. [ARCHITECTURE.md](docs/ARCHITECTURE.md) - Architecture and core concepts
+2. [DEVELOPMENT_IMPLEMENTATION.md](docs/DEVELOPMENT_IMPLEMENTATION.md) - Development guide and implementation
+3. [UI_UX_ENHANCEMENT.md](docs/UI_UX_ENHANCEMENT.md) - UI/UX design and enhancement
+4. [ADVANCED.md](docs/ADVANCED.md) - Advanced features and deployment
+
 ## About
 
 Detective is a Farcaster mini app where players engage in short conversations and guess whether they're speaking with another real user or an intelligent bot. The bot is trained on the player's recent Farcaster posts, making the impersonation as authentic as possible.

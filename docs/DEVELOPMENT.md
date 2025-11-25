@@ -1,4 +1,4 @@
-# Detective Farcaster Mini App - Documentation Part 2: Development Guide & Implementation
+# Detective Farcaster Mini App - Development Guide & Implementation
 
 ## Development Phases
 
