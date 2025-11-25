@@ -30,7 +30,6 @@ type RoundResult = {
 };
 
 export default function MultiChatContainer({ fid }: Props) {
-  const [activeTab, setActiveTab] = useState(1);
   const [votes, setVotes] = useState<VoteState>({});
   const [newMatchIds, setNewMatchIds] = useState<Set<string>>(new Set());
   const [gameFinished, setGameFinished] = useState(false);
@@ -81,16 +80,22 @@ export default function MultiChatContainer({ fid }: Props) {
   }, [matchData, error]);
 
   // Check if game is finished (all rounds completed and no active matches)
+  // Add safeguards to prevent premature game ending
   useEffect(() => {
     if (
       !gameFinished &&
       matchData?.matches &&
       matchData.matches.length === 0 &&
-      matchData.currentRound > matchData.totalRounds
+      matchData.currentRound > matchData.totalRounds &&
+      // Safeguard: Only finish if we have some round results
+      roundResults.length > 0 &&
+      // Safeguard: Ensure we've played at least one round worth of matches
+      roundResults.length >= 2
     ) {
+      console.log(`[MultiChatContainer] Game finished. Round ${matchData.currentRound}/${matchData.totalRounds}, Results: ${roundResults.length}`);
       setGameFinished(true);
     }
-  }, [matchData, gameFinished]);
+  }, [matchData, gameFinished, roundResults.length]);
 
   // Track round transitions for loading state
   useEffect(() => {
@@ -337,19 +342,19 @@ export default function MultiChatContainer({ fid }: Props) {
     );
   }
 
-  // Check if any match has new messages (for notification badges)
-  const hasNewMessages: Record<number, boolean> = {};
-  // This would need WebSocket or more sophisticated tracking for real new message detection
+  // Note: New message tracking would need WebSocket or more sophisticated tracking
+  // for real new message detection - currently not implemented
 
   return (
     <div className="space-y-4">
-      {/* Round indicator */}
-      <div className="text-center mb-4">
-        <span className="bg-slate-700 px-3 py-1 rounded-full text-sm text-blue-300">
+      {/* Round indicator - more compact on mobile */}
+      <div className="text-center mb-2 lg:mb-4">
+        <span className="bg-slate-700 px-3 py-1 rounded-full text-xs lg:text-sm text-blue-300">
           Round {currentRound} of {totalRounds}
         </span>
+        {/* Hide player pool info on mobile to save space */}
         {matchData.playerPool && (
-          <p className="text-xs text-gray-500 mt-2">
+          <p className="hidden lg:block text-xs text-gray-500 mt-2">
             {matchData.playerPool.totalPlayers} players •{" "}
             {matchData.playerPool.totalBots} bots in pool
           </p>
@@ -408,68 +413,61 @@ export default function MultiChatContainer({ fid }: Props) {
         })}
       </div>
 
-      {/* Mobile view - tabbed interface */}
-      <div className="lg:hidden">
-        {/* Tab buttons */}
-        <div className="flex justify-center gap-2 mb-4">
-          {[1, 2].map((slotNumber) => {
-            const match = slots[slotNumber];
-            const isActive = activeTab === slotNumber;
-            const currentVote = match ? votes[match.id] || "REAL" : "REAL";
-            const voteColor =
-              currentVote === "BOT" ? "border-red-500" : "border-green-500";
+      {/* Mobile view - stacked chats for simultaneous viewing */}
+      <div className="lg:hidden space-y-3">
+        {[1, 2].map((slotNumber) => {
+          const match = slots[slotNumber];
 
+          if (!match) {
             return (
-              <button
+              <div
                 key={slotNumber}
-                onClick={() => setActiveTab(slotNumber)}
-                disabled={!match}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors relative border-b-2 ${voteColor} ${
-                  isActive
-                    ? "bg-blue-600 text-white"
-                    : match
-                    ? "bg-slate-700 text-gray-300 hover:bg-slate-600"
-                    : "bg-slate-800 text-gray-500 cursor-not-allowed border-slate-600"
-                }`}
+                className="bg-slate-800/50 rounded-lg p-4 border-2 border-dashed border-slate-700"
               >
-                Chat {slotNumber}
-                {hasNewMessages[slotNumber] && !isActive && (
-                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-                )}
-              </button>
+                <div className="text-center text-gray-500">
+                  <p className="text-sm font-medium">Chat {slotNumber}</p>
+                  <p className="text-xs">Waiting for opponent...</p>
+                </div>
+              </div>
             );
-          })}
-        </div>
+          }
 
-        {/* Active chat */}
-        {slots[activeTab] ? (
-          <div className="relative">
-            <ChatWindow
-              fid={fid}
-              match={slots[activeTab]}
-              currentVote={votes[slots[activeTab].id] || "REAL"}
-              onVoteToggle={() => handleVoteToggle(slots[activeTab].id)}
-              onComplete={() => handleMatchComplete(slots[activeTab].id)}
-              isCompact={false}
-              showVoteToggle={true}
-              isNewMatch={newMatchIds.has(slots[activeTab].id)}
-              cycleId={cycleId}
-              playerCount={playerCount}
-              activeMatchIds={activeMatchIds}
-            />
-          </div>
-        ) : (
-          <div className="bg-slate-800/50 rounded-lg p-6 border-2 border-dashed border-slate-700">
-            <div className="text-center text-gray-500">
-              <p className="text-lg mb-2">Chat Slot {activeTab}</p>
-              <p className="text-sm">Waiting for opponent...</p>
+          const currentVote = votes[match.id] || "REAL";
+          const voteColor =
+            currentVote === "BOT" ? "border-red-500/50" : "border-green-500/50";
+
+          return (
+            <div
+              key={match.id}
+              className={`relative border-l-4 ${voteColor} transition-colors duration-300 rounded-lg overflow-hidden`}
+            >
+              {/* Chat number badge */}
+              <div className="absolute top-2 right-2 z-10 bg-blue-600/80 backdrop-blur-sm rounded-full w-6 h-6 flex items-center justify-center text-white font-bold text-xs">
+                {slotNumber}
+              </div>
+
+              {/* Chat content - mobile compact mode */}
+              <ChatWindow
+                fid={fid}
+                match={match}
+                currentVote={currentVote}
+                onVoteToggle={() => handleVoteToggle(match.id)}
+                onComplete={() => handleMatchComplete(match.id)}
+                isCompact={true}
+                isMobileStacked={true}
+                showVoteToggle={true}
+                isNewMatch={newMatchIds.has(match.id)}
+                cycleId={cycleId}
+                playerCount={playerCount}
+                activeMatchIds={activeMatchIds}
+              />
             </div>
-          </div>
-        )}
+          );
+        })}
       </div>
 
-      {/* Instructions */}
-      <div className="bg-slate-900/50 rounded-lg p-4 mt-6">
+      {/* Instructions - hidden on mobile to save space */}
+      <div className="hidden lg:block bg-slate-900/50 rounded-lg p-4 mt-6">
         <h3 className="text-sm font-bold text-gray-300 mb-2">Quick Tips:</h3>
         <ul className="text-xs text-gray-400 space-y-1">
           <li>• Each chat lasts 1 minute - make your decision quickly!</li>
