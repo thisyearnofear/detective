@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 
 type ResultsMode = "opponent-reveal" | "round-summary" | "game-complete";
 
@@ -51,7 +52,12 @@ export default function ResultsCard({
   totalPlayers = 1,
   onPlayAgain,
 }: ResultsCardProps) {
+  const [mounted, setMounted] = useState(false);
   const [countdownSeconds, setCountdownSeconds] = useState(nextRoundIn);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (nextRoundIn <= 0) return;
@@ -69,16 +75,22 @@ export default function ResultsCard({
     return () => clearInterval(timer);
   }, [nextRoundIn]);
 
-  if (!isVisible) return null;
+  if (!isVisible || !mounted) return null;
 
   const isLastRound = roundNumber === totalRounds;
   const roundAccuracy = totalVotes > 0 ? Math.round((correctVotes / totalVotes) * 100) : 0;
   const percentile = Math.round(((totalPlayers - leaderboardRank) / totalPlayers) * 100);
 
+  // Helper to render in portal
+  const renderInPortal = (content: React.ReactNode) => {
+    if (typeof document === "undefined") return null;
+    return createPortal(content, document.body);
+  };
+
   // Opponent reveal mode - brief reveal of who they faced
   if (mode === "opponent-reveal" && opponent && actualType) {
-    return (
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    return renderInPortal(
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
         <div className="card max-w-md w-full animate-scale-in">
           <div className="text-center space-y-6">
             {/* Opponent avatar */}
@@ -100,11 +112,10 @@ export default function ResultsCard({
 
             {/* Reveal */}
             <div
-              className={`inline-block px-6 py-3 rounded-xl font-bold text-sm uppercase tracking-widest ${
-                actualType === "REAL"
-                  ? "bg-green-500/20 border border-green-500/50 text-green-400"
-                  : "bg-red-500/20 border border-red-500/50 text-red-400"
-              }`}
+              className={`inline-block px-6 py-3 rounded-xl font-bold text-sm uppercase tracking-widest ${actualType === "REAL"
+                ? "bg-green-500/20 border border-green-500/50 text-green-400"
+                : "bg-red-500/20 border border-red-500/50 text-red-400"
+                }`}
             >
               {actualType === "REAL" ? "HUMAN" : "AI BOT"}
             </div>
@@ -122,8 +133,8 @@ export default function ResultsCard({
 
   // Round summary mode - shows accuracy for the round
   if (mode === "round-summary") {
-    return (
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    return renderInPortal(
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
         <div className="card max-w-md w-full animate-scale-in">
           {/* Header */}
           <div className="text-center mb-8">
@@ -190,11 +201,11 @@ export default function ResultsCard({
 
   // Game complete mode - full results summary
   if (mode === "game-complete") {
-    return (
-      <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto">
+    return renderInPortal(
+      <div className="fixed inset-0 bg-black/95 z-[100] overflow-y-auto">
         <div className="min-h-full flex flex-col items-center justify-start py-12 px-4">
           <div className="w-full max-w-lg space-y-8">
-            
+
             {/* Header */}
             <div className="text-center space-y-4">
               <p className="text-xs font-medium text-white/50 uppercase tracking-[0.3em]">
@@ -275,17 +286,15 @@ export default function ResultsCard({
                   {roundResults.map((result, idx) => (
                     <div
                       key={idx}
-                      className={`flex items-center gap-4 p-4 rounded-xl border backdrop-blur transition-all duration-300 ${
-                        result.correct
-                          ? "bg-green-500/10 border-green-500/30"
-                          : "bg-red-500/10 border-red-500/30"
-                      }`}
+                      className={`flex items-center gap-4 p-4 rounded-xl border backdrop-blur transition-all duration-300 ${result.correct
+                        ? "bg-green-500/10 border-green-500/30"
+                        : "bg-red-500/10 border-red-500/30"
+                        }`}
                     >
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
-                        result.correct
-                          ? "bg-green-500/20 text-green-400"
-                          : "bg-red-500/20 text-red-400"
-                      }`}>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${result.correct
+                        ? "bg-green-500/20 text-green-400"
+                        : "bg-red-500/20 text-red-400"
+                        }`}>
                         {result.correct ? "+" : "-"}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -296,11 +305,10 @@ export default function ResultsCard({
                           vs @{result.opponentUsername}
                         </div>
                       </div>
-                      <div className={`text-xs px-3 py-1 rounded-full font-medium uppercase tracking-wider ${
-                        result.opponentType === "REAL"
-                          ? "bg-green-500/20 text-green-400 border border-green-500/30"
-                          : "bg-red-500/20 text-red-400 border border-red-500/30"
-                      }`}>
+                      <div className={`text-xs px-3 py-1 rounded-full font-medium uppercase tracking-wider ${result.opponentType === "REAL"
+                        ? "bg-green-500/20 text-green-400 border border-green-500/30"
+                        : "bg-red-500/20 text-red-400 border border-red-500/30"
+                        }`}>
                         {result.opponentType === "REAL" ? "Human" : "Bot"}
                       </div>
                     </div>

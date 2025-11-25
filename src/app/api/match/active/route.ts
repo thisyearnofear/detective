@@ -69,8 +69,7 @@ export async function GET(request: NextRequest) {
     const matchesPerRound = gameState.config.simultaneousMatches;
     const maxPossibleRounds = Math.floor(
       gameState.config.gameDurationMs /
-      gameState.config.matchDurationMs /
-      matchesPerRound,
+      gameState.config.matchDurationMs,
     );
     const totalRounds = Math.min(
       maxPossibleRounds,
@@ -85,6 +84,9 @@ export async function GET(request: NextRequest) {
       );
       playerRank = rankIndex >= 0 ? rankIndex + 1 : 0;
     }
+
+    const player = gameState.players.get(playerFid);
+    const voteHistory = player ? player.voteHistory : [];
 
     return NextResponse.json({
       matches: sanitizedMatches,
@@ -102,6 +104,7 @@ export async function GET(request: NextRequest) {
       gameState: gameState.state,
       // Include cycleId for shared channel optimization
       cycleId: gameState.cycleId,
+      voteHistory,
     });
   } catch (error) {
     console.error("Error fetching active matches:", error);

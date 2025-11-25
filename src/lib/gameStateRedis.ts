@@ -28,7 +28,7 @@ const MATCH_DURATION = 60 * 1000; // 1 minute per match
 const SIMULTANEOUS_MATCHES = 2; // 2 concurrent chats
 const INACTIVITY_WARNING = 30 * 1000; // 30 seconds
 const INACTIVITY_FORFEIT = 45 * 1000; // 45 seconds
-const MAX_ROUNDS = Math.floor(GAME_DURATION / MATCH_DURATION / SIMULTANEOUS_MATCHES);
+const MAX_ROUNDS = Math.floor(GAME_DURATION / MATCH_DURATION);
 
 // TTL for Redis keys (in seconds)
 const CYCLE_TTL = 60 * 60; // 1 hour
@@ -679,6 +679,9 @@ export class RedisGameManager {
                         ? match.voteHistory[match.voteHistory.length - 1].timestamp - match.startTime
                         : match.endTime - match.startTime,
                     voteChanges: match.voteHistory.length,
+                    opponentUsername: match.opponent.username,
+                    opponentType: match.opponent.type as "REAL" | "BOT",
+                    roundNumber: match.roundNumber,
                 };
 
                 player.voteHistory.push(voteRecord);
@@ -689,12 +692,14 @@ export class RedisGameManager {
             const session = await this.getOrCreateSession(match.player.fid);
             session.completedMatchIds.add(matchId);
 
-            for (const [slot, id] of session.activeMatches) {
-                if (id === matchId) {
-                    session.activeMatches.delete(slot);
-                    break;
-                }
-            }
+            // Do NOT remove from activeMatches yet - wait for round transition
+            // This ensures the user still sees the match (and timer) until the round officially ends
+            // for (const [slot, id] of session.activeMatches) {
+            //     if (id === matchId) {
+            //         session.activeMatches.delete(slot);
+            //         break;
+            //     }
+            // }
 
             await this.saveSession(session);
             await setJSON(RedisKeys.match(matchId), match, MATCH_TTL);
