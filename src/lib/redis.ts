@@ -378,13 +378,13 @@ class InMemoryStore {
 // Unified Redis client type
 type RedisClientType = UpstashRedisClient | InMemoryStore;
 
-// Create the appropriate client
-function createRedisClient(): RedisClientType {
-    if (USE_UPSTASH && UPSTASH_REST_URL && UPSTASH_REST_TOKEN) {
-        return new UpstashRedisClient(UPSTASH_REST_URL, UPSTASH_REST_TOKEN);
-    }
-    return new InMemoryStore();
-}
+// Create the appropriate client (inline initialization below, function kept for reference)
+// function createRedisClient(): RedisClientType {
+//     if (USE_UPSTASH && UPSTASH_REST_URL && UPSTASH_REST_TOKEN) {
+//         return new UpstashRedisClient(UPSTASH_REST_URL, UPSTASH_REST_TOKEN);
+//     }
+//     return new InMemoryStore();
+// }
 
 // Initialize client (server-side only)
 // Use globalThis to persist InMemoryStore across Hot Module Replacement (HMR)

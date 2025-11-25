@@ -23,9 +23,9 @@ const RESPONSE_CLEANUP_BUFFER = 60000; // Keep responses 60s after delivery atte
 const DEAD_LETTER_PREFIX = "bot:failed";
 const USE_REDIS = process.env.USE_REDIS === "true";
 
-// In-memory fallback for local development
-const inMemoryScheduled = new Map<string, ScheduledBotResponse>();
-const inMemoryDeadLetter = new Map<string, ScheduledBotResponse & { failureReason: string; failedAt: number }>();
+// In-memory fallback for local development (currently using Redis exclusively)
+// const inMemoryScheduled = new Map<string, ScheduledBotResponse>();
+// const inMemoryDeadLetter = new Map<string, ScheduledBotResponse & { failureReason: string; failedAt: number }>();
 
 /**
  * Schedule a bot response to be delivered at a specific time
