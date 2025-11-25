@@ -481,8 +481,8 @@ export default function MultiChatContainer({ fid }: Props) {
         )}
       </div>
 
-      {/* Desktop view - show both chats side by side */}
-      <div className="hidden lg:grid lg:grid-cols-2 gap-4">
+      {/* Single responsive layout - grid on desktop, stack on mobile */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4">
         {[1, 2].map((slotNumber) => {
           const match = stableSlots[slotNumber];
 
@@ -490,11 +490,11 @@ export default function MultiChatContainer({ fid }: Props) {
             return (
               <div
                 key={slotNumber}
-                className="bg-slate-800/50 rounded-lg p-6 border-2 border-dashed border-slate-700"
+                className="bg-slate-800/50 rounded-lg p-4 lg:p-6 border-2 border-dashed border-slate-700"
               >
                 <div className="text-center text-gray-500">
-                  <p className="text-lg mb-2">Chat Slot {slotNumber}</p>
-                  <p className="text-sm">Waiting for opponent...</p>
+                  <p className="text-sm lg:text-lg font-medium lg:mb-2">Chat Slot {slotNumber}</p>
+                  <p className="text-xs lg:text-sm">Waiting for opponent...</p>
                 </div>
               </div>
             );
@@ -509,64 +509,12 @@ export default function MultiChatContainer({ fid }: Props) {
               key={match.id}
               className={`relative border-l-4 ${voteColor} transition-colors duration-300 rounded-lg overflow-hidden`}
             >
-              {/* Chat number badge */}
-              <div className="absolute -top-2 -right-2 z-10 bg-blue-600 rounded-full w-8 h-8 flex items-center justify-center text-white font-bold text-sm">
+              {/* Chat number badge - responsive sizing */}
+              <div className="absolute top-2 right-2 lg:-top-2 lg:-right-2 z-10 bg-blue-600 lg:bg-blue-600 backdrop-blur-sm lg:backdrop-blur-none rounded-full w-6 h-6 lg:w-8 lg:h-8 flex items-center justify-center text-white font-bold text-xs lg:text-sm opacity-80 lg:opacity-100">
                 {slotNumber}
               </div>
 
-              {/* Chat content */}
-              <ChatWindow
-                fid={fid}
-                match={match}
-                currentVote={currentVote}
-                onVoteToggle={() => handleVoteToggle(match.id)}
-                onComplete={() => handleMatchComplete(match.id)}
-                isCompact={true}
-                showVoteToggle={true}
-                isNewMatch={newMatchIds.has(match.id)}
-                cycleId={cycleId}
-                playerCount={playerCount}
-                activeMatchIds={activeMatchIds}
-              />
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Mobile view - stacked chats for simultaneous viewing */}
-      <div className="lg:hidden space-y-3">
-        {[1, 2].map((slotNumber) => {
-          const match = stableSlots[slotNumber];
-
-          if (!match) {
-            return (
-              <div
-                key={slotNumber}
-                className="bg-slate-800/50 rounded-lg p-4 border-2 border-dashed border-slate-700"
-              >
-                <div className="text-center text-gray-500">
-                  <p className="text-sm font-medium">Chat {slotNumber}</p>
-                  <p className="text-xs">Waiting for opponent...</p>
-                </div>
-              </div>
-            );
-          }
-
-          const currentVote = votes[match.id] || "REAL";
-          const voteColor =
-            currentVote === "BOT" ? "border-red-500/50" : "border-green-500/50";
-
-          return (
-            <div
-              key={match.id}
-              className={`relative border-l-4 ${voteColor} transition-colors duration-300 rounded-lg overflow-hidden`}
-            >
-              {/* Chat number badge */}
-              <div className="absolute top-2 right-2 z-10 bg-blue-600/80 backdrop-blur-sm rounded-full w-6 h-6 flex items-center justify-center text-white font-bold text-xs">
-                {slotNumber}
-              </div>
-
-              {/* Chat content - mobile compact mode */}
+              {/* Chat content - single component with responsive props */}
               <ChatWindow
                 fid={fid}
                 match={match}
