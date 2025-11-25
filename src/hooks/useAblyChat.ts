@@ -374,11 +374,13 @@ export function useAblyChat({
 export function useAblyGameEvents({
     fid,
     cycleId,
+    enabled = true,
     onEvent,
     onError,
 }: {
     fid: number;
     cycleId: string;
+    enabled?: boolean;
     onEvent?: (event: { type: string; data: Record<string, any> }) => void;
     onError?: (error: Error) => void;
 }) {
@@ -397,6 +399,11 @@ export function useAblyGameEvents({
     }, [onError]);
 
     useEffect(() => {
+        // Skip initialization if not enabled or no valid cycleId
+        if (!enabled || !cycleId || cycleId === "placeholder") {
+            return;
+        }
+
         let mounted = true;
         const channelService = getAblyChannelService();
 
@@ -444,7 +451,7 @@ export function useAblyGameEvents({
             mounted = false;
             // Don't detach - let the main chat hook manage channel lifecycle
         };
-    }, [fid, cycleId]);
+    }, [fid, cycleId, enabled]);
 
     return { isConnected };
 }

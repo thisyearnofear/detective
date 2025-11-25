@@ -62,8 +62,12 @@ export async function GET(request: NextRequest) {
                 const tokenDetails = await client.auth.requestToken({
                     clientId: `fid:${fid}`,
                     capability: {
+                        // Per-match channels (legacy/fallback)
                         [`match:*`]: ["subscribe", "publish", "presence"],
-                        [`game:events`]: ["subscribe"],
+                        // Shared channels for scalability
+                        [`game:*:chat`]: ["subscribe", "publish"],
+                        [`game:*:events`]: ["subscribe"],
+                        [`game:*:presence`]: ["subscribe", "presence"],
                     },
                     ttl: 60 * 60 * 1000,
                 });
