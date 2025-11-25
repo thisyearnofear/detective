@@ -6,7 +6,7 @@ export default function AnimatedGridBackdropExample() {
 
   return (
     <div style={{ position: 'relative', minHeight: '100vh' }}>
-      <AnimatedGridBackdrop images={images.slice(0, 9)} gridLayout="layout-1" />
+      <AnimatedGridBackdrop images={images.slice(0, 9)} />
       
       {/* Your content goes here */}
       <div style={{ position: 'relative', zIndex: 10, padding: '2rem' }}>
