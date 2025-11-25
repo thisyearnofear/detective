@@ -287,6 +287,30 @@ class GameManager {
   }
 
   /**
+   * Load a match from Redis
+   */
+  private async loadMatchFromRedis(matchId: string): Promise<Match | null> {
+    if (!USE_REDIS) return null;
+    try {
+      const data = await redis.hget(REDIS_KEYS.matches, matchId);
+      if (!data) return null;
+      
+      const parsed = JSON.parse(data);
+      // Reconstruct the match object with proper types
+      return {
+        ...parsed,
+        messages: parsed.messages || [],
+        startTime: parsed.startTime,
+        endTime: parsed.endTime,
+        nextRoundStartTime: parsed.nextRoundStartTime,
+      } as Match;
+    } catch (error) {
+      console.error(`[GameManager] Failed to load match ${matchId} from Redis:`, error);
+      return null;
+    }
+  }
+
+  /**
    * Delete a match from Redis
    */
   private async deleteMatchFromRedis(matchId: string): Promise<void> {
@@ -725,10 +749,31 @@ class GameManager {
   }
 
   /**
-   * Retrieves a match by its ID.
+   * Retrieves a match by its ID (synchronous, memory only).
+   * For Redis-aware retrieval, use getMatchAsync().
    */
   public getMatch(matchId: string): Match | undefined {
     return this.state.matches.get(matchId);
+  }
+
+  /**
+   * Retrieves a match by its ID (async, checks Redis if not in memory).
+   */
+  public async getMatchAsync(matchId: string): Promise<Match | undefined> {
+    // Check memory first
+    let match = this.state.matches.get(matchId);
+    if (match) return match;
+
+    // Try Redis
+    const redisMatch = await this.loadMatchFromRedis(matchId);
+    if (redisMatch) {
+      // Cache in memory
+      this.state.matches.set(matchId, redisMatch);
+      console.log(`[GameManager] Loaded match ${matchId} from Redis into memory`);
+      return redisMatch;
+    }
+
+    return undefined;
   }
 
   /**
@@ -1123,13 +1168,19 @@ class GameManager {
     const matchesToDelete: string[] = [];
 
     for (const [matchId, match] of this.state.matches) {
+      const timeSinceEnd = now - match.endTime;
+      const isPastGrace = timeSinceEnd > GRACE_PERIOD_MS;
+      
       // Delete matches that are old, locked, and past grace period
       if (
         match.voteLocked &&
         match.isFinished &&
-        (now - match.endTime) > GRACE_PERIOD_MS
+        isPastGrace
       ) {
+        console.log(`[cleanupOldMatches] Match ${matchId} eligible for cleanup: voteLocked=${match.voteLocked}, isFinished=${match.isFinished}, timeSinceEnd=${timeSinceEnd}ms, gracePeriod=${GRACE_PERIOD_MS}ms`);
         matchesToDelete.push(matchId);
+      } else if (match.voteLocked) {
+        console.log(`[cleanupOldMatches] Match ${matchId} locked but not ready for cleanup: isFinished=${match.isFinished}, timeSinceEnd=${timeSinceEnd}ms, isPastGrace=${isPastGrace}`);
       }
     }
 
@@ -1218,7 +1269,8 @@ class GameManager {
   }
 }
 
-// Export a singleton instance of the GameManager
+// Export a singleton instance of the GameManager (per serverless instance)
+// Redis is the source of truth for horizontal scaling across instances
 const globalForGame = global as unknown as { gameManager: GameManager };
 
 export const gameManager =

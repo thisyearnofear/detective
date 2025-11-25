@@ -25,7 +25,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const match = gameManager.getMatch(matchId);
+    const match = await gameManager.getMatchAsync(matchId);
     if (!match) {
       return NextResponse.json({ error: "Match not found." }, { status: 404 });
     }

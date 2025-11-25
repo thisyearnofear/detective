@@ -31,9 +31,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid FID." }, { status: 400 });
     }
 
-    // Verify the match belongs to this player
-    const match = gameManager.getMatch(matchId);
+    // Verify the match belongs to this player (check Redis if not in memory)
+    const match = await gameManager.getMatchAsync(matchId);
     if (!match) {
+      console.error(`[/api/match/vote POST] Match ${matchId} not found for FID ${playerFid}. Match was likely deleted or never existed.`);
+      const allMatches = Array.from(gameManager.getGameState().matches.keys());
+      console.log(`[/api/match/vote POST] Currently available matches in memory: ${allMatches.length > 0 ? allMatches.join(', ') : 'NONE'}`);
       return NextResponse.json(
         { error: "Match not found." },
         { status: 404 }
@@ -104,9 +107,12 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Invalid FID." }, { status: 400 });
     }
 
-    // Verify the match belongs to this player
-    const match = gameManager.getMatch(matchId);
+    // Verify the match belongs to this player (check Redis if not in memory)
+    const match = await gameManager.getMatchAsync(matchId);
     if (!match) {
+      console.error(`[/api/match/vote PUT] Match ${matchId} not found for FID ${playerFid}. Match was likely deleted or never existed.`);
+      const allMatches = Array.from(gameManager.getGameState().matches.keys());
+      console.log(`[/api/match/vote PUT] Currently available matches in memory: ${allMatches.length > 0 ? allMatches.join(', ') : 'NONE'}`);
       return NextResponse.json(
         { error: "Match not found." },
         { status: 404 }
