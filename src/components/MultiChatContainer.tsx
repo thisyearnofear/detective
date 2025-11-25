@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import useSWR from "swr";
 import { useAblyGameEvents } from "@/hooks/useAblyChat";
 import ChatWindow from "./ChatWindow";
@@ -357,6 +357,58 @@ export default function MultiChatContainer({ fid }: Props) {
     cycleId = "",
   } = matchData;
 
+  // Memoize slots to prevent ChatWindow from re-mounting on every matchData refresh
+  // Use a ref to maintain stable references when match content hasn't changed
+  const previousSlotsRef = useRef<any>({});
+  const stableSlots = useMemo(() => {
+    if (!slots || Object.keys(slots).length === 0) {
+      return slots;
+    }
+
+    // Create a new slots object only if the match IDs or critical properties have changed
+    const newSlots: any = {};
+    let hasChanges = false;
+
+    for (const slotNum of [1, 2]) {
+      const currentMatch = slots[slotNum];
+      const previousMatch = previousSlotsRef.current[slotNum];
+
+      if (!currentMatch) {
+        newSlots[slotNum] = currentMatch;
+        if (previousMatch) hasChanges = true;
+        continue;
+      }
+
+      // Check if this is actually a different match or just a re-render
+      if (
+        !previousMatch ||
+        previousMatch.id !== currentMatch.id ||
+        previousMatch.voteLocked !== currentMatch.voteLocked ||
+        previousMatch.messages?.length !== currentMatch.messages?.length
+      ) {
+        newSlots[slotNum] = currentMatch;
+        hasChanges = true;
+      } else {
+        // Reuse the previous reference to prevent re-mounting
+        newSlots[slotNum] = previousMatch;
+      }
+    }
+
+    if (hasChanges) {
+      previousSlotsRef.current = newSlots;
+      return newSlots;
+    }
+
+    return previousSlotsRef.current;
+  }, [
+    slots[1]?.id,
+    slots[2]?.id,
+    slots[1]?.voteLocked,
+    slots[2]?.voteLocked,
+    slots[1]?.messages?.length,
+    slots[2]?.messages?.length,
+  ]);
+
   // Calculate player count and active match IDs for shared channel optimization
   const playerCount = matchData?.playerPool?.totalPlayers || 0;
   const activeMatchIds = matches.map((m: any) => m.id);
@@ -427,7 +479,7 @@ export default function MultiChatContainer({ fid }: Props) {
       {/* Desktop view - show both chats side by side */}
       <div className="hidden lg:grid lg:grid-cols-2 gap-4">
         {[1, 2].map((slotNumber) => {
-          const match = slots[slotNumber];
+          const match = stableSlots[slotNumber];
 
           if (!match) {
             return (
@@ -479,7 +531,7 @@ export default function MultiChatContainer({ fid }: Props) {
       {/* Mobile view - stacked chats for simultaneous viewing */}
       <div className="lg:hidden space-y-3">
         {[1, 2].map((slotNumber) => {
-          const match = slots[slotNumber];
+          const match = stableSlots[slotNumber];
 
           if (!match) {
             return (
