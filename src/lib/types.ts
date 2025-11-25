@@ -39,6 +39,9 @@ export interface VoteRecord {
   speed: number; // Time in ms from match start to final vote
   voteChanges: number; // Number of times vote was toggled
   forfeit?: boolean; // If match was forfeited due to inactivity
+  opponentUsername?: string;
+  opponentType?: "REAL" | "BOT";
+  roundNumber?: number;
 }
 
 // Represents a single conversation match

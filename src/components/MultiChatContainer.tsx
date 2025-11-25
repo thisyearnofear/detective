@@ -35,12 +35,25 @@ export default function MultiChatContainer({ fid }: Props) {
   const [gameFinished, setGameFinished] = useState(false);
   const [roundResults, setRoundResults] = useState<RoundResult[]>([]);
   const [revealingMatch, setRevealingMatch] = useState<string | null>(null);
+  const [revealQueue, setRevealQueue] = useState<Array<{
+    matchId: string;
+    data: {
+      opponent: {
+        fid: number;
+        username: string;
+        displayName: string;
+        pfpUrl: string;
+      };
+      actualType: "REAL" | "BOT";
+    };
+  }>>([]);
   const [revealData, setRevealData] = useState<{
     opponent: {
       fid: number;
       username: string;
       displayName: string;
       pfpUrl: string;
+      actualType?: "REAL" | "BOT"; // Add this to fix type error if needed, but the structure below matches
     };
     actualType: "REAL" | "BOT";
   } | null>(null);
@@ -104,12 +117,12 @@ export default function MultiChatContainer({ fid }: Props) {
       if (lastRound > 0 && matchData.matches?.length === 0) {
         // We're between rounds - show transition
         setIsTransitioning(true);
-        
+
         // Clear any existing timeout
         if (transitionTimeoutRef.current) {
           clearTimeout(transitionTimeoutRef.current);
         }
-        
+
         // Auto-clear transition after 10 seconds max
         transitionTimeoutRef.current = setTimeout(() => {
           setIsTransitioning(false);
@@ -117,7 +130,7 @@ export default function MultiChatContainer({ fid }: Props) {
       }
       setLastRound(matchData.currentRound);
     }
-    
+
     // Clear transition when matches arrive
     if (matchData?.matches?.length > 0 && isTransitioning) {
       setIsTransitioning(false);
@@ -161,6 +174,41 @@ export default function MultiChatContainer({ fid }: Props) {
       }
     }
   }, [matchData]);
+
+  // Sync roundResults from server voteHistory
+  useEffect(() => {
+    if (matchData?.voteHistory) {
+      const history = matchData.voteHistory as any[];
+      // Map voteHistory to RoundResult
+      const newResults: RoundResult[] = history.map((h) => ({
+        roundNumber: h.roundNumber || 1,
+        correct: h.correct,
+        opponentUsername: h.opponentUsername || "Unknown",
+        opponentType: h.opponentType || "BOT",
+        opponentFid: 0, // Not critical for summary
+      }));
+
+      // Simple deep compare to avoid infinite loops
+      if (JSON.stringify(newResults) !== JSON.stringify(roundResults)) {
+        setRoundResults(newResults);
+      }
+    }
+  }, [matchData?.voteHistory, roundResults]);
+
+  // Process reveal queue
+  useEffect(() => {
+    if (!revealingMatch && revealQueue.length > 0) {
+      const nextReveal = revealQueue[0];
+      setRevealQueue((prev) => prev.slice(1));
+      setRevealingMatch(nextReveal.matchId);
+      setRevealData(nextReveal.data);
+
+      setTimeout(() => {
+        setRevealingMatch(null);
+        setRevealData(null);
+      }, 2000);
+    }
+  }, [revealingMatch, revealQueue]);
 
   // Handle vote toggle
   const handleVoteToggle = useCallback(
@@ -210,34 +258,22 @@ export default function MultiChatContainer({ fid }: Props) {
           // Get the match to find opponent info
           const match = matchData?.matches.find((m: any) => m.id === matchId);
           if (match) {
-            setRevealingMatch(matchId);
-            setRevealData({
-              opponent: {
-                fid: match.opponent.fid,
-                username: match.opponent.username,
-                displayName: match.opponent.displayName,
-                pfpUrl: match.opponent.pfpUrl,
-              },
-              actualType: result.actualType,
-            });
-
-            // Add to round results
-            setRoundResults((prev) => [
+            // Add to reveal queue
+            setRevealQueue((prev) => [
               ...prev,
               {
-                roundNumber: match.roundNumber,
-                correct: result.isCorrect,
-                opponentUsername: match.opponent.username,
-                opponentType: result.actualType,
-                opponentFid: match.opponent.fid,
+                matchId,
+                data: {
+                  opponent: {
+                    fid: match.opponent.fid,
+                    username: match.opponent.username,
+                    displayName: match.opponent.displayName,
+                    pfpUrl: match.opponent.pfpUrl,
+                  },
+                  actualType: result.actualType,
+                },
               },
             ]);
-
-            // Dismiss reveal after 2 seconds
-            setTimeout(() => {
-              setRevealingMatch(null);
-              setRevealData(null);
-            }, 2000);
           }
         }
 
