@@ -352,8 +352,8 @@ export default function ChatWindow({
       {warningLevel !== "none" && !isTimeUp && (
         <div
           className={`absolute top-0 left-0 right-0 p-3 text-center text-sm rounded-t-lg font-semibold transition-all ${warningLevel === "warning"
-              ? "bg-gradient-to-r from-yellow-500/30 to-amber-500/20 text-yellow-200 animate-inactivity-warning"
-              : "bg-gradient-to-r from-red-500/40 to-orange-500/30 text-red-100 animate-inactivity-critical"
+            ? "bg-gradient-to-r from-yellow-500/30 to-amber-500/20 text-yellow-200 animate-inactivity-warning"
+            : "bg-gradient-to-r from-red-500/40 to-orange-500/30 text-red-100 animate-inactivity-critical"
             }`}
         >
           <div className="flex items-center justify-center gap-2">
@@ -498,21 +498,21 @@ export default function ChatWindow({
           <input
             className={`grow bg-slate-700 rounded-lg ${isMobileStacked ? "px-2 py-1.5 text-xs" : "px-4 py-2"
               } text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${isCompact && !isMobileStacked ? "text-sm" : ""
-              } ${USE_WEBSOCKET && !isConnected && !shouldFallbackToPolling
-                ? "opacity-50"
+              } ${USE_WEBSOCKET && (!isConnected || isConnecting) && !shouldFallbackToPolling
+                ? "opacity-50 cursor-not-allowed"
                 : ""
               }`}
             value={input}
             onChange={handleInputChange}
-            onKeyPress={(e) => e.key === "Enter" && handleSend()}
+            onKeyPress={(e) => e.key === "Enter" && (USE_WEBSOCKET && (!isConnected || isConnecting) && !shouldFallbackToPolling ? null : handleSend())}
             placeholder={
-              USE_WEBSOCKET && !isConnected && !shouldFallbackToPolling
-                ? "Connecting..."
+              USE_WEBSOCKET && (!isConnected || isConnecting) && !shouldFallbackToPolling
+                ? isConnecting ? "Connecting..." : "Reconnecting..."
                 : isMobileStacked
                   ? "Type message..."
                   : "Type your message... (try :unicorn: or :fire:)"
             }
-            disabled={USE_WEBSOCKET && !isConnected && !shouldFallbackToPolling && isInitializing}
+            disabled={USE_WEBSOCKET && (!isConnected || isConnecting) && !shouldFallbackToPolling}
           />
           {/* Hide emoji picker in mobile stacked mode to save space */}
           {!isMobileStacked && (
@@ -525,7 +525,7 @@ export default function ChatWindow({
             className={`bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white font-bold ${isMobileStacked ? "py-1.5 px-3 text-xs" : "py-2 px-4"
               } rounded-lg transition-colors`}
             onClick={handleSend}
-            disabled={!input.trim() || (USE_WEBSOCKET && !isConnected && !shouldFallbackToPolling && isInitializing)}
+            disabled={!input.trim() || (USE_WEBSOCKET && (!isConnected || isConnecting) && !shouldFallbackToPolling)}
           >
             Send
           </button>

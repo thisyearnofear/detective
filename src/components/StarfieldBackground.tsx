@@ -74,7 +74,7 @@ export default function StarfieldBackground() {
             colors[i * 3 + 2] = color.b;
 
             // Size - slightly smaller max size to reduce overdraw
-            sizes[i] = Math.random() * 6 + 2; 
+            sizes[i] = Math.random() * 6 + 2;
         }
 
         const geometry = new THREE.BufferGeometry();

@@ -113,15 +113,20 @@ export function useAblyChat({
 
     useEffect(() => {
         let mounted = true;
+        let initDebounceTimer: NodeJS.Timeout | null = null;
         const subscriberId = subscriberIdRef.current;
         const currentStrategy = strategyRef.current;
         const channelService = getAblyChannelService();
         const matchIdCache = getGlobalMatchIdCache();
 
         const initializeAbly = async () => {
-            // Prevent duplicate initialization
+            // Prevent duplicate initialization - check both ref and mounted state
             if (initializingRef.current) {
                 console.log(`[Ably] Already initializing for FID ${fid}, matchId ${matchId}`);
+                return;
+            }
+            if (!mounted) {
+                console.log(`[Ably] Component unmounted before initialization for FID ${fid}, matchId ${matchId}`);
                 return;
             }
             initializingRef.current = true;
@@ -272,11 +277,17 @@ export function useAblyChat({
             }
         };
 
-        initializeAbly();
+        // Debounce initialization to handle React Strict Mode double-mounting
+        // In production, this delay is negligible. In dev with Strict Mode, it prevents
+        // rapid mount/unmount/remount from creating multiple connections
+        initDebounceTimer = setTimeout(() => {
+            initializeAbly();
+        }, 50);
 
         return () => {
             mounted = false;
             initializingRef.current = false;
+            if (initDebounceTimer) clearTimeout(initDebounceTimer);
             if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
             const channelKey = currentStrategy === "shared" && cycleId
