@@ -3,7 +3,7 @@ import '@/styles/globals.css';
 import GradientBackground from '@/components/GradientBackground';
 
 export const metadata: Metadata = {
-  title: 'Detective - Bot or Not? Prove it!',
+  title: 'Detective - Is That You?',
   description: 'AI-powered social deduction game on Farcaster. Can you tell if you\'re chatting with a real person or an AI bot?',
 
   // Favicon and app icons
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 
   // Open Graph (for social sharing)
   openGraph: {
-    title: 'Detective - Bot or Not? Prove it!',
+    title: 'Detective - Is That You?',
     description: 'Can you tell if you are chatting with a real person or an AI bot?',
     type: 'website',
     url: 'https://detective.app', // Update with your actual domain
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
   // Twitter Card
   twitter: {
     card: 'summary_large_image',
-    title: 'Detective - Bot or Not? Prove it!',
+    title: 'Detective - Is That You?',
     description: 'Can you tell if you are chatting with a real person or an AI bot?',
     images: ['/og-image.png'],
   },

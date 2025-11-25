@@ -44,6 +44,18 @@ export default function MultiChatContainer({ fid }: Props) {
     revalidateOnFocus: true,
   });
 
+  // Check if game is finished (all rounds completed and no active matches)
+  useEffect(() => {
+    if (
+      !gameFinished &&
+      matchData?.matches &&
+      matchData.matches.length === 0 &&
+      matchData.currentRound > matchData.totalRounds
+    ) {
+      setGameFinished(true);
+    }
+  }, [matchData, gameFinished]);
+
   // Initialize votes from match data and track new matches
   useEffect(() => {
     if (matchData?.matches) {
@@ -190,18 +202,6 @@ export default function MultiChatContainer({ fid }: Props) {
     currentRound = 1,
     totalRounds = 5,
   } = matchData;
-
-  // Check if game is finished (all rounds completed and no active matches)
-  useEffect(() => {
-    if (
-      !gameFinished &&
-      matches.length === 0 &&
-      currentRound > totalRounds &&
-      roundResults.length === totalRounds
-    ) {
-      setGameFinished(true);
-    }
-  }, [matches.length, currentRound, totalRounds, roundResults.length, gameFinished]);
 
   // Show end game screen
   if (gameFinished && roundResults.length > 0) {
