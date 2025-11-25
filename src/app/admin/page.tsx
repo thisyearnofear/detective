@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import AnimatedGridBackdrop from '@/components/AnimatedGridBackdrop';
+import StarfieldBackground from '@/components/StarfieldBackground';
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -118,7 +119,12 @@ export default function AdminPage() {
 
     return (
         <main className="min-h-screen p-6 bg-slate-900 text-white relative flex items-center justify-center">
+            {/* Layer 1: Starfield (deepest) */}
+            <StarfieldBackground />
+
+            {/* Layer 2: Grid Backdrop */}
             <AnimatedGridBackdrop images={gridImages} />
+
             <div className="max-w-6xl w-full relative z-10">
                 {/* Header */}
                 <div className="flex justify-between items-center mb-8">

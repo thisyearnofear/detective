@@ -9,6 +9,7 @@ import Leaderboard from "@/components/Leaderboard";
 import AuthInput from "@/components/AuthInput";
 import SpinningDetective from "@/components/SpinningDetective";
 import AnimatedGridBackdrop from "@/components/AnimatedGridBackdrop";
+import StarfieldBackground from "@/components/StarfieldBackground";
 import { GameCycleState } from "@/lib/types";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
@@ -24,6 +25,15 @@ export default function Home() {
   const [sdkUser, setSdkUser] = useState<any>(null);
   const [authMode, setAuthMode] = useState<"sdk" | "web" | null>(null);
   const [isSdkLoading, setIsSdkLoading] = useState(true);
+  const [introComplete, setIntroComplete] = useState(false);
+
+  useEffect(() => {
+    // Auto-advance intro after 2 seconds
+    const timer = setTimeout(() => {
+      setIntroComplete(true);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Use SWR for polling the game state every 3 seconds
   const { data: gameState, error: gameStateError } = useSWR(
@@ -136,110 +146,124 @@ export default function Home() {
   const gridImages = Array.from({ length: 9 }, (_, i) => `/grid-images/${i + 1}.jpg`);
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center relative py-12 px-4">
+    <main className="min-h-screen flex items-center justify-center relative overflow-hidden px-4">
+      {/* Layer 1: Starfield (deepest) */}
+      <StarfieldBackground />
+
+      {/* Layer 2: Grid Backdrop */}
       <AnimatedGridBackdrop images={gridImages} />
 
-      {/* Content Container */}
-      <div className="relative z-10 w-full max-w-2xl bg-slate-900/80 backdrop-blur-sm rounded-lg p-8 sm:p-12 border border-slate-800/50">
-        {/* Hero Section */}
-        <div className="text-center mb-16 animate-fade-in">
-          <h1 className="hero-title text-5xl sm:text-6xl font-black mb-4 text-stroke hover:text-stroke-white transition-all duration-300">
-            🔍 Detective
+      {/* Layer 3: Content Container - Perfect centering */}
+      <div className={`relative z-10 w-full max-w-2xl flex flex-col items-center justify-center transition-all duration-1000 ease-[cubic-bezier(0.22,1,0.36,1)] ${introComplete ? 'translate-y-0' : 'translate-y-[10vh]'}`}>
+
+        {/* Hero Section - The DETECTIVE Title - Perfectly centered */}
+        <div className={`w-full flex items-center justify-center transition-all duration-1000 ease-[cubic-bezier(0.22,1,0.36,1)] mb-16 ${introComplete ? 'opacity-0 scale-50 pointer-events-none h-0 mb-0' : 'opacity-100 scale-100 h-auto'}`}>
+          <h1 className="hero-title text-7xl sm:text-[10rem] md:text-[12rem] font-black text-white tracking-tighter leading-none select-none mix-blend-overlay opacity-90 text-center">
+            DETECTIVE
           </h1>
-          <p className="text-base sm:text-lg text-gray-300 mb-8">
-            An onchain social deduction game
-          </p>
         </div>
 
-        {/* Main Content */}
-        {!sdkUser ? (
-          // Not authenticated
-          <div className="space-y-8">
-            {/* Auth Card */}
-            <div className="card animate-scale-in">
-              <AuthInput onAuthSuccess={handleWebAuth} />
-            </div>
+        {/* Main Content - Clean editorial design - Perfectly centered */}
+        <div className={`w-full flex flex-col items-center transition-all duration-1000 delay-500 ${introComplete ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'}`}>
+          {!sdkUser ? (
+            // Not authenticated - Perfect centering
+            <div className="w-full max-w-md flex flex-col items-center space-y-12">
+              {/* Clean Header - Perfectly centered */}
+              <div className="w-full flex flex-col items-center space-y-6 text-center">
+                <div className="flex items-center justify-center w-16 h-16 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-sm">
+                  <span className="text-2xl">🔍</span>
+                </div>
+              </div>
 
-            {/* How to Play */}
-            <div className="card mt-12">
-              <h3 className="hero-title text-2xl font-black mb-8 text-stroke text-center hover:text-stroke-white transition-all duration-300">How to Play</h3>
-              <div className="space-y-4 text-gray-300 text-base text-center">
-                {[
-                  "Register for a game when registration is open.",
-                  "Manage 2 simultaneous chats, each lasting 1 minute.",
-                  "Vote during the chat: Is each opponent a REAL person or a BOT?",
-                  "Complete multiple matches in rounds!",
-                  "Climb the leaderboard with accuracy and speed!",
-                ].map((rule, i) => (
-                  <p key={i} className="leading-relaxed">{rule}</p>
-                ))}
+              {/* Auth Input - Contains all the necessary content */}
+              <div className="w-full">
+                <AuthInput onAuthSuccess={handleWebAuth} />
+              </div>
+
+              {/* How to Play - Editorial List Style */}
+              <div className="text-center space-y-8 pt-12">
+                <h3 className="text-xs font-medium text-white/50 uppercase tracking-[0.3em]">Mission Briefing</h3>
+
+                <div className="space-y-6">
+                  {[
+                    "REGISTER FOR A GAME WHEN REGISTRATION IS OPEN",
+                    "MANAGE 2 SIMULTANEOUS CHATS, EACH LASTING 1 MINUTE",
+                    "VOTE DURING THE CHAT: IS EACH OPPONENT A REAL PERSON OR A BOT?",
+                    "COMPLETE MULTIPLE MATCHES IN ROUNDS",
+                    "CLIMB THE LEADERBOARD WITH ACCURACY AND SPEED"
+                  ].map((rule, i) => (
+                    <p key={i} className="text-base font-medium text-white/70 hover:text-white/90 transition-colors cursor-default leading-relaxed">
+                      {rule}
+                    </p>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-        ) : (
-          // Authenticated
-          <div className="space-y-8">
-            {/* User Info Card */}
-            <div className="card">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-gray-200">Logged in as</p>
-                  <p className="text-lg font-bold text-white">
-                    @{sdkUser.username}
-                    {authMode === "web" && (
-                      <span className="ml-2 text-xs bg-blue-900/70 text-blue-200 px-2 py-1 rounded border border-blue-500/50">
-                        Web Mode
-                      </span>
-                    )}
+          ) : (
+            // Authenticated content remains the same...
+            <div className="space-y-8">
+              {/* User Info Card */}
+              <div className="card">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-200">Logged in as</p>
+                    <p className="text-lg font-bold text-white">
+                      @{sdkUser.username}
+                      {authMode === "web" && (
+                        <span className="ml-2 text-xs bg-blue-900/70 text-blue-200 px-2 py-1 rounded border border-blue-500/50">
+                          Web Mode
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleLogout}
+                    className="btn-secondary text-xs py-1 px-3"
+                  >
+                    Logout
+                  </button>
+                </div>
+              </div>
+
+              {/* Game Status */}
+              {gameState && (
+                <div className="card text-center">
+                  <p className="text-xs text-gray-200 mb-1">Game Status</p>
+                  <p className="hero-title text-xl font-black text-stroke uppercase tracking-widest hover:text-stroke-white transition-all duration-300">
+                    {gameState.state}
+                  </p>
+                  <p className="text-xs text-gray-200 mt-1">
+                    {gameState.playerCount} players registered
                   </p>
                 </div>
-                <button
-                  onClick={handleLogout}
-                  className="btn-secondary text-xs py-1 px-3"
-                >
-                  Logout
-                </button>
-              </div>
+              )}
+
+              {/* Game Content */}
+              {renderGameState()}
+
+              {/* Back to Home */}
+              {sdkUser && gameState && (
+                <div className="text-center">
+                  <button
+                    onClick={handleLogout}
+                    className="text-xs text-gray-300 hover:text-gray-200 transition-colors"
+                  >
+                    ← Return to home
+                  </button>
+                </div>
+              )}
             </div>
+          )}
 
-            {/* Game Status */}
-            {gameState && (
-              <div className="card text-center">
-                <p className="text-xs text-gray-200 mb-1">Game Status</p>
-                <p className="hero-title text-xl font-black text-stroke uppercase tracking-widest hover:text-stroke-white transition-all duration-300">
-                  {gameState.state}
-                </p>
-                <p className="text-xs text-gray-200 mt-1">
-                  {gameState.playerCount} players registered
-                </p>
-              </div>
-            )}
-
-            {/* Game Content */}
-            {renderGameState()}
-
-            {/* Back to Home */}
-            {sdkUser && gameState && (
-              <div className="text-center">
-                <button
-                  onClick={handleLogout}
-                  className="text-xs text-gray-300 hover:text-gray-200 transition-colors"
-                >
-                  ← Return to home
-                </button>
-              </div>
-            )}
+          {/* Footer */}
+          <div className="mt-24 pt-8 text-center border-t border-white/5">
+            <a
+              href="/admin"
+              className="text-xs font-bold text-gray-600 hover:text-white transition-colors uppercase tracking-widest"
+            >
+              Admin Panel
+            </a>
           </div>
-        )}
-
-        {/* Footer */}
-        <div className="mt-16 pt-8 text-center border-t border-gray-800/50">
-          <a
-            href="/admin"
-            className="hero-title text-sm font-black text-stroke hover:text-stroke-white transition-all duration-300"
-          >
-            🔧 Admin Panel
-          </a>
         </div>
       </div>
     </main>
