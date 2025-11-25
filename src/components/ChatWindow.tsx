@@ -34,6 +34,7 @@ type Props = {
   onVoteToggle?: () => void;
   onComplete?: () => void;
   isCompact?: boolean;
+  isMobileStacked?: boolean; // Extra compact mode for stacked mobile layout
   showVoteToggle?: boolean;
   // New props for shared channel optimization
   cycleId?: string;
@@ -48,6 +49,7 @@ export default function ChatWindow({
   onVoteToggle,
   onComplete,
   isCompact = false,
+  isMobileStacked = false,
   showVoteToggle = false,
   isNewMatch = false,
   cycleId,
@@ -293,12 +295,13 @@ export default function ChatWindow({
   const matchDuration = Math.round((match.endTime - Date.now()) / 1000);
 
   // Determine chat height based on compact mode
-  const chatHeight = isCompact ? "h-64" : "h-80";
+  // Mobile stacked mode needs even shorter height to fit both chats on screen
+  const chatHeight = isMobileStacked ? "h-36" : isCompact ? "h-64" : "h-80";
 
   return (
     <div
       className={`bg-slate-800 rounded-lg ${
-        isCompact ? "p-4" : "p-6"
+        isMobileStacked ? "p-3" : isCompact ? "p-4" : "p-6"
       } transition-all duration-300 relative ${
         warningLevel !== "none" ? "ring-2" : ""
       } ${
@@ -373,15 +376,15 @@ export default function ChatWindow({
 
       {/* Opponent Card */}
       <div
-        className={`flex justify-between items-start gap-4 ${
-          isCompact ? "mb-3" : "mb-4"
+        className={`flex justify-between items-start gap-2 ${
+          isMobileStacked ? "mb-2" : isCompact ? "mb-3" : "mb-4"
         }`}
       >
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <OpponentCard
             opponent={match.opponent}
             isNewMatch={isNewMatch}
-            compact={isCompact}
+            compact={isCompact || isMobileStacked}
             onColorsExtracted={(primary, secondary) => {
               setOpponentColors({ primary, secondary });
             }}
@@ -389,22 +392,23 @@ export default function ChatWindow({
         </div>
         {match.endTime && !isTimeUp && (
           <ProgressRingTimer
-            duration={matchDuration > 0 ? matchDuration : 0}
+            duration={matchDuration > 0 ? matchDuration : 60}
+            endTime={match.endTime}
             onComplete={handleTimeUp}
-            compact={isCompact}
+            compact={isCompact || isMobileStacked}
           />
         )}
       </div>
 
       {/* Vote toggle (if enabled) */}
       {showVoteToggle && !isTimeUp && !match.voteLocked && (
-        <div className="mb-3">
+        <div className={isMobileStacked ? "mb-2" : "mb-3"}>
           <VoteToggle
             currentVote={currentVote || "REAL"}
             onToggle={onVoteToggle!}
             isLocked={match.voteLocked}
             showAnimation={isNewMatch}
-            isCompact={isCompact}
+            isCompact={isCompact || isMobileStacked}
           />
         </div>
       )}
@@ -412,8 +416,8 @@ export default function ChatWindow({
       {/* Chat messages */}
       <div
         className={`${chatHeight} overflow-y-auto bg-slate-900/50 rounded-lg ${
-          isCompact ? "p-3" : "p-4"
-        } space-y-3 mb-4`}
+          isMobileStacked ? "p-2 space-y-2" : isCompact ? "p-3 space-y-3" : "p-4 space-y-3"
+        } ${isMobileStacked ? "mb-2" : "mb-4"}`}
       >
         {error && (
           <div className="text-center text-red-400">
@@ -449,9 +453,11 @@ export default function ChatWindow({
               }}
             >
               <div
-                className={`max-w-xs ${
+                className={`${
+                  isMobileStacked ? "max-w-[85%]" : "max-w-xs"
+                } ${
                   isCompact ? "md:max-w-sm" : "md:max-w-md"
-                } rounded-lg px-3 py-2 ${
+                } rounded-lg ${isMobileStacked ? "px-2 py-1" : "px-3 py-2"} ${
                   msg.sender.fid === fid
                     ? "bg-blue-600 text-white"
                     : "bg-slate-700 text-gray-200"
@@ -465,13 +471,16 @@ export default function ChatWindow({
                     : {}
                 }
               >
-                <p className={`${isCompact ? "text-xs" : "text-sm"}`}>
+                <p className={`${isMobileStacked || isCompact ? "text-xs" : "text-sm"}`}>
                   {msg.text}
                 </p>
               </div>
-              <span className="text-xs text-gray-500 mt-1">
-                @{msg.sender.username}
-              </span>
+              {/* Hide username in mobile stacked mode to save space */}
+              {!isMobileStacked && (
+                <span className="text-xs text-gray-500 mt-1">
+                  @{msg.sender.username}
+                </span>
+              )}
             </div>
           );
         })}
@@ -480,8 +489,8 @@ export default function ChatWindow({
 
       {/* Input area or completion message */}
       {isTimeUp || match.voteLocked ? (
-        <div className="text-center py-3 bg-slate-700/50 rounded-lg">
-          <p className="text-sm text-gray-300">
+        <div className={`text-center ${isMobileStacked ? "py-2" : "py-3"} bg-slate-700/50 rounded-lg`}>
+          <p className={`${isMobileStacked ? "text-xs" : "text-sm"} text-gray-300`}>
             <span className="text-xs text-gray-500">Vote locked • </span>
             <span
               className={`font-bold ${
@@ -493,10 +502,12 @@ export default function ChatWindow({
           </p>
         </div>
       ) : (
-        <div className="flex gap-2">
+        <div className={`flex ${isMobileStacked ? "gap-1" : "gap-2"}`}>
           <input
-            className={`grow bg-slate-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              isCompact ? "text-sm" : ""
+            className={`grow bg-slate-700 rounded-lg ${
+              isMobileStacked ? "px-2 py-1.5 text-xs" : "px-4 py-2"
+            } text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              isCompact && !isMobileStacked ? "text-sm" : ""
             } ${
               USE_WEBSOCKET && !isConnected && !shouldFallbackToPolling
                 ? "opacity-50"
@@ -507,17 +518,24 @@ export default function ChatWindow({
             onKeyPress={(e) => e.key === "Enter" && handleSend()}
             placeholder={
               USE_WEBSOCKET && !isConnected && !shouldFallbackToPolling
-                ? "Connecting to chat..."
+                ? "Connecting..."
+                : isMobileStacked
+                ? "Type message..."
                 : "Type your message... (try :unicorn: or :fire:)"
             }
             disabled={USE_WEBSOCKET && !isConnected && !shouldFallbackToPolling && isInitializing}
           />
-          <EmojiPicker
-            onEmojiSelect={handleEmojiSelect}
-            isCompact={isCompact}
-          />
+          {/* Hide emoji picker in mobile stacked mode to save space */}
+          {!isMobileStacked && (
+            <EmojiPicker
+              onEmojiSelect={handleEmojiSelect}
+              isCompact={isCompact}
+            />
+          )}
           <button
-            className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+            className={`bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white font-bold ${
+              isMobileStacked ? "py-1.5 px-3 text-xs" : "py-2 px-4"
+            } rounded-lg transition-colors`}
             onClick={handleSend}
             disabled={!input.trim() || (USE_WEBSOCKET && !isConnected && !shouldFallbackToPolling && isInitializing)}
           >

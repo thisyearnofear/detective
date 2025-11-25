@@ -19,10 +19,13 @@ const USE_DATABASE = process.env.USE_DATABASE === "true" && DATABASE_URL;
 // Types for database records
 export interface DbGameCycle {
     id: string;
+    chain: string; // 'arbitrum' | 'monad' | 'local'
     state: string;
     started_at: Date;
     ended_at: Date | null;
     player_count: number;
+    entry_fee_wei: string | null;
+    prize_pool_wei: string | null;
     created_at: Date;
 }
 
@@ -68,7 +71,23 @@ export interface DbLeaderboardEntry {
     accuracy: number;
     avg_speed_ms: number;
     total_matches: number;
+    total_games: number;
+    total_wins: number;
     rank: number;
+}
+
+export interface DbGameResult {
+    id: number;
+    cycle_id: string;
+    player_fid: number;
+    accuracy: number;
+    correct_votes: number;
+    total_votes: number;
+    avg_speed_ms: number;
+    rank: number;
+    total_players: number;
+    prize_won_wei: string | null;
+    created_at: Date;
 }
 
 /**
@@ -78,6 +97,8 @@ class InMemoryDatabase {
     private cycles: Map<string, DbGameCycle> = new Map();
     private matches: Map<string, DbMatch> = new Map();
     private playerStats: Map<number, DbPlayerStats> = new Map();
+    private gameResults: DbGameResult[] = [];
+    private gameResultIdCounter = 1;
 
     async saveGameCycle(cycle: Omit<DbGameCycle, "created_at">): Promise<void> {
         this.cycles.set(cycle.id, {
@@ -176,6 +197,8 @@ class InMemoryDatabase {
             accuracy: s.accuracy,
             avg_speed_ms: s.avg_speed_ms,
             total_matches: s.total_matches,
+            total_games: s.total_games,
+            total_wins: 0, // In-memory doesn't track wins yet
             rank: index + 1,
         }));
     }
@@ -186,6 +209,35 @@ class InMemoryDatabase {
             stats.total_games++;
             stats.updated_at = new Date();
         }
+    }
+
+    async saveGameResult(result: Omit<DbGameResult, "id" | "created_at">): Promise<void> {
+        this.gameResults.push({
+            ...result,
+            id: this.gameResultIdCounter++,
+            created_at: new Date(),
+        });
+
+        // Update total_wins if player won (rank 1)
+        if (result.rank === 1) {
+            const stats = this.playerStats.get(result.player_fid);
+            if (stats) {
+                (stats as any).total_wins = ((stats as any).total_wins || 0) + 1;
+            }
+        }
+    }
+
+    async getGameResultsByCycle(cycleId: string): Promise<DbGameResult[]> {
+        return this.gameResults
+            .filter(r => r.cycle_id === cycleId)
+            .sort((a, b) => a.rank - b.rank);
+    }
+
+    async getGameResultsByPlayer(fid: number, limit: number = 50): Promise<DbGameResult[]> {
+        return this.gameResults
+            .filter(r => r.player_fid === fid)
+            .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())
+            .slice(0, limit);
     }
 }
 
@@ -230,10 +282,13 @@ class PostgresDatabase {
         await pool.query(`
       CREATE TABLE IF NOT EXISTS game_cycles (
         id VARCHAR(255) PRIMARY KEY,
+        chain VARCHAR(20) DEFAULT 'local',
         state VARCHAR(20) NOT NULL,
         started_at TIMESTAMP NOT NULL,
         ended_at TIMESTAMP,
         player_count INTEGER DEFAULT 0,
+        entry_fee_wei VARCHAR(78),
+        prize_pool_wei VARCHAR(78),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
       
@@ -262,6 +317,7 @@ class PostgresDatabase {
         pfp_url TEXT,
         total_games INTEGER DEFAULT 0,
         total_matches INTEGER DEFAULT 0,
+        total_wins INTEGER DEFAULT 0,
         correct_votes INTEGER DEFAULT 0,
         accuracy DECIMAL(5,2) DEFAULT 0,
         avg_speed_ms INTEGER DEFAULT 0,
@@ -271,9 +327,45 @@ class PostgresDatabase {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
       
+      CREATE TABLE IF NOT EXISTS game_results (
+        id SERIAL PRIMARY KEY,
+        cycle_id VARCHAR(255) REFERENCES game_cycles(id),
+        player_fid INTEGER NOT NULL,
+        accuracy DECIMAL(5,2) NOT NULL,
+        correct_votes INTEGER NOT NULL,
+        total_votes INTEGER NOT NULL,
+        avg_speed_ms INTEGER NOT NULL,
+        rank INTEGER NOT NULL,
+        total_players INTEGER NOT NULL,
+        prize_won_wei VARCHAR(78),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      
       CREATE INDEX IF NOT EXISTS idx_matches_player ON matches(player_fid);
       CREATE INDEX IF NOT EXISTS idx_matches_cycle ON matches(cycle_id);
       CREATE INDEX IF NOT EXISTS idx_player_stats_accuracy ON player_stats(accuracy DESC);
+      CREATE INDEX IF NOT EXISTS idx_game_results_cycle ON game_results(cycle_id);
+      CREATE INDEX IF NOT EXISTS idx_game_results_player ON game_results(player_fid);
+      CREATE INDEX IF NOT EXISTS idx_game_results_rank ON game_results(rank);
+    `);
+
+        // Add columns if they don't exist (for existing databases)
+        await pool.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'player_stats' AND column_name = 'total_wins') THEN
+          ALTER TABLE player_stats ADD COLUMN total_wins INTEGER DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'game_cycles' AND column_name = 'chain') THEN
+          ALTER TABLE game_cycles ADD COLUMN chain VARCHAR(20) DEFAULT 'local';
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'game_cycles' AND column_name = 'entry_fee_wei') THEN
+          ALTER TABLE game_cycles ADD COLUMN entry_fee_wei VARCHAR(78);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'game_cycles' AND column_name = 'prize_pool_wei') THEN
+          ALTER TABLE game_cycles ADD COLUMN prize_pool_wei VARCHAR(78);
+        END IF;
+      END $$;
     `);
 
         this.initialized = true;
@@ -400,8 +492,9 @@ class PostgresDatabase {
     async getGlobalLeaderboard(limit: number = 100): Promise<DbLeaderboardEntry[]> {
         const pool = await this.getPool();
         const result = await pool.query(
-            `SELECT 
+            `SELECT
         fid, username, display_name, pfp_url, accuracy, avg_speed_ms, total_matches,
+        total_games, COALESCE(total_wins, 0) as total_wins,
         ROW_NUMBER() OVER (ORDER BY accuracy DESC, avg_speed_ms ASC) as rank
        FROM player_stats
        WHERE total_matches >= 5
@@ -415,11 +508,59 @@ class PostgresDatabase {
     async incrementPlayerGames(fid: number): Promise<void> {
         const pool = await this.getPool();
         await pool.query(
-            `UPDATE player_stats 
+            `UPDATE player_stats
        SET total_games = total_games + 1, updated_at = CURRENT_TIMESTAMP
        WHERE fid = $1`,
             [fid]
         );
+    }
+
+    async saveGameResult(result: Omit<DbGameResult, "id" | "created_at">): Promise<void> {
+        const pool = await this.getPool();
+        await pool.query(
+            `INSERT INTO game_results (
+        cycle_id, player_fid, accuracy, correct_votes, total_votes,
+        avg_speed_ms, rank, total_players, prize_won_wei
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+            [
+                result.cycle_id, result.player_fid, result.accuracy,
+                result.correct_votes, result.total_votes, result.avg_speed_ms,
+                result.rank, result.total_players, result.prize_won_wei
+            ]
+        );
+
+        // Update total_wins if player won (rank 1)
+        if (result.rank === 1) {
+            await pool.query(
+                `UPDATE player_stats
+         SET total_wins = total_wins + 1, updated_at = CURRENT_TIMESTAMP
+         WHERE fid = $1`,
+                [result.player_fid]
+            );
+        }
+    }
+
+    async getGameResultsByCycle(cycleId: string): Promise<DbGameResult[]> {
+        const pool = await this.getPool();
+        const result = await pool.query(
+            `SELECT * FROM game_results
+       WHERE cycle_id = $1
+       ORDER BY rank ASC`,
+            [cycleId]
+        );
+        return result.rows;
+    }
+
+    async getGameResultsByPlayer(fid: number, limit: number = 50): Promise<DbGameResult[]> {
+        const pool = await this.getPool();
+        const result = await pool.query(
+            `SELECT * FROM game_results
+       WHERE player_fid = $1
+       ORDER BY created_at DESC
+       LIMIT $2`,
+            [fid, limit]
+        );
+        return result.rows;
     }
 
     async close(): Promise<void> {
@@ -449,6 +590,9 @@ export interface IDatabase {
     getPlayerStats(fid: number): Promise<DbPlayerStats | null>;
     getGlobalLeaderboard(limit?: number): Promise<DbLeaderboardEntry[]>;
     incrementPlayerGames(fid: number): Promise<void>;
+    saveGameResult(result: Omit<DbGameResult, "id" | "created_at">): Promise<void>;
+    getGameResultsByCycle(cycleId: string): Promise<DbGameResult[]>;
+    getGameResultsByPlayer(fid: number, limit?: number): Promise<DbGameResult[]>;
 }
 
 // Create database instance

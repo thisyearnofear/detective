@@ -10,6 +10,7 @@ import {
   VoteRecord,
 } from "./types";
 import { redis, getJSON, setJSON } from "./redis";
+import { database } from "./database";
 
 const GAME_DURATION = 5 * 60 * 1000; // 5 minutes
 const REGISTRATION_DURATION = 1 * 60 * 1000; // 1 minute for testing
@@ -772,13 +773,14 @@ class GameManager {
     const actualType = match.opponent.type;
     const isCorrect = guess === actualType;
 
+    const voteSpeed = match.currentVote
+      ? match.voteHistory[match.voteHistory.length - 1].timestamp - match.startTime
+      : match.endTime - match.startTime;
+
     const voteRecord: VoteRecord = {
       matchId,
       correct: isCorrect,
-      speed: match.currentVote
-        ? match.voteHistory[match.voteHistory.length - 1].timestamp -
-        match.startTime
-        : match.endTime - match.startTime,
+      speed: voteSpeed,
       voteChanges: match.voteHistory.length,
     };
 
@@ -803,10 +805,104 @@ class GameManager {
     this.saveMatchToRedis(match).catch(console.error);
     this.savePlayerToRedis(player).catch(console.error);
 
+    // Save match result to database (async, non-blocking)
+    this.saveMatchToDatabase(match, isCorrect, voteSpeed).catch(console.error);
+
     // Don't delete from global matches immediately - allow grace period
     console.log(`[lockMatchVote] Match ${matchId} locked. Keeping in global state for grace period.`);
 
     return isCorrect;
+  }
+
+  /**
+   * Save match result to the database
+   */
+  private async saveMatchToDatabase(match: Match, isCorrect: boolean, voteSpeedMs: number): Promise<void> {
+    try {
+      const player = match.player;
+
+      // Save match to database
+      await database.saveMatch({
+        id: match.id,
+        cycle_id: this.state.cycleId,
+        player_fid: player.fid,
+        opponent_fid: match.opponent.fid,
+        opponent_type: match.opponent.type,
+        slot_number: match.slotNumber,
+        round_number: match.roundNumber,
+        vote: match.currentVote || null,
+        is_correct: isCorrect,
+        vote_changes: match.voteHistory.length,
+        vote_speed_ms: voteSpeedMs,
+        messages: match.messages,
+        started_at: new Date(match.startTime),
+        ended_at: new Date(match.endTime),
+      });
+
+      // Update player stats in database
+      await database.updatePlayerStats(
+        player.fid,
+        player.username,
+        player.displayName,
+        player.pfpUrl,
+        { correct: isCorrect, speedMs: voteSpeedMs }
+      );
+
+      console.log(`[saveMatchToDatabase] Saved match ${match.id} to database`);
+    } catch (error) {
+      console.error(`[saveMatchToDatabase] Failed to save match ${match.id}:`, error);
+    }
+  }
+
+  /**
+   * Save final game results to the database when game finishes
+   */
+  private async saveGameResultsToDatabase(): Promise<void> {
+    try {
+      const leaderboard = this.state.leaderboard;
+      const totalPlayers = leaderboard.length;
+
+      // Save game cycle to database
+      await database.saveGameCycle({
+        id: this.state.cycleId,
+        chain: 'local', // Will be updated when blockchain integration is added
+        state: this.state.state,
+        started_at: new Date(this.state.registrationEnds), // Game started when registration ended
+        ended_at: new Date(),
+        player_count: totalPlayers,
+        entry_fee_wei: null,
+        prize_pool_wei: null,
+      });
+
+      // Save individual game results for each player
+      for (let i = 0; i < leaderboard.length; i++) {
+        const entry = leaderboard[i];
+        const player = this.state.players.get(entry.player.fid);
+        if (!player) continue;
+
+        const correctVotes = player.voteHistory.filter(v => v.correct && !v.forfeit).length;
+        const totalVotes = player.voteHistory.length;
+
+        await database.saveGameResult({
+          cycle_id: this.state.cycleId,
+          player_fid: entry.player.fid,
+          accuracy: entry.accuracy,
+          correct_votes: correctVotes,
+          total_votes: totalVotes,
+          avg_speed_ms: Math.round(entry.avgSpeed),
+          rank: i + 1,
+          total_players: totalPlayers,
+          prize_won_wei: null, // Will be updated when blockchain integration is added
+        });
+
+        // Increment total games for player
+        await database.incrementPlayerGames(entry.player.fid);
+      }
+
+      console.log(`[saveGameResultsToDatabase] Saved game results for ${totalPlayers} players in cycle ${this.state.cycleId}`);
+    } catch (error) {
+      console.error(`[saveGameResultsToDatabase] Failed to save game results:`, error);
+    }
   }
 
   /**
@@ -920,6 +1016,8 @@ class GameManager {
         this.state.state = "FINISHED";
         // Calculate and store the final leaderboard once the game is finished.
         this.state.leaderboard = this.getLeaderboard();
+        // Save final game results to database (async, non-blocking)
+        this.saveGameResultsToDatabase().catch(console.error);
       } else {
         console.log(`[updateCycleState] Waiting for players to finish. Completed: ${completedPlayers}/${totalPlayers}, Sessions: ${this.state.playerSessions.size}, Matches: ${this.state.matches.size}. Extending game time.`);
         // Extend game time by 1 minute to allow stragglers to finish

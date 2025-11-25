@@ -1,29 +1,50 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 interface ProgressRingTimerProps {
-  duration: number; // Duration in seconds
+  duration: number; // Duration in seconds (initial)
+  endTime?: number; // Absolute end time in ms (preferred - from server)
   onComplete?: () => void;
   compact?: boolean;
 }
 
 export default function ProgressRingTimer({
   duration,
+  endTime: serverEndTime,
   onComplete,
   compact = false,
 }: ProgressRingTimerProps) {
   const [remaining, setRemaining] = useState(duration);
   const [isWarning, setIsWarning] = useState(false);
   const [isCritical, setIsCritical] = useState(false);
+  const hasCompletedRef = useRef(false);
+  const initialDurationRef = useRef(duration);
+
+  // Store initial duration for progress calculation
+  useEffect(() => {
+    if (duration > 0) {
+      initialDurationRef.current = duration;
+    }
+  }, []);
 
   useEffect(() => {
+    // Reset completion flag when duration changes significantly (new match)
+    if (duration > 5) {
+      hasCompletedRef.current = false;
+      initialDurationRef.current = duration;
+    }
     setRemaining(duration);
   }, [duration]);
 
   useEffect(() => {
-    const startTime = Date.now();
-    const endTime = startTime + duration * 1000;
+    // Use server end time if provided, otherwise calculate from duration
+    const endTime = serverEndTime || (Date.now() + duration * 1000);
+    
+    // Don't start timer if duration is too short (likely stale data)
+    if (duration <= 0 && !serverEndTime) {
+      return;
+    }
 
     const updateTimer = () => {
       const now = Date.now();
@@ -34,7 +55,9 @@ export default function ProgressRingTimer({
       setIsWarning(secondsLeft <= 30 && secondsLeft > 0);
       setIsCritical(secondsLeft <= 10);
 
-      if (secondsLeft <= 0) {
+      // Only trigger onComplete once
+      if (secondsLeft <= 0 && !hasCompletedRef.current) {
+        hasCompletedRef.current = true;
         setRemaining(0);
         onComplete?.();
       }
@@ -45,11 +68,13 @@ export default function ProgressRingTimer({
     updateTimer();
 
     return () => clearInterval(interval);
-  }, [duration, onComplete]);
+  }, [duration, serverEndTime, onComplete]);
 
   const minutes = Math.floor(remaining / 60);
   const seconds = Math.round(remaining % 60);
-  const progress = remaining / duration;
+  // Use initial duration for progress calculation to avoid jumps
+  const effectiveDuration = initialDurationRef.current > 0 ? initialDurationRef.current : duration;
+  const progress = effectiveDuration > 0 ? remaining / effectiveDuration : 0;
 
   // SVG dimensions
   const size = compact ? 60 : 80;
