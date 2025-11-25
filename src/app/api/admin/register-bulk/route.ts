@@ -1,6 +1,6 @@
 // src/app/api/admin/register-bulk/route.ts
 import { NextResponse } from "next/server";
-import { unifiedGameManager as gameManager } from "@/lib/gameManagerUnified";
+import { gameManager } from "@/lib/gameState";
 import { getFarcasterUserData } from "@/lib/neynar";
 
 /**

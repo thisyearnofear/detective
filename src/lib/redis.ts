@@ -191,7 +191,11 @@ class InMemoryStore {
     // String operations
     async get(key: string): Promise<string | null> {
         this.checkExpiry(key);
-        return this.store.get(key) || null;
+        const value = this.store.get(key) || null;
+        if (key.includes("bot:scheduled")) {
+            console.log(`[InMemoryStore] GET ${key}: ${value ? "FOUND" : "NOT FOUND"} (store size: ${this.store.size})`);
+        }
+        return value;
     }
 
     async set(key: string, value: string, options?: { ex?: number; nx?: boolean }): Promise<string | null> {
@@ -208,6 +212,9 @@ class InMemoryStore {
     async setex(key: string, seconds: number, value: string): Promise<string> {
         this.store.set(key, value);
         this.expiry.set(key, Date.now() + seconds * 1000);
+        if (key.includes("bot:scheduled")) {
+            console.log(`[InMemoryStore] SETEX ${key}: stored (store size: ${this.store.size}, expires in ${seconds}s)`);
+        }
         return "OK";
     }
 
@@ -380,9 +387,28 @@ function createRedisClient(): RedisClientType {
 }
 
 // Initialize client (server-side only)
-const redisClient: RedisClientType = typeof window === "undefined"
-    ? createRedisClient()
-    : new InMemoryStore();
+// Use globalThis to persist InMemoryStore across Hot Module Replacement (HMR)
+let redisClient: RedisClientType;
+
+if (typeof window === "undefined") {
+    // Server-side
+    if (USE_UPSTASH && UPSTASH_REST_URL && UPSTASH_REST_TOKEN) {
+        redisClient = new UpstashRedisClient(UPSTASH_REST_URL, UPSTASH_REST_TOKEN);
+    } else {
+        // Use globalThis to preserve in-memory store across HMR rebuilds
+        const globalAny = globalThis as any;
+        if (!globalAny.__REDIS_STORE__) {
+            console.log("[Redis] Creating new in-memory store instance");
+            globalAny.__REDIS_STORE__ = new InMemoryStore();
+        } else {
+            console.log("[Redis] Reusing existing in-memory store instance from globalThis");
+        }
+        redisClient = globalAny.__REDIS_STORE__;
+    }
+} else {
+    // Client-side (shouldn't normally happen, but fallback just in case)
+    redisClient = new InMemoryStore();
+}
 
 // Export the client
 export const redis = redisClient;

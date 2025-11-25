@@ -4,8 +4,9 @@ import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import useSWR from "swr";
 import { useAblyGameEvents } from "@/hooks/useAblyChat";
 import ChatWindow from "./ChatWindow";
-import ResultsCard from "./ResultsCard";
+import Leaderboard from "./Leaderboard";
 import RoundStartLoader from "./RoundStartLoader";
+import RoundTransition from "./RoundTransition";
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -35,29 +36,16 @@ export default function MultiChatContainer({ fid }: Props) {
   const [newMatchIds, setNewMatchIds] = useState<Set<string>>(new Set());
   const [gameFinished, setGameFinished] = useState(false);
   const [roundResults, setRoundResults] = useState<RoundResult[]>([]);
-  const [revealingMatch, setRevealingMatch] = useState<string | null>(null);
-  const [revealQueue, setRevealQueue] = useState<Array<{
-    matchId: string;
-    data: {
-      opponent: {
-        fid: number;
-        username: string;
-        displayName: string;
-        pfpUrl: string;
-      };
-      actualType: "REAL" | "BOT";
-    };
-  }>>([]);
-  const [revealData, setRevealData] = useState<{
+  const [showRevealScreen, setShowRevealScreen] = useState(false);
+  const [batchReveals, setBatchReveals] = useState<Array<{
     opponent: {
       fid: number;
       username: string;
       displayName: string;
       pfpUrl: string;
-      actualType?: "REAL" | "BOT"; // Add this to fix type error if needed, but the structure below matches
     };
     actualType: "REAL" | "BOT";
-  } | null>(null);
+  }>>([]);
   // Track if we've ever successfully loaded matches (to prevent premature error display)
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [consecutiveErrors, setConsecutiveErrors] = useState(0);
@@ -95,6 +83,16 @@ export default function MultiChatContainer({ fid }: Props) {
     onEvent: (event) => {
       if (!ablyCycleId) return; // Extra safety check
       console.log("[MultiChatContainer] Received game event:", event.type);
+      
+      // Handle new chat messages (including bot responses)
+      if (event.type === "chat_message") {
+        const { matchId, senderFid, text } = event.data;
+        console.log(`[MultiChatContainer] Received chat_message for match ${matchId} from FID ${senderFid}: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`);
+        // Refresh to get the updated match data with the new message
+        mutate();
+        return;
+      }
+      
       // When match_end event arrives, refresh to get new matches (but not if game is finished)
       if ((event.type === "match_end" || event.type === "round_end") && !gameFinished) {
         mutate();
@@ -227,20 +225,18 @@ export default function MultiChatContainer({ fid }: Props) {
     }
   }, [matchData?.voteHistory, roundResults]);
 
-  // Process reveal queue
+  // Show reveal screen when round ends (all matches locked, no new matches available)
   useEffect(() => {
-    if (!revealingMatch && revealQueue.length > 0) {
-      const nextReveal = revealQueue[0];
-      setRevealQueue((prev) => prev.slice(1));
-      setRevealingMatch(nextReveal.matchId);
-      setRevealData(nextReveal.data);
-
-      setTimeout(() => {
-        setRevealingMatch(null);
-        setRevealData(null);
-      }, 2000);
+    if (
+      batchReveals.length > 0 &&
+      matchData?.matches?.length === 0 &&
+      !showRevealScreen
+    ) {
+      setShowRevealScreen(true);
     }
-  }, [revealingMatch, revealQueue]);
+  }, [batchReveals.length, matchData?.matches?.length, showRevealScreen]);
+
+
 
   // Handle vote toggle
   const handleVoteToggle = useCallback(
@@ -274,7 +270,7 @@ export default function MultiChatContainer({ fid }: Props) {
     [votes, fid]
   );
 
-  // Handle match completion
+  // Handle match completion - collect reveal data
   const handleMatchComplete = useCallback(
     async (matchId: string) => {
       try {
@@ -290,20 +286,17 @@ export default function MultiChatContainer({ fid }: Props) {
           // Get the match to find opponent info
           const match = matchData?.matches.find((m: any) => m.id === matchId);
           if (match) {
-            // Add to reveal queue
-            setRevealQueue((prev) => [
+            // Collect reveal data for batch display
+            setBatchReveals((prev) => [
               ...prev,
               {
-                matchId,
-                data: {
-                  opponent: {
-                    fid: match.opponent.fid,
-                    username: match.opponent.username,
-                    displayName: match.opponent.displayName,
-                    pfpUrl: match.opponent.pfpUrl,
-                  },
-                  actualType: result.actualType,
+                opponent: {
+                  fid: match.opponent.fid,
+                  username: match.opponent.username,
+                  displayName: match.opponent.displayName,
+                  pfpUrl: match.opponent.pfpUrl,
                 },
+                actualType: result.actualType,
               },
             ]);
           }
@@ -458,19 +451,19 @@ export default function MultiChatContainer({ fid }: Props) {
     );
   }
 
-  // Show end game screen
+  // Show end game screen with leaderboard
   if (gameFinished && roundResults.length > 0) {
     const accuracy =
       (roundResults.filter((r) => r.correct).length / roundResults.length) *
       100;
 
     return (
-      <ResultsCard
-        isVisible={true}
-        mode="game-complete"
+      <Leaderboard
+        fid={fid}
+        isGameEnd={true}
         accuracy={accuracy}
         roundResults={roundResults}
-        leaderboardRank={matchData?.playerRank || 1}
+        playerRank={matchData?.playerRank || 1}
         totalPlayers={matchData?.playerPool?.totalPlayers || 0}
         onPlayAgain={() => {
           setGameFinished(false);
@@ -483,6 +476,37 @@ export default function MultiChatContainer({ fid }: Props) {
   }
 
   if (matches.length === 0) {
+    // Show reveal screen if we have reveals to display
+    if (showRevealScreen && batchReveals.length > 0) {
+      const accuracy =
+        roundResults.length > 0
+          ? (roundResults.filter((r) => r.correct).length / roundResults.length) * 100
+          : 0;
+
+      return (
+        <RoundTransition
+          isVisible={true}
+          phase="reveal"
+          reveals={batchReveals}
+          stats={{
+            accuracy,
+            correct: roundResults.filter((r) => r.correct).length,
+            total: roundResults.length,
+            playerRank: matchData?.playerRank,
+            totalPlayers: matchData?.playerPool?.totalPlayers,
+          }}
+          nextRoundNumber={currentRound + 1}
+          displayDuration={6000}
+          onComplete={() => {
+            setShowRevealScreen(false);
+            setBatchReveals([]);
+            setIsTransitioning(true);
+          }}
+        />
+      );
+    }
+
+    // Show loading state if transitioning between rounds
     return (
       <RoundStartLoader
         roundNumber={currentRound}
@@ -569,32 +593,24 @@ export default function MultiChatContainer({ fid }: Props) {
       </div>
 
       {/* Instructions - hidden on mobile to save space */}
-      <div className="hidden lg:block bg-slate-900/50 rounded-lg p-4 mt-6">
-        <h3 className="text-sm font-bold text-gray-300 mb-2">Quick Tips:</h3>
-        <ul className="text-xs text-gray-400 space-y-1">
-          <li>• Each chat lasts 1 minute - make your decision quickly!</li>
-          <li>• Toggle your vote anytime during the chat</li>
-          <li>• Your vote locks when the timer ends</li>
-          <li>• Manage both conversations to maximize your score</li>
-          <li>
-            • Use the 🦄 button for quick emoji access (or type :unicorn:)
-          </li>
-          <li>
-            • You'll face {matchData?.playerPool?.totalOpponents || "multiple"}{" "}
-            different opponents
-          </li>
-        </ul>
+      <div className="hidden lg:block bg-slate-900/50 rounded-xl p-4 mt-6 border border-slate-700/50 shadow-lg">
+        <div className="text-center">
+          <h3 className="text-sm font-semibold text-slate-200 mb-3 flex items-center justify-center gap-2">
+            <span className="text-lg">💡</span>
+            Quick Tips
+          </h3>
+          <div className="space-y-2 text-xs text-slate-300 leading-relaxed">
+            <div>• Each chat lasts 1 minute - make your decision quickly!</div>
+            <div>• Toggle your vote anytime during the chat</div>
+            <div>• Your vote locks when the timer ends</div>
+            <div>• Manage both conversations to maximize your score</div>
+            <div>• Use the 🦄 button for quick emoji access (or type :unicorn:)</div>
+            <div>• You'll face 4 different opponents</div>
+          </div>
+        </div>
       </div>
 
-      {/* Opponent reveal card */}
-      {revealData && revealingMatch && (
-        <ResultsCard
-          isVisible={revealingMatch !== null}
-          mode="opponent-reveal"
-          opponent={revealData.opponent}
-          actualType={revealData.actualType}
-        />
-      )}
+
     </div>
   );
 }

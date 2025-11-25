@@ -217,6 +217,34 @@ class GameEventPublisher {
       console.error("[GameEventPublisher] Error publishing game_end:", err);
     }
   }
+
+  /**
+   * Publish when a new chat message is added to a match
+   */
+  async publishChatMessage(
+    cycleId: string,
+    matchId: string,
+    playerFid: number,
+    senderFid: number,
+    text: string
+  ): Promise<void> {
+    try {
+      await this.ablySrv.publishGameEvent(
+        cycleId,
+        "chat_message",
+        {
+          matchId,
+          senderFid,
+          text,
+          timestamp: Date.now(),
+        },
+        [playerFid] // Only for the player in this match
+      );
+      console.log(`[GameEventPublisher] Published chat_message for match ${matchId} from FID ${senderFid}`);
+    } catch (err) {
+      console.error("[GameEventPublisher] Error publishing chat_message:", err);
+    }
+  }
 }
 
 export function getGameEventPublisher(): GameEventPublisher {

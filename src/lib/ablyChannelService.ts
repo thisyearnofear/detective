@@ -106,11 +106,17 @@ class AblyChannelService {
           }
         },
         clientId: `fid:${fid}`,
+        autoConnect: true,
+        reconnectTimeout: 15000,
+        realtimeRequestTimeout: 15000,
         disconnectedRetryTimeout: 3000,
         suspendedRetryTimeout: 10000,
+        httpOpenTimeout: 10000,
         transportParams: {
           remainConnectedAfterSuspend: true,
         },
+        transports: ["web_socket", "xhr_streaming", "xhr_polling"],
+        log: { level: 2 }, // Enable debug logging
       });
 
       this.clients.set(fid, client);

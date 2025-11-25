@@ -22,7 +22,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const match = await gameManager.getMatchAsync(matchId);
+    const match = await gameManager.getMatch(matchId);
     if (!match) {
       return NextResponse.json(
         { error: "Match not found." },

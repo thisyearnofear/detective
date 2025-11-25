@@ -1,6 +1,6 @@
 // src/app/api/game/register/route.ts
 import { NextResponse } from "next/server";
-import { unifiedGameManager as gameManager } from "@/lib/gameManagerUnified";
+import { gameManager } from "@/lib/gameState";
 import { getFarcasterUserData } from "@/lib/neynar";
 
 /**
@@ -16,7 +16,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid FID provided." }, { status: 400 });
     }
 
-    // Use async version for proper Redis loading in production
     const gameState = await gameManager.getGameState();
     if (gameState.state !== "REGISTRATION") {
       return NextResponse.json(

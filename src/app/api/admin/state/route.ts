@@ -1,6 +1,6 @@
 // src/app/api/admin/state/route.ts
 import { NextResponse } from "next/server";
-import { unifiedGameManager as gameManager } from "@/lib/gameManagerUnified";
+import { gameManager } from "@/lib/gameState";
 
 /**
  * Admin API to manually control game state transitions.
