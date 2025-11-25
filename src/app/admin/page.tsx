@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import AnimatedGridBackdrop from '@/components/AnimatedGridBackdrop';
@@ -8,12 +8,116 @@ import StarfieldBackground from '@/components/StarfieldBackground';
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
+// Custom confirmation modal component
+function ConfirmModal({
+    isOpen,
+    onClose,
+    onConfirm,
+    title,
+    message,
+    confirmText = 'Confirm',
+    cancelText = 'Cancel',
+    variant = 'danger',
+}: {
+    isOpen: boolean;
+    onClose: () => void;
+    onConfirm: () => void;
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    variant?: 'danger' | 'warning' | 'info';
+}) {
+    // Handle escape key
+    useEffect(() => {
+        const handleEscape = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && isOpen) {
+                onClose();
+            }
+        };
+        window.addEventListener('keydown', handleEscape);
+        return () => window.removeEventListener('keydown', handleEscape);
+    }, [isOpen, onClose]);
+
+    if (!isOpen) return null;
+
+    const variantStyles = {
+        danger: {
+            icon: '⚠️',
+            iconBg: 'bg-red-900/30 border-red-500/30',
+            confirmBtn: 'bg-red-600/30 border-red-500/50 hover:bg-red-600/50 text-red-200',
+        },
+        warning: {
+            icon: '⚡',
+            iconBg: 'bg-yellow-900/30 border-yellow-500/30',
+            confirmBtn: 'bg-yellow-600/30 border-yellow-500/50 hover:bg-yellow-600/50 text-yellow-200',
+        },
+        info: {
+            icon: 'ℹ️',
+            iconBg: 'bg-blue-900/30 border-blue-500/30',
+            confirmBtn: 'bg-blue-600/30 border-blue-500/50 hover:bg-blue-600/50 text-blue-200',
+        },
+    };
+
+    const styles = variantStyles[variant];
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <div
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                onClick={onClose}
+            />
+
+            {/* Modal */}
+            <div className="relative bg-gray-900/95 border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-200">
+                {/* Icon */}
+                <div className="flex justify-center mb-4">
+                    <div className={`w-16 h-16 rounded-full ${styles.iconBg} border flex items-center justify-center`}>
+                        <span className="text-3xl">{styles.icon}</span>
+                    </div>
+                </div>
+
+                {/* Title */}
+                <h3 className="text-xl font-light text-white/90 text-center mb-2">
+                    {title}
+                </h3>
+
+                {/* Message */}
+                <p className="text-sm text-white/60 text-center mb-6">
+                    {message}
+                </p>
+
+                {/* Actions */}
+                <div className="flex gap-3">
+                    <button
+                        onClick={onClose}
+                        className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition-all"
+                    >
+                        {cancelText}
+                    </button>
+                    <button
+                        onClick={() => {
+                            onConfirm();
+                            onClose();
+                        }}
+                        className={`flex-1 px-4 py-3 border rounded-lg text-sm font-medium transition-all ${styles.confirmBtn}`}
+                    >
+                        {confirmText}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function AdminPage() {
     const router = useRouter();
     const [usernames, setUsernames] = useState('');
     const [isRegistering, setIsRegistering] = useState(false);
     const [isTransitioning, setIsTransitioning] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [showResetModal, setShowResetModal] = useState(false);
 
     // Poll admin data every 3 seconds
     const { data: adminData, mutate } = useSWR('/api/admin/state', fetcher, {
@@ -86,9 +190,7 @@ export default function AdminPage() {
         }
     };
 
-    const handleReset = async () => {
-        if (!confirm('Are you sure you want to reset the entire game?')) return;
-
+    const handleReset = useCallback(async () => {
         setIsTransitioning(true);
         setMessage(null);
 
@@ -112,7 +214,7 @@ export default function AdminPage() {
         } finally {
             setIsTransitioning(false);
         }
-    };
+    }, [mutate]);
 
     // Generate grid images array
     const gridImages = Array.from({ length: 9 }, (_, i) => `/grid-images/${i + 1}.jpg`);
@@ -222,11 +324,11 @@ export default function AdminPage() {
                                 </div>
 
                                 <button
-                                    onClick={handleReset}
+                                    onClick={() => setShowResetModal(true)}
                                     disabled={isTransitioning}
                                     className="w-full bg-red-600/20 border border-red-500/30 hover:bg-red-600/30 disabled:bg-white/5 disabled:border-white/10 disabled:cursor-not-allowed px-4 py-3 rounded-lg text-xs font-medium text-red-200 hover:text-red-100 transition-all"
                                 >
-                                    Reset Game
+                                    {isTransitioning ? 'Resetting...' : 'Reset Game'}
                                 </button>
                             </div>
                         )}
@@ -323,6 +425,18 @@ export default function AdminPage() {
                     </div>
                 )}
             </div>
+
+            {/* Reset Confirmation Modal */}
+            <ConfirmModal
+                isOpen={showResetModal}
+                onClose={() => setShowResetModal(false)}
+                onConfirm={handleReset}
+                title="Reset Game"
+                message="This will clear all registered players, bots, matches, and game state. This action cannot be undone."
+                confirmText="Reset Everything"
+                cancelText="Cancel"
+                variant="danger"
+            />
         </main>
     );
 }
