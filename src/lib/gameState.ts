@@ -485,16 +485,15 @@ class GameManager {
         // Auto-lock vote when time expires (backend is source of truth)
         console.log(`[getActiveMatches] Match ${matchId} expired without lock, auto-locking`);
         this.lockMatchVote(matchId);
-        // Don't immediately delete - allow client time to submit final vote
-        // Set a grace period for vote submission
-        matches.push(match);
-        activeMatchCount++;
+        // Mark as expired but don't count in activeMatchCount
+        hasExpiredMatches = true;
+        // Don't add to matches array - let frontend know round is over
       } else if (match.endTime <= now && match.voteLocked) {
-        // Already locked, but keep for a short grace period
-        console.log(`[getActiveMatches] Match ${matchId} already locked, keeping for grace period`);
-        matches.push(match);
-        activeMatchCount++;
-        hasExpiredMatches = true; // Mark for cleanup after grace period
+        // Already locked, don't show to frontend anymore
+        console.log(`[getActiveMatches] Match ${matchId} already locked, removing from active display`);
+        hasExpiredMatches = true; // Mark for cleanup
+        session.activeMatches.delete(slotNum); // Remove from session immediately
+        // Don't add to matches array or increment activeMatchCount
       } else {
         // Match still active
         console.log(`[getActiveMatches] Match ${matchId} still active`);
