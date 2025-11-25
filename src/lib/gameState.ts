@@ -142,7 +142,16 @@ class GameManager {
    */
   public getActiveMatches(fid: number): Match[] {
     const player = this.state.players.get(fid);
-    if (!player || this.state.state !== "LIVE") return [];
+    if (!player) {
+      console.log(`[getActiveMatches] Player ${fid} not found in state`);
+      return [];
+    }
+    if (this.state.state !== "LIVE") {
+      console.log(`[getActiveMatches] Game not in LIVE state. Current state: ${this.state.state}`);
+      return [];
+    }
+
+    console.log(`[getActiveMatches] Processing player ${fid}. Game state: ${this.state.state}. Total players: ${this.state.players.size}, Total bots: ${this.state.bots.size}`);
 
     const session = this.getOrCreateSession(fid);
     const now = Date.now();
@@ -196,9 +205,9 @@ class GameManager {
     // Check if it's time to start a new round
     const isRoundComplete = activeMatchCount === 0 && (hasExpiredMatches || session.activeMatches.size === 0);
     const isTimeForNextRound = session.nextRoundStartTime && now >= session.nextRoundStartTime;
-    
+
     console.log(`[getActiveMatches] Round check: activeMatchCount=${activeMatchCount}, currentRound=${session.currentRound}, maxRounds=${maxRounds}, hasExpiredMatches=${hasExpiredMatches}, activeMatches.size=${session.activeMatches.size}, isRoundComplete=${isRoundComplete}, isTimeForNextRound=${isTimeForNextRound}`);
-    
+
     if (!session.nextRoundStartTime && activeMatchCount === 0) {
       // First time getting matches - start round 1
       console.log(`[getActiveMatches] Starting first round for player ${fid}. Players: ${Array.from(this.state.players.keys()).join(', ')}, Bots: ${Array.from(this.state.bots.keys()).join(', ')}`);
@@ -243,7 +252,7 @@ class GameManager {
       session.currentRound++;
     }
 
-      return matches;
+    return matches;
   }
 
   /**
@@ -275,6 +284,7 @@ class GameManager {
     const opponent = this.selectOpponent(fid, session);
     if (!opponent) {
       console.error(`[createMatchForSlot] No opponent found for player ${fid}. Available players: ${Array.from(this.state.players.keys()).join(', ')} | Available bots: ${Array.from(this.state.bots.keys()).join(', ')}`);
+      console.log(`[createMatchForSlot] Total players: ${this.state.players.size}, Total bots: ${this.state.bots.size}`);
       return null;
     }
 
@@ -320,7 +330,13 @@ class GameManager {
       ),
     ];
 
-    if (allOpponents.length === 0) return null;
+    console.log(`[selectOpponent] Player ${playerFid}: Found ${allOpponents.length} opponents (players: ${allOpponents.filter(o => o.type === 'REAL').length}, bots: ${allOpponents.filter(o => o.type === 'BOT').length})`);
+    console.log(`[selectOpponent] Available FIDs: ${allOpponents.map(o => o.fid).join(', ')}`);
+
+    if (allOpponents.length === 0) {
+      console.log(`[selectOpponent] No opponents available for player ${playerFid}`);
+      return null;
+    }
 
     // Calculate repeat threshold based on total opponents
     // Allow repeats only when necessary
@@ -452,7 +468,7 @@ class GameManager {
       correct: isCorrect,
       speed: match.currentVote
         ? match.voteHistory[match.voteHistory.length - 1].timestamp -
-          match.startTime
+        match.startTime
         : match.endTime - match.startTime,
       voteChanges: match.voteHistory.length,
     };
@@ -521,6 +537,21 @@ class GameManager {
       this.state.state === "REGISTRATION" &&
       now > this.state.registrationEnds
     ) {
+      // Check if we have enough players to start a meaningful game
+      const totalPlayers = this.state.players.size;
+      const totalBots = this.state.bots.size;
+      const totalOpponents = totalPlayers - 1 + (totalBots - 1);
+
+      console.log(`[updateCycleState] Registration ending. Players: ${totalPlayers}, Bots: ${totalBots}, Available opponents: ${totalOpponents}`);
+
+      if (totalOpponents < 1) {
+        console.warn(`[updateCycleState] Not enough opponents (${totalOpponents}) to start game. Need at least 1 opponent. Keeping in REGISTRATION state.`);
+        // Extend registration by 30 seconds to allow more players
+        this.state.registrationEnds = now + 30000;
+        return;
+      }
+
+      console.log(`[updateCycleState] Starting LIVE state with ${totalOpponents} available opponents`);
       this.state.state = "LIVE";
     }
     if (this.state.state === "LIVE" && now > this.state.gameEnds) {
@@ -548,7 +579,7 @@ class GameManager {
       const avgSpeed =
         correctVotes.length > 0
           ? correctVotes.reduce((sum, v) => sum + v.speed, 0) /
-            correctVotes.length
+          correctVotes.length
           : 0;
 
       return {
