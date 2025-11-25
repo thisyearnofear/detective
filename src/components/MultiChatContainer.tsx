@@ -76,7 +76,7 @@ export default function MultiChatContainer({ fid }: Props) {
   } = useSWR(`/api/match/active?fid=${fid}`, fetcher, {
     refreshInterval: 5000, // Reduced from 1000ms - events keep us in sync
     refreshWhenHidden: false,
-    revalidateOnFocus: true,
+    revalidateOnFocus: false, // Prevent tab switching from triggering refetch
     // Keep previous data on error to prevent UI flicker
     keepPreviousData: true,
     // Don't throw on error, let us handle it gracefully
@@ -381,7 +381,13 @@ export default function MultiChatContainer({ fid }: Props) {
   // Calculate player count and active match IDs for shared channel optimization
   const matches = matchData?.matches || [];
   const playerCount = matchData?.playerPool?.totalPlayers || 0;
-  const activeMatchIds = matches.map((m: any) => m.id);
+  
+  // Memoize activeMatchIds to prevent unnecessary re-subscriptions
+  // Only create new array when actual match IDs change
+  const activeMatchIds = useMemo(
+    () => matches.map((m: any) => m.id),
+    [matches.map((m: any) => m.id).join(",")]
+  );
 
   // Only show error state if we've never loaded successfully OR we've had multiple consecutive errors
   // This prevents UI flicker from transient errors
