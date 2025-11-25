@@ -16,7 +16,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid FID provided." }, { status: 400 });
     }
 
-    const gameState = gameManager.getGameState();
+    // Use async version for proper Redis loading in production
+    const gameState = await gameManager.getGameStateAsync();
     if (gameState.state !== "REGISTRATION") {
       return NextResponse.json(
         { error: "Registration is currently closed." },

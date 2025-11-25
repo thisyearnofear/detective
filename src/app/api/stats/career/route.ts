@@ -95,16 +95,18 @@ export async function GET(request: NextRequest) {
       (entry) => entry.player.fid === playerFid
     );
 
+    // Use async version for proper Redis loading in production
+    const gameState = await gameManager.getGameStateAsync();
     const leaderboardHistory = playerLeaderboardEntry
       ? [
-          {
-            gameId: gameManager.getGameState().cycleId,
-            timestamp: Date.now(),
-            rank: leaderboard.indexOf(playerLeaderboardEntry) + 1,
-            totalPlayers: leaderboard.length,
-            accuracy: playerLeaderboardEntry.accuracy,
-          },
-        ]
+        {
+          gameId: gameState.cycleId,
+          timestamp: Date.now(),
+          rank: leaderboard.indexOf(playerLeaderboardEntry) + 1,
+          totalPlayers: leaderboard.length,
+          accuracy: playerLeaderboardEntry.accuracy,
+        },
+      ]
       : [];
 
     return NextResponse.json({

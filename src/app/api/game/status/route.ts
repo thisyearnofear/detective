@@ -10,7 +10,8 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const fidParam = searchParams.get("fid");
-    const fullState = gameManager.getGameState();
+    // Use async version for proper Redis loading in production
+    const fullState = await gameManager.getGameStateAsync();
 
     let isRegistered = false;
     if (fidParam) {
