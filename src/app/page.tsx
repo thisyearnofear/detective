@@ -16,8 +16,8 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 // This component handles the logic when the game is LIVE
 // Component that displays when the game is live
-const LiveGameView = ({ fid }: { fid: number }) => {
-  return <MultiChatContainer fid={fid} />;
+const LiveGameView = ({ fid, cycleId }: { fid: number; cycleId?: string }) => {
+  return <MultiChatContainer key={cycleId || 'live-game'} fid={fid} />;
 };
 
 // Main component for the application's home page
@@ -36,10 +36,15 @@ export default function Home() {
   }, []);
 
   // Use SWR for polling the game state every 3 seconds
+  // keepPreviousData prevents component unmounting during refetch
   const { data: gameState, error: gameStateError } = useSWR(
     sdkUser ? `/api/game/status?fid=${sdkUser.fid}` : "/api/game/status",
     fetcher,
-    { refreshInterval: 3000 },
+    { 
+      refreshInterval: 3000,
+      keepPreviousData: true,
+      revalidateOnFocus: false,
+    },
   );
 
   const handleLogout = () => {
@@ -104,7 +109,7 @@ export default function Home() {
             </div>
           );
         }
-        return <LiveGameView fid={sdkUser.fid} />;
+        return <LiveGameView fid={sdkUser.fid} cycleId={gameState.cycleId} />;
       case "FINISHED":
         return (
           <div>
