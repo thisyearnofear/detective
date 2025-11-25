@@ -34,11 +34,12 @@ export function useAblyChat({ fid, matchId, onMessage, onError }: AblyChatOption
 
     const clientRef = useRef<Ably.Realtime | null>(null);
     const channelRef = useRef<Ably.RealtimeChannel | null>(null);
+    const onMessageRef = useRef<typeof onMessage | undefined>(onMessage);
+    const onErrorRef = useRef<typeof onError | undefined>(onError);
 
     const globalAblyCache: { clients: Map<number, Ably.Realtime>, initialTokens: Map<number, any> } = (globalThis as any).__ABLY_CACHE__ || { clients: new Map(), initialTokens: new Map() };
     (globalThis as any).__ABLY_CACHE__ = globalAblyCache;
 
-    // Initialize Ably connection
     useEffect(() => {
         let mounted = true;
 
@@ -127,9 +128,12 @@ export function useAblyChat({ fid, matchId, onMessage, onError }: AblyChatOption
                 const channel = client.channels.get(`match:${matchId}`);
                 channelRef.current = channel;
 
-                await channel.attach();
+                if (channel.state !== "attached") {
+                    await channel.attach();
+                }
                 if (!mounted) return;
 
+                channel.unsubscribe();
                 channel.subscribe("message", (message: any) => {
                     if (mounted && message.data) {
                         const chatMessage: ChatMessage = message.data;
@@ -139,7 +143,7 @@ export function useAblyChat({ fid, matchId, onMessage, onError }: AblyChatOption
                             }
                             return [...prev, chatMessage];
                         });
-                        onMessage?.(chatMessage);
+                        onMessageRef.current?.(chatMessage);
                     }
                 });
 
@@ -149,7 +153,7 @@ export function useAblyChat({ fid, matchId, onMessage, onError }: AblyChatOption
                     const error = err instanceof Error ? err : new Error("Failed to initialize Ably");
                     setError(error);
                     setIsConnecting(false);
-                    onError?.(error);
+                    onErrorRef.current?.(error);
                     console.error("[Ably] Initialization error:", error);
                 }
             }
@@ -164,7 +168,7 @@ export function useAblyChat({ fid, matchId, onMessage, onError }: AblyChatOption
                 Promise.resolve(channelRef.current.detach()).catch(() => {});
             }
         };
-    }, [fid, matchId, onMessage, onError]);
+    }, [fid, matchId]);
 
     // Send message function
     const sendMessage = useCallback(
@@ -186,17 +190,25 @@ export function useAblyChat({ fid, matchId, onMessage, onError }: AblyChatOption
             } catch (err) {
                 const error = err instanceof Error ? err : new Error("Failed to send message");
                 setError(error);
-                onError?.(error);
+                onErrorRef.current?.(error);
                 throw error;
             }
         },
-        [isConnected, onError]
+        [isConnected]
     );
 
     // Load initial messages (from game state)
     const loadInitialMessages = useCallback((initialMessages: ChatMessage[]) => {
         setMessages(initialMessages);
     }, []);
+
+    useEffect(() => {
+        onMessageRef.current = onMessage;
+    }, [onMessage]);
+
+    useEffect(() => {
+        onErrorRef.current = onError;
+    }, [onError]);
 
     return {
         messages,
