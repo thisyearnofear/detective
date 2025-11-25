@@ -70,7 +70,8 @@ export default function ProgressRingTimer({
 
   return (
     <div className="flex flex-col items-center justify-center">
-      <svg width={size} height={size} className="relative">
+      <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+        <svg width={size} height={size} className="absolute">
         {/* Background circle */}
         <circle
           cx={size / 2}
@@ -98,7 +99,17 @@ export default function ProgressRingTimer({
             transform: "rotate(-90deg)",
           }}
         />
-      </svg>
+
+        {/* Logo overlay */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <img 
+            src="/detective.png" 
+            alt="Detective"
+            className="w-6 h-6 opacity-60"
+          />
+        </div>
+        </svg>
+      </div>
 
       {/* Time display */}
       <div
