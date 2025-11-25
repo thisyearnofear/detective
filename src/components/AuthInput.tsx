@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import SpinningDetective from './SpinningDetective';
 
 type Props = {
     onAuthSuccess: (userProfile: {
@@ -44,32 +45,28 @@ export default function AuthInput({ onAuthSuccess }: Props) {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4">
             <div className="text-center">
-                <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2 drop-shadow-lg">Welcome to Detective</h2>
-                <p className="text-sm sm:text-base text-gray-200 drop-shadow-md">
+                <p className="text-xs text-gray-200">
                     Enter your Farcaster username to play
                 </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                    <label htmlFor="username" className="block text-sm font-medium text-gray-200 mb-2 drop-shadow-sm">
-                        Farcaster Username
-                    </label>
+            <form onSubmit={handleSubmit} className="space-y-3 flex flex-col items-center">
+                <div className="w-full flex justify-center">
                     <input
                         id="username"
                         type="text"
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
                         placeholder="e.g., dwr, v, jessepollak"
-                        className="w-full bg-slate-700/70 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all border border-slate-600/70"
+                        className="input-field py-2 text-center"
                         disabled={isLoading}
                     />
                 </div>
 
                 {error && (
-                    <div className="bg-red-900/40 border border-red-500/60 rounded-lg p-3 text-red-200 text-sm drop-shadow-sm">
+                    <div className="bg-red-900/40 border border-red-500/60 rounded-lg p-2 text-red-200 text-xs">
                         {error}
                     </div>
                 )}
@@ -77,14 +74,21 @@ export default function AuthInput({ onAuthSuccess }: Props) {
                 <button
                     type="submit"
                     disabled={isLoading || !username.trim()}
-                    className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-slate-600 disabled:to-slate-700 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-all shadow-lg hover:shadow-xl drop-shadow-lg"
+                    className="btn-primary w-full font-bold py-2 text-sm"
                 >
-                    {isLoading ? 'Connecting...' : 'Connect'}
+                    {isLoading ? (
+                        <div className="flex items-center justify-center gap-2">
+                            <SpinningDetective size="md" />
+                            <span>Connecting...</span>
+                        </div>
+                    ) : (
+                        'Connect'
+                    )}
                 </button>
             </form>
 
-            <div className="pt-4 border-t border-slate-700/50">
-                <p className="text-xs text-gray-300 text-center drop-shadow-sm">
+            <div className="pt-3 border-t border-slate-700/50">
+                <p className="text-xs text-gray-300 text-center">
                     Using Warpcast?{' '}
                     <a href="warpcast://detective" className="text-blue-300 hover:text-blue-200 font-medium">
                         Open in app
