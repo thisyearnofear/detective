@@ -577,6 +577,13 @@ class GameManager {
       const totalPlayers = this.state.players.size;
       let completedPlayers = 0;
 
+      // SAFEGUARD: Don't end game if there are no players (edge case)
+      if (totalPlayers === 0) {
+        console.warn(`[updateCycleState] No players in LIVE game. Extending game time.`);
+        this.state.gameEnds = now + (60 * 1000);
+        return;
+      }
+
       for (const [fid, session] of this.state.playerSessions) {
         const player = this.state.players.get(fid);
         if (player) {
@@ -592,13 +599,17 @@ class GameManager {
       // Only finish game if all players are done (or if game duration is significantly exceeded)
       const gameDurationExceeded = now > this.state.gameEnds + (2 * 60 * 1000); // 2 extra minutes
 
-      if (completedPlayers === totalPlayers || gameDurationExceeded) {
-        console.log(`[updateCycleState] Game ending. Completed players: ${completedPlayers}/${totalPlayers}, Duration exceeded: ${gameDurationExceeded}`);
+      // SAFEGUARD: Require at least some player sessions before considering game complete
+      const hasPlayerSessions = this.state.playerSessions.size > 0;
+      const allPlayersComplete = hasPlayerSessions && completedPlayers === totalPlayers;
+
+      if (allPlayersComplete || gameDurationExceeded) {
+        console.log(`[updateCycleState] Game ending. Completed players: ${completedPlayers}/${totalPlayers}, Duration exceeded: ${gameDurationExceeded}, Has sessions: ${hasPlayerSessions}`);
         this.state.state = "FINISHED";
         // Calculate and store the final leaderboard once the game is finished.
         this.state.leaderboard = this.getLeaderboard();
       } else {
-        console.log(`[updateCycleState] Waiting for players to finish. Completed: ${completedPlayers}/${totalPlayers}. Extending game time.`);
+        console.log(`[updateCycleState] Waiting for players to finish. Completed: ${completedPlayers}/${totalPlayers}, Sessions: ${this.state.playerSessions.size}. Extending game time.`);
         // Extend game time by 1 minute to allow stragglers to finish
         this.state.gameEnds = now + (60 * 1000);
       }
@@ -687,13 +698,18 @@ class GameManager {
     newState: "REGISTRATION" | "LIVE" | "FINISHED",
   ): void {
     const now = Date.now();
+    console.log(`[forceStateTransition] Transitioning from ${this.state.state} to ${newState}`);
+    console.log(`[forceStateTransition] Current players: ${this.state.players.size}, bots: ${this.state.bots.size}`);
+
     this.state.state = newState;
     if (newState === "REGISTRATION") {
       this.state.registrationEnds = now + REGISTRATION_DURATION;
       this.state.gameEnds = now + GAME_DURATION;
+      console.log(`[forceStateTransition] Registration ends: ${new Date(this.state.registrationEnds).toISOString()}`);
     } else if (newState === "LIVE") {
       this.state.registrationEnds = now - 1;
       this.state.gameEnds = now + GAME_DURATION;
+      console.log(`[forceStateTransition] Game ends: ${new Date(this.state.gameEnds).toISOString()} (${GAME_DURATION}ms from now)`);
     } else if (newState === "FINISHED") {
       this.state.leaderboard = this.getLeaderboard();
     }

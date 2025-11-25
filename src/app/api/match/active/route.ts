@@ -22,9 +22,14 @@ export async function GET(request: NextRequest) {
     }
 
     const gameState = gameManager.getGameState();
+
+    // Debug logging
+    console.log(`[/api/match/active] FID: ${playerFid}, State: ${gameState.state}, Players: ${gameState.players.size}, GameEnds: ${new Date(gameState.gameEnds).toISOString()}`);
+
     if (gameState.state !== "LIVE") {
+      console.log(`[/api/match/active] Returning 403 - game state is ${gameState.state}, not LIVE`);
       return NextResponse.json(
-        { error: "The game is not currently live." },
+        { error: "The game is not currently live.", currentState: gameState.state },
         { status: 403 },
       );
     }
