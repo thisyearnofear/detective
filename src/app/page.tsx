@@ -205,59 +205,65 @@ export default function Home() {
               </div>
             </div>
           ) : (
-            // Authenticated content remains the same...
-            <div className="space-y-8">
-              {/* User Info Card */}
-              <div className="card">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-gray-200">Logged in as</p>
-                    <p className="text-lg font-bold text-white">
-                      @{sdkUser.username}
-                      {authMode === "web" && (
-                        <span className="ml-2 text-xs bg-blue-900/70 text-blue-200 px-2 py-1 rounded border border-blue-500/50">
-                          Web Mode
-                        </span>
-                      )}
+            // Authenticated content
+            gameState?.state === "FINISHED" ? (
+              // Game finished - show full screen leaderboard
+              renderGameState()
+            ) : (
+              // Game in progress - show layout with headers
+              <div className="space-y-8">
+                {/* User Info Card */}
+                <div className="card">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-gray-200">Logged in as</p>
+                      <p className="text-lg font-bold text-white">
+                        @{sdkUser.username}
+                        {authMode === "web" && (
+                          <span className="ml-2 text-xs bg-blue-900/70 text-blue-200 px-2 py-1 rounded border border-blue-500/50">
+                            Web Mode
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleLogout}
+                      className="btn-secondary text-xs py-1 px-3"
+                    >
+                      Logout
+                    </button>
+                  </div>
+                </div>
+
+                {/* Game Status */}
+                {gameState && (
+                  <div className="card text-center">
+                    <p className="text-xs text-gray-200 mb-1">Game Status</p>
+                    <p className="hero-title text-xl font-black text-stroke uppercase tracking-widest hover:text-stroke-white transition-all duration-300">
+                      {gameState.state}
+                    </p>
+                    <p className="text-xs text-gray-200 mt-1">
+                      {gameState.playerCount} players registered
                     </p>
                   </div>
-                  <button
-                    onClick={handleLogout}
-                    className="btn-secondary text-xs py-1 px-3"
-                  >
-                    Logout
-                  </button>
-                </div>
+                )}
+
+                {/* Game Content */}
+                {renderGameState()}
+
+                {/* Back to Home */}
+                {sdkUser && gameState && (
+                  <div className="text-center">
+                    <button
+                      onClick={handleLogout}
+                      className="text-xs text-gray-300 hover:text-gray-200 transition-colors"
+                    >
+                      ← Return to home
+                    </button>
+                  </div>
+                )}
               </div>
-
-              {/* Game Status */}
-              {gameState && (
-                <div className="card text-center">
-                  <p className="text-xs text-gray-200 mb-1">Game Status</p>
-                  <p className="hero-title text-xl font-black text-stroke uppercase tracking-widest hover:text-stroke-white transition-all duration-300">
-                    {gameState.state}
-                  </p>
-                  <p className="text-xs text-gray-200 mt-1">
-                    {gameState.playerCount} players registered
-                  </p>
-                </div>
-              )}
-
-              {/* Game Content */}
-              {renderGameState()}
-
-              {/* Back to Home */}
-              {sdkUser && gameState && (
-                <div className="text-center">
-                  <button
-                    onClick={handleLogout}
-                    className="text-xs text-gray-300 hover:text-gray-200 transition-colors"
-                  >
-                    ← Return to home
-                  </button>
-                </div>
-              )}
-            </div>
+            )
           )}
 
           {/* Footer */}
