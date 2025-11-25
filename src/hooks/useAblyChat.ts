@@ -127,7 +127,10 @@ export function useAblyChat({ fid, matchId, onMessage, onError }: AblyChatOption
                 const channel = client.channels.get(`match:${matchId}`);
                 channelRef.current = channel;
 
-                await channel.subscribe("message", (message: any) => {
+                await channel.attach();
+                if (!mounted) return;
+
+                channel.subscribe("message", (message: any) => {
                     if (mounted && message.data) {
                         const chatMessage: ChatMessage = message.data;
                         setMessages((prev) => {
@@ -158,7 +161,7 @@ export function useAblyChat({ fid, matchId, onMessage, onError }: AblyChatOption
             mounted = false;
             if (channelRef.current) {
                 channelRef.current.unsubscribe();
-                channelRef.current.detach();
+                Promise.resolve(channelRef.current.detach()).catch(() => {});
             }
         };
     }, [fid, matchId, onMessage, onError]);
