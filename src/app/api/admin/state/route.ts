@@ -1,6 +1,6 @@
 // src/app/api/admin/state/route.ts
 import { NextResponse } from "next/server";
-import { gameManager } from "@/lib/gameState";
+import { unifiedGameManager as gameManager } from "@/lib/gameManagerUnified";
 
 /**
  * Admin API to manually control game state transitions.
@@ -15,12 +15,12 @@ export async function POST(request: Request) {
 
         if (action === "transition" && state) {
             // Load state from Redis first
-            await gameManager.getGameStateAsync();
-            gameManager.forceStateTransition(state);
+            await gameManager.getGameState();
+            await gameManager.forceStateTransition(state);
             return NextResponse.json({
                 success: true,
                 message: `Game state transitioned to ${state}`,
-                gameState: await gameManager.getGameStateAsync(),
+                gameState: await gameManager.getGameState(),
             });
         }
 
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
             return NextResponse.json({
                 success: true,
                 message: "Game reset successfully",
-                gameState: await gameManager.getGameStateAsync(),
+                gameState: await gameManager.getGameState(),
             });
         }
 
@@ -50,10 +50,10 @@ export async function POST(request: Request) {
 export async function GET() {
     try {
         // Use async version for proper Redis loading in production
-        const gameState = await gameManager.getGameStateAsync();
-        const players = gameManager.getAllPlayers();
-        const bots = gameManager.getAllBots();
-        const matches = gameManager.getAllMatches();
+        const gameState = await gameManager.getGameState();
+        const players = await gameManager.getAllPlayers();
+        const bots = await gameManager.getAllBots();
+        const matches = await gameManager.getAllMatches();
 
         return NextResponse.json({
             gameState: {

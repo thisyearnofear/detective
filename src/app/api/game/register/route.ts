@@ -1,6 +1,6 @@
 // src/app/api/game/register/route.ts
 import { NextResponse } from "next/server";
-import { gameManager } from "@/lib/gameState";
+import { unifiedGameManager as gameManager } from "@/lib/gameManagerUnified";
 import { getFarcasterUserData } from "@/lib/neynar";
 
 /**
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     }
 
     // Use async version for proper Redis loading in production
-    const gameState = await gameManager.getGameStateAsync();
+    const gameState = await gameManager.getGameState();
     if (gameState.state !== "REGISTRATION") {
       return NextResponse.json(
         { error: "Registration is currently closed." },
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     }
 
     // Register the player and create the corresponding bot in the game state
-    const player = gameManager.registerPlayer(userProfile, recentCasts, style);
+    const player = await gameManager.registerPlayer(userProfile, recentCasts, style);
 
     if (!player) {
       return NextResponse.json(
