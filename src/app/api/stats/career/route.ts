@@ -1,6 +1,6 @@
 // src/app/api/stats/career/route.ts
 import { NextResponse } from "next/server";
-import { gameManager } from "@/lib/gameState";
+import { unifiedGameManager as gameManager } from "@/lib/gameManagerUnified";
 import { NextRequest } from "next/server";
 
 /**
@@ -21,7 +21,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Invalid FID." }, { status: 400 });
     }
 
-    const player = gameManager.getAllPlayers().find((p) => p.fid === playerFid);
+    const players = await gameManager.getAllPlayers();
+    const player = players.find((p) => p.fid === playerFid);
     if (!player) {
       return NextResponse.json(
         {
@@ -90,13 +91,13 @@ export async function GET(request: NextRequest) {
 
     // Get leaderboard history from current game state
     // Note: In production, this would be queried from database with historical records
-    const leaderboard = gameManager.getLeaderboard();
+    const leaderboard = await gameManager.getLeaderboard();
     const playerLeaderboardEntry = leaderboard.find(
       (entry) => entry.player.fid === playerFid
     );
 
     // Use async version for proper Redis loading in production
-    const gameState = await gameManager.getGameStateAsync();
+    const gameState = await gameManager.getGameState();
     const leaderboardHistory = playerLeaderboardEntry
       ? [
         {

@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get all active matches for the player
-    const matches = gameManager.getActiveMatches(playerFid);
+    const matches = await gameManager.getActiveMatches(playerFid);
 
     // Sanitize matches before sending to client
     const sanitizedMatches = matches.map((match) => ({

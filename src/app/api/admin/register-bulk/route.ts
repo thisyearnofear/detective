@@ -1,6 +1,6 @@
 // src/app/api/admin/register-bulk/route.ts
 import { NextResponse } from "next/server";
-import { gameManager } from "@/lib/gameState";
+import { unifiedGameManager as gameManager } from "@/lib/gameManagerUnified";
 import { getFarcasterUserData } from "@/lib/neynar";
 
 /**
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
                         { text: `Hello from ${username}!` },
                         { text: `This is a test cast from ${username}.` },
                     ];
-                    gameManager.registerPlayer(
+                    await gameManager.registerPlayer(
                         {
                             fid: mockFid,
                             username: username,
@@ -86,7 +86,7 @@ export async function POST(request: Request) {
                 }
 
                 // Register player
-                const player = gameManager.registerPlayer(userProfile, recentCasts, style);
+                const player = await gameManager.registerPlayer(userProfile, recentCasts, style);
 
                 if (player) {
                     results.push({ username, success: true, fid: player.fid });
