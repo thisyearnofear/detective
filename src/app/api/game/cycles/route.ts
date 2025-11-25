@@ -9,7 +9,8 @@ import { gameManager } from "@/lib/gameState";
  */
 export async function GET() {
   try {
-    const gameState = gameManager.getGameState();
+    // Use async version for proper Redis loading in production
+    const gameState = await gameManager.getGameStateAsync();
 
     // For the MVP, we only have one cycle. This can be expanded later.
     const availableCycles = [

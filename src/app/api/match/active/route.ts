@@ -21,7 +21,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Invalid FID." }, { status: 400 });
     }
 
-    const gameState = gameManager.getGameState();
+    // Use async version for proper Redis loading in production
+    const gameState = await gameManager.getGameStateAsync();
 
     // Debug logging
     console.log(`[/api/match/active] FID: ${playerFid}, State: ${gameState.state}, Players: ${gameState.players.size}, GameEnds: ${new Date(gameState.gameEnds).toISOString()}`);

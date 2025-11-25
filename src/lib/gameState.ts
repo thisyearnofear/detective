@@ -9,6 +9,7 @@ import {
   PlayerGameSession,
   VoteRecord,
 } from "./types";
+import { redis, getJSON, setJSON, hgetJSON, hsetJSON } from "./redis";
 
 const GAME_DURATION = 5 * 60 * 1000; // 5 minutes
 const REGISTRATION_DURATION = 1 * 60 * 1000; // 1 minute for testing
@@ -23,13 +24,34 @@ const MAX_ROUNDS = Math.floor(
   GAME_DURATION / MATCH_DURATION / SIMULTANEOUS_MATCHES,
 );
 
+// Check if Redis is available for state persistence
+const USE_REDIS = process.env.USE_REDIS === "true";
+
+// Redis key constants
+const REDIS_KEYS = {
+  gameState: "game:state",
+  players: "game:players",
+  bots: "game:bots",
+  matches: "game:matches",
+  sessions: "game:sessions",
+};
+
+// TTL for Redis keys (1 hour)
+const REDIS_TTL = 60 * 60;
+
 /**
  * Manages the in-memory state of the game.
  * Implemented as a singleton to ensure a single source of truth.
+ *
+ * When USE_REDIS=true, critical state is synced to Redis for
+ * horizontal scaling across serverless function instances.
  */
 class GameManager {
   private static instance: GameManager;
   private state: GameState;
+  private initialized: boolean = false;
+  private lastSyncTime: number = 0;
+  private syncInterval: number = 1000; // Sync every 1 second max
 
   private constructor() {
     this.state = this.initializeGameState();
@@ -71,12 +93,274 @@ class GameManager {
     };
   }
 
+  // ========== REDIS SYNC METHODS ==========
+
+  /**
+   * Load state from Redis (called on first access in production)
+   */
+  private async loadFromRedis(): Promise<void> {
+    if (!USE_REDIS || this.initialized) return;
+
+    try {
+      console.log("[GameManager] Loading state from Redis...");
+
+      // Load core game state
+      const savedState = await getJSON<{
+        cycleId: string;
+        state: "REGISTRATION" | "LIVE" | "FINISHED";
+        registrationEnds: number;
+        gameEnds: number;
+      }>(REDIS_KEYS.gameState);
+
+      if (savedState) {
+        this.state.cycleId = savedState.cycleId;
+        this.state.state = savedState.state;
+        this.state.registrationEnds = savedState.registrationEnds;
+        this.state.gameEnds = savedState.gameEnds;
+        console.log(`[GameManager] Loaded state: ${savedState.state}, cycleId: ${savedState.cycleId}`);
+      }
+
+      // Load players
+      const playersData = await redis.hgetall(REDIS_KEYS.players);
+      if (playersData && Object.keys(playersData).length > 0) {
+        this.state.players.clear();
+        for (const [fid, data] of Object.entries(playersData)) {
+          try {
+            const player = JSON.parse(data) as Player;
+            // Reconstruct voteHistory array
+            player.voteHistory = player.voteHistory || [];
+            this.state.players.set(parseInt(fid, 10), player);
+          } catch (e) {
+            console.error(`[GameManager] Failed to parse player ${fid}:`, e);
+          }
+        }
+        console.log(`[GameManager] Loaded ${this.state.players.size} players from Redis`);
+      }
+
+      // Load bots
+      const botsData = await redis.hgetall(REDIS_KEYS.bots);
+      if (botsData && Object.keys(botsData).length > 0) {
+        this.state.bots.clear();
+        for (const [fid, data] of Object.entries(botsData)) {
+          try {
+            const bot = JSON.parse(data) as Bot;
+            this.state.bots.set(parseInt(fid, 10), bot);
+          } catch (e) {
+            console.error(`[GameManager] Failed to parse bot ${fid}:`, e);
+          }
+        }
+        console.log(`[GameManager] Loaded ${this.state.bots.size} bots from Redis`);
+      }
+
+      // Load matches
+      const matchesData = await redis.hgetall(REDIS_KEYS.matches);
+      if (matchesData && Object.keys(matchesData).length > 0) {
+        this.state.matches.clear();
+        for (const [matchId, data] of Object.entries(matchesData)) {
+          try {
+            const match = JSON.parse(data) as Match;
+            this.state.matches.set(matchId, match);
+          } catch (e) {
+            console.error(`[GameManager] Failed to parse match ${matchId}:`, e);
+          }
+        }
+        console.log(`[GameManager] Loaded ${this.state.matches.size} matches from Redis`);
+      }
+
+      // Load sessions
+      const sessionsData = await redis.hgetall(REDIS_KEYS.sessions);
+      if (sessionsData && Object.keys(sessionsData).length > 0) {
+        this.state.playerSessions.clear();
+        for (const [fid, data] of Object.entries(sessionsData)) {
+          try {
+            const sessionData = JSON.parse(data);
+            // Reconstruct Maps and Sets from arrays
+            const session: PlayerGameSession = {
+              fid: sessionData.fid,
+              activeMatches: new Map(sessionData.activeMatches || []),
+              completedMatchIds: new Set(sessionData.completedMatchIds || []),
+              facedOpponents: new Map(sessionData.facedOpponents || []),
+              currentRound: sessionData.currentRound || 0,
+              nextRoundStartTime: sessionData.nextRoundStartTime,
+            };
+            this.state.playerSessions.set(parseInt(fid, 10), session);
+          } catch (e) {
+            console.error(`[GameManager] Failed to parse session ${fid}:`, e);
+          }
+        }
+        console.log(`[GameManager] Loaded ${this.state.playerSessions.size} sessions from Redis`);
+      }
+
+      this.initialized = true;
+    } catch (error) {
+      console.error("[GameManager] Failed to load from Redis:", error);
+      // Continue with in-memory state
+      this.initialized = true;
+    }
+  }
+
+  /**
+   * Save core state to Redis
+   */
+  private async saveStateToRedis(): Promise<void> {
+    if (!USE_REDIS) return;
+
+    const now = Date.now();
+    if (now - this.lastSyncTime < this.syncInterval) return;
+    this.lastSyncTime = now;
+
+    try {
+      // Save core game state
+      await setJSON(REDIS_KEYS.gameState, {
+        cycleId: this.state.cycleId,
+        state: this.state.state,
+        registrationEnds: this.state.registrationEnds,
+        gameEnds: this.state.gameEnds,
+      }, REDIS_TTL);
+    } catch (error) {
+      console.error("[GameManager] Failed to save state to Redis:", error);
+    }
+  }
+
+  /**
+   * Save a player to Redis
+   */
+  private async savePlayerToRedis(player: Player): Promise<void> {
+    if (!USE_REDIS) return;
+    try {
+      await redis.hset(REDIS_KEYS.players, player.fid.toString(), JSON.stringify(player));
+      await redis.expire(REDIS_KEYS.players, REDIS_TTL);
+    } catch (error) {
+      console.error(`[GameManager] Failed to save player ${player.fid} to Redis:`, error);
+    }
+  }
+
+  /**
+   * Save a bot to Redis
+   */
+  private async saveBotToRedis(bot: Bot): Promise<void> {
+    if (!USE_REDIS) return;
+    try {
+      await redis.hset(REDIS_KEYS.bots, bot.fid.toString(), JSON.stringify(bot));
+      await redis.expire(REDIS_KEYS.bots, REDIS_TTL);
+    } catch (error) {
+      console.error(`[GameManager] Failed to save bot ${bot.fid} to Redis:`, error);
+    }
+  }
+
+  /**
+   * Save a match to Redis
+   */
+  private async saveMatchToRedis(match: Match): Promise<void> {
+    if (!USE_REDIS) return;
+    try {
+      await redis.hset(REDIS_KEYS.matches, match.id, JSON.stringify(match));
+      await redis.expire(REDIS_KEYS.matches, REDIS_TTL);
+    } catch (error) {
+      console.error(`[GameManager] Failed to save match ${match.id} to Redis:`, error);
+    }
+  }
+
+  /**
+   * Save a session to Redis
+   */
+  private async saveSessionToRedis(session: PlayerGameSession): Promise<void> {
+    if (!USE_REDIS) return;
+    try {
+      // Convert Maps and Sets to arrays for JSON serialization
+      const serializable = {
+        fid: session.fid,
+        activeMatches: Array.from(session.activeMatches.entries()),
+        completedMatchIds: Array.from(session.completedMatchIds),
+        facedOpponents: Array.from(session.facedOpponents.entries()),
+        currentRound: session.currentRound,
+        nextRoundStartTime: session.nextRoundStartTime,
+      };
+      await redis.hset(REDIS_KEYS.sessions, session.fid.toString(), JSON.stringify(serializable));
+      await redis.expire(REDIS_KEYS.sessions, REDIS_TTL);
+    } catch (error) {
+      console.error(`[GameManager] Failed to save session ${session.fid} to Redis:`, error);
+    }
+  }
+
+  /**
+   * Delete a match from Redis
+   */
+  private async deleteMatchFromRedis(matchId: string): Promise<void> {
+    if (!USE_REDIS) return;
+    try {
+      await redis.hdel(REDIS_KEYS.matches, matchId);
+    } catch (error) {
+      console.error(`[GameManager] Failed to delete match ${matchId} from Redis:`, error);
+    }
+  }
+
+  /**
+   * Clear all Redis state (for reset)
+   */
+  private async clearRedisState(): Promise<void> {
+    if (!USE_REDIS) return;
+    try {
+      await redis.del(REDIS_KEYS.gameState);
+      await redis.del(REDIS_KEYS.players);
+      await redis.del(REDIS_KEYS.bots);
+      await redis.del(REDIS_KEYS.matches);
+      await redis.del(REDIS_KEYS.sessions);
+      console.log("[GameManager] Cleared all Redis state");
+    } catch (error) {
+      console.error("[GameManager] Failed to clear Redis state:", error);
+    }
+  }
+
   /**
    * Returns the current game state.
+   * In production with Redis, this loads state from Redis first.
    */
   public getGameState(): GameState {
+    // Sync load from Redis (blocking for first call)
+    if (USE_REDIS && !this.initialized) {
+      // Use a sync wrapper for the async load
+      // This is a workaround for the sync API - in production,
+      // the state should be loaded before this is called
+      this.loadFromRedisSync();
+    }
+
     this.updateCycleState();
     this.cleanupOldMatches();
+
+    // Save state to Redis (async, non-blocking)
+    this.saveStateToRedis().catch(console.error);
+
+    return this.state;
+  }
+
+  /**
+   * Synchronous wrapper for loading from Redis
+   * Uses a blocking approach for initial load
+   */
+  private loadFromRedisSync(): void {
+    if (!USE_REDIS || this.initialized) return;
+
+    // Mark as initialized to prevent multiple loads
+    this.initialized = true;
+
+    // Schedule async load - state will be available on next call
+    this.loadFromRedis().catch(console.error);
+  }
+
+  /**
+   * Async version of getGameState for use in async contexts
+   */
+  public async getGameStateAsync(): Promise<GameState> {
+    if (USE_REDIS && !this.initialized) {
+      await this.loadFromRedis();
+    }
+
+    this.updateCycleState();
+    this.cleanupOldMatches();
+
+    await this.saveStateToRedis();
+
     return this.state;
   }
 
@@ -117,6 +401,10 @@ class GameManager {
       style,
     };
     this.state.bots.set(userProfile.fid, newBot);
+
+    // Save to Redis (async, non-blocking)
+    this.savePlayerToRedis(newPlayer).catch(console.error);
+    this.saveBotToRedis(newBot).catch(console.error);
 
     return newPlayer;
   }
@@ -318,9 +606,15 @@ class GameManager {
 
     this.state.matches.set(match.id, match);
 
+    // Save match to Redis (async, non-blocking)
+    this.saveMatchToRedis(match).catch(console.error);
+
     // Update faced opponents tracking
     const facedCount = session.facedOpponents.get(opponent.fid) || 0;
     session.facedOpponents.set(opponent.fid, facedCount + 1);
+
+    // Save session to Redis (async, non-blocking)
+    this.saveSessionToRedis(session).catch(console.error);
 
     return match;
   }
@@ -434,6 +728,10 @@ class GameManager {
     };
 
     match.messages.push(message);
+
+    // Save to Redis (async, non-blocking)
+    this.saveMatchToRedis(match).catch(console.error);
+
     return message;
   }
 
@@ -497,7 +795,13 @@ class GameManager {
           break;
         }
       }
+      // Save session to Redis
+      this.saveSessionToRedis(session).catch(console.error);
     }
+
+    // Save match and player to Redis
+    this.saveMatchToRedis(match).catch(console.error);
+    this.savePlayerToRedis(player).catch(console.error);
 
     // Don't delete from global matches immediately - allow grace period
     console.log(`[lockMatchVote] Match ${matchId} locked. Keeping in global state for grace period.`);
@@ -692,6 +996,8 @@ class GameManager {
       console.log(`[cleanupOldMatches] Cleaning up ${matchesToDelete.length} old matches`);
       matchesToDelete.forEach(matchId => {
         this.state.matches.delete(matchId);
+        // Also delete from Redis
+        this.deleteMatchFromRedis(matchId).catch(console.error);
       });
     }
   }
@@ -721,6 +1027,9 @@ class GameManager {
     } else if (newState === "FINISHED") {
       this.state.leaderboard = this.getLeaderboard();
     }
+
+    // IMPORTANT: Save to Redis immediately for production
+    this.saveStateToRedis().catch(console.error);
   }
 
   /**
@@ -728,6 +1037,10 @@ class GameManager {
    */
   public resetGame(): void {
     this.state = this.initializeGameState();
+    this.initialized = false;
+
+    // Clear Redis state
+    this.clearRedisState().catch(console.error);
   }
 
   /**

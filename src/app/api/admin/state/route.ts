@@ -14,11 +14,13 @@ export async function POST(request: Request) {
         const { action, state } = body;
 
         if (action === "transition" && state) {
+            // Load state from Redis first
+            await gameManager.getGameStateAsync();
             gameManager.forceStateTransition(state);
             return NextResponse.json({
                 success: true,
                 message: `Game state transitioned to ${state}`,
-                gameState: gameManager.getGameState(),
+                gameState: await gameManager.getGameStateAsync(),
             });
         }
 
@@ -27,7 +29,7 @@ export async function POST(request: Request) {
             return NextResponse.json({
                 success: true,
                 message: "Game reset successfully",
-                gameState: gameManager.getGameState(),
+                gameState: await gameManager.getGameStateAsync(),
             });
         }
 
@@ -46,7 +48,8 @@ export async function POST(request: Request) {
 
 export async function GET() {
     try {
-        const gameState = gameManager.getGameState();
+        // Use async version for proper Redis loading in production
+        const gameState = await gameManager.getGameStateAsync();
         const players = gameManager.getAllPlayers();
         const bots = gameManager.getAllBots();
         const matches = gameManager.getAllMatches();

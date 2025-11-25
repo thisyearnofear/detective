@@ -8,7 +8,8 @@ import { gameManager } from "@/lib/gameState";
  */
 export async function GET() {
   try {
-    const gameState = gameManager.getGameState();
+    // Use async version for proper Redis loading in production
+    const gameState = await gameManager.getGameStateAsync();
 
     // If the game is finished, return the stored final leaderboard.
     // Otherwise, calculate and return a provisional one.
