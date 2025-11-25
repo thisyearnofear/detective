@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     const chatsByMatch: Record<string, any> = {};
 
     for (const matchId of matchIds) {
-      const match = gameManager.getMatch(matchId);
+      const match = await gameManager.getMatchAsync(matchId);
 
       if (match) {
         chatsByMatch[matchId] = {
