@@ -115,9 +115,9 @@ class AblyChannelService {
         transportParams: {
           remainConnectedAfterSuspend: true,
         },
-        transports: ["web_socket", "xhr_streaming", "xhr_polling"],
+        transports: ["web_socket", "xhr_polling"],
         log: { level: 2 }, // Enable debug logging
-      });
+      } as any);
 
       this.clients.set(fid, client);
       return client;

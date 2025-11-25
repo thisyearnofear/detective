@@ -55,7 +55,8 @@ export type GameEventPayload = {
     | "match_end"
     | "game_start"
     | "game_end"
-    | "vote_locked";
+    | "vote_locked"
+    | "chat_message";
     targetFids?: number[]; // If undefined, broadcast to all
     data: Record<string, any>;
 };
