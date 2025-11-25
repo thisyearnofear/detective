@@ -146,9 +146,12 @@ export default function ChatWindow({
   // Load initial messages for WebSocket mode
   useEffect(() => {
     if (USE_WEBSOCKET && match.messages && match.messages.length > 0) {
-      loadInitialMessages(match.messages);
+      // Only load if we don't have messages yet, to prevent overwriting live chat
+      if (messages.length === 0) {
+        loadInitialMessages(match.messages);
+      }
     }
-  }, [match.messages, loadInitialMessages]);
+  }, [match.messages, loadInitialMessages, messages.length]);
 
   useEffect(() => {
     if (!USE_WEBSOCKET) return;
@@ -300,21 +303,18 @@ export default function ChatWindow({
 
   return (
     <div
-      className={`bg-slate-800 rounded-lg ${
-        isMobileStacked ? "p-3" : isCompact ? "p-4" : "p-6"
-      } transition-all duration-300 relative ${
-        warningLevel !== "none" ? "ring-2" : ""
-      } ${
-        warningLevel === "warning" ? "ring-yellow-500 ring-opacity-50" : ""
-      } ${warningLevel === "critical" ? "ring-red-500 ring-opacity-75" : ""}`}
+      className={`bg-slate-800 rounded-lg ${isMobileStacked ? "p-3" : isCompact ? "p-4" : "p-6"
+        } transition-all duration-300 relative ${warningLevel !== "none" ? "ring-2" : ""
+        } ${warningLevel === "warning" ? "ring-yellow-500 ring-opacity-50" : ""
+        } ${warningLevel === "critical" ? "ring-red-500 ring-opacity-75" : ""}`}
       style={
         warningLevel !== "none"
           ? {
-              boxShadow:
-                warningLevel === "warning"
-                  ? "inset 0 0 20px rgba(234, 179, 8, 0.2), 0 0 15px rgba(234, 179, 8, 0.15)"
-                  : "inset 0 0 20px rgba(239, 68, 68, 0.25), 0 0 20px rgba(239, 68, 68, 0.2)",
-            }
+            boxShadow:
+              warningLevel === "warning"
+                ? "inset 0 0 20px rgba(234, 179, 8, 0.2), 0 0 15px rgba(234, 179, 8, 0.15)"
+                : "inset 0 0 20px rgba(239, 68, 68, 0.25), 0 0 20px rgba(239, 68, 68, 0.2)",
+          }
           : {}
       }
     >
@@ -351,11 +351,10 @@ export default function ChatWindow({
       {/* Warning banner */}
       {warningLevel !== "none" && !isTimeUp && (
         <div
-          className={`absolute top-0 left-0 right-0 p-3 text-center text-sm rounded-t-lg font-semibold transition-all ${
-            warningLevel === "warning"
+          className={`absolute top-0 left-0 right-0 p-3 text-center text-sm rounded-t-lg font-semibold transition-all ${warningLevel === "warning"
               ? "bg-gradient-to-r from-yellow-500/30 to-amber-500/20 text-yellow-200 animate-inactivity-warning"
               : "bg-gradient-to-r from-red-500/40 to-orange-500/30 text-red-100 animate-inactivity-critical"
-          }`}
+            }`}
         >
           <div className="flex items-center justify-center gap-2">
             {warningLevel === "warning" && (
@@ -376,9 +375,8 @@ export default function ChatWindow({
 
       {/* Opponent Card */}
       <div
-        className={`flex justify-between items-start gap-2 ${
-          isMobileStacked ? "mb-2" : isCompact ? "mb-3" : "mb-4"
-        }`}
+        className={`flex justify-between items-start gap-2 ${isMobileStacked ? "mb-2" : isCompact ? "mb-3" : "mb-4"
+          }`}
       >
         <div className="flex-1 min-w-0">
           <OpponentCard
@@ -415,9 +413,8 @@ export default function ChatWindow({
 
       {/* Chat messages */}
       <div
-        className={`${chatHeight} overflow-y-auto bg-slate-900/50 rounded-lg ${
-          isMobileStacked ? "p-2 space-y-2" : isCompact ? "p-3 space-y-3" : "p-4 space-y-3"
-        } ${isMobileStacked ? "mb-2" : "mb-4"}`}
+        className={`${chatHeight} overflow-y-auto bg-slate-900/50 rounded-lg ${isMobileStacked ? "p-2 space-y-2" : isCompact ? "p-3 space-y-3" : "p-4 space-y-3"
+          } ${isMobileStacked ? "mb-2" : "mb-4"}`}
       >
         {error && (
           <div className="text-center text-red-400">
@@ -441,9 +438,8 @@ export default function ChatWindow({
           return (
             <div
               key={msg.id}
-              className={`flex flex-col ${
-                msg.sender.fid === fid ? "items-end" : "items-start"
-              }`}
+              className={`flex flex-col ${msg.sender.fid === fid ? "items-end" : "items-start"
+                }`}
               style={{
                 animation: isNewMessage
                   ? msg.sender.fid === fid
@@ -453,21 +449,18 @@ export default function ChatWindow({
               }}
             >
               <div
-                className={`${
-                  isMobileStacked ? "max-w-[85%]" : "max-w-xs"
-                } ${
-                  isCompact ? "md:max-w-sm" : "md:max-w-md"
-                } rounded-lg ${isMobileStacked ? "px-2 py-1" : "px-3 py-2"} ${
-                  msg.sender.fid === fid
+                className={`${isMobileStacked ? "max-w-[85%]" : "max-w-xs"
+                  } ${isCompact ? "md:max-w-sm" : "md:max-w-md"
+                  } rounded-lg ${isMobileStacked ? "px-2 py-1" : "px-3 py-2"} ${msg.sender.fid === fid
                     ? "bg-blue-600 text-white"
                     : "bg-slate-700 text-gray-200"
-                }`}
+                  }`}
                 style={
                   msg.sender.fid !== fid && opponentColors
                     ? {
-                        backgroundColor: `rgba(${opponentColors.primary[0]}, ${opponentColors.primary[1]}, ${opponentColors.primary[2]}, 0.15)`,
-                        borderLeft: `3px solid rgb(${opponentColors.primary[0]}, ${opponentColors.primary[1]}, ${opponentColors.primary[2]})`,
-                      }
+                      backgroundColor: `rgba(${opponentColors.primary[0]}, ${opponentColors.primary[1]}, ${opponentColors.primary[2]}, 0.15)`,
+                      borderLeft: `3px solid rgb(${opponentColors.primary[0]}, ${opponentColors.primary[1]}, ${opponentColors.primary[2]})`,
+                    }
                     : {}
                 }
               >
@@ -493,9 +486,8 @@ export default function ChatWindow({
           <p className={`${isMobileStacked ? "text-xs" : "text-sm"} text-gray-300`}>
             <span className="text-xs text-gray-500">Vote locked • </span>
             <span
-              className={`font-bold ${
-                currentVote === "BOT" ? "text-red-400" : "text-green-400"
-              }`}
+              className={`font-bold ${currentVote === "BOT" ? "text-red-400" : "text-green-400"
+                }`}
             >
               {currentVote === "BOT" ? "🤖 BOT" : "👤 HUMAN"}
             </span>
@@ -504,15 +496,12 @@ export default function ChatWindow({
       ) : (
         <div className={`flex ${isMobileStacked ? "gap-1" : "gap-2"}`}>
           <input
-            className={`grow bg-slate-700 rounded-lg ${
-              isMobileStacked ? "px-2 py-1.5 text-xs" : "px-4 py-2"
-            } text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              isCompact && !isMobileStacked ? "text-sm" : ""
-            } ${
-              USE_WEBSOCKET && !isConnected && !shouldFallbackToPolling
+            className={`grow bg-slate-700 rounded-lg ${isMobileStacked ? "px-2 py-1.5 text-xs" : "px-4 py-2"
+              } text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${isCompact && !isMobileStacked ? "text-sm" : ""
+              } ${USE_WEBSOCKET && !isConnected && !shouldFallbackToPolling
                 ? "opacity-50"
                 : ""
-            }`}
+              }`}
             value={input}
             onChange={handleInputChange}
             onKeyPress={(e) => e.key === "Enter" && handleSend()}
@@ -520,8 +509,8 @@ export default function ChatWindow({
               USE_WEBSOCKET && !isConnected && !shouldFallbackToPolling
                 ? "Connecting..."
                 : isMobileStacked
-                ? "Type message..."
-                : "Type your message... (try :unicorn: or :fire:)"
+                  ? "Type message..."
+                  : "Type your message... (try :unicorn: or :fire:)"
             }
             disabled={USE_WEBSOCKET && !isConnected && !shouldFallbackToPolling && isInitializing}
           />
@@ -533,9 +522,8 @@ export default function ChatWindow({
             />
           )}
           <button
-            className={`bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white font-bold ${
-              isMobileStacked ? "py-1.5 px-3 text-xs" : "py-2 px-4"
-            } rounded-lg transition-colors`}
+            className={`bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white font-bold ${isMobileStacked ? "py-1.5 px-3 text-xs" : "py-2 px-4"
+              } rounded-lg transition-colors`}
             onClick={handleSend}
             disabled={!input.trim() || (USE_WEBSOCKET && !isConnected && !shouldFallbackToPolling && isInitializing)}
           >

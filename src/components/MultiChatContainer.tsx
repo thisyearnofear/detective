@@ -332,7 +332,7 @@ export default function MultiChatContainer({ fid }: Props) {
 
   const stableSlots = useMemo(() => {
     if (!slots || Object.keys(slots).length === 0) {
-      return slots;
+      return {};
     }
 
     // Create a new slots object only if the match IDs or critical properties have changed
@@ -344,9 +344,8 @@ export default function MultiChatContainer({ fid }: Props) {
       const previousMatch = previousSlotsRef.current[slotNum];
 
       if (!currentMatch) {
-        newSlots[slotNum] = currentMatch;
         if (previousMatch) hasChanges = true;
-        continue;
+        continue; // Don't set undefined slots
       }
 
       // Check if this is actually a different match or just a re-render
@@ -354,7 +353,7 @@ export default function MultiChatContainer({ fid }: Props) {
         !previousMatch ||
         previousMatch.id !== currentMatch.id ||
         previousMatch.voteLocked !== currentMatch.voteLocked ||
-        previousMatch.messages?.length !== currentMatch.messages?.length
+        (previousMatch.messages?.length || 0) !== (currentMatch.messages?.length || 0)
       ) {
         newSlots[slotNum] = currentMatch;
         hasChanges = true;
@@ -364,7 +363,7 @@ export default function MultiChatContainer({ fid }: Props) {
       }
     }
 
-    if (hasChanges) {
+    if (hasChanges || Object.keys(previousSlotsRef.current).length !== Object.keys(newSlots).length) {
       previousSlotsRef.current = newSlots;
       return newSlots;
     }

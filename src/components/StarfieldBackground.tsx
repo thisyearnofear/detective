@@ -36,14 +36,14 @@ export default function StarfieldBackground() {
         const renderer = new THREE.WebGLRenderer({
             canvas: canvasRef.current,
             alpha: true,
-            antialias: true,
+            antialias: false, // Disable antialias for performance
         });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setPixelRatio(1); // Force 1x pixel ratio for performance
         rendererRef.current = renderer;
 
         // Create particles - Optimized for performance
-        const POINTS_COUNT = 1500; // Reduced from 4000 to fix frame drops
+        const POINTS_COUNT = 800; // Reduced to 800
         const positions = new Float32Array(POINTS_COUNT * 3);
         const colors = new Float32Array(POINTS_COUNT * 3);
         const sizes = new Float32Array(POINTS_COUNT);
@@ -73,8 +73,8 @@ export default function StarfieldBackground() {
             colors[i * 3 + 1] = color.g;
             colors[i * 3 + 2] = color.b;
 
-            // Size - MUCH BIGGER
-            sizes[i] = Math.random() * 8 + 3; // 3-11 instead of 1-4
+            // Size - slightly smaller max size to reduce overdraw
+            sizes[i] = Math.random() * 6 + 2; 
         }
 
         const geometry = new THREE.BufferGeometry();
@@ -92,11 +92,11 @@ export default function StarfieldBackground() {
         vColor = color;
         vec3 p = position;
         
-        // Infinite scroll effect - SLOWER for visibility
+        // Infinite scroll effect
         p.z = -150.0 + mod(position.z + uTime * 10.0, 400.0);
         
         vec4 mvPosition = modelViewMatrix * vec4(p, 1.0);
-        gl_PointSize = size * (80.0 / -mvPosition.z); // Bigger multiplier
+        gl_PointSize = size * (80.0 / -mvPosition.z);
         gl_Position = projectionMatrix * mvPosition;
       }
     `;
@@ -112,11 +112,10 @@ export default function StarfieldBackground() {
         
         if (dist > 0.5) discard;
         
-        // Soft glow effect - BRIGHTER
+        // Soft glow effect
         float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
-        alpha = pow(alpha, 1.5); // Less aggressive falloff
+        alpha = pow(alpha, 1.5);
         
-        // Boost brightness
         vec3 brightColor = vColor * 1.5;
         
         gl_FragColor = vec4(brightColor, alpha * 0.9);
@@ -165,7 +164,6 @@ export default function StarfieldBackground() {
         const clock = new THREE.Clock();
         let animationFrameId: number;
 
-        let frameCount = 0;
         const animate = () => {
             animationFrameId = requestAnimationFrame(animate);
 
@@ -185,13 +183,8 @@ export default function StarfieldBackground() {
                 particlesRef.current.rotation.y = currentRotationRef.current.y;
             }
 
-            const isConnected = !!(globalThis as any).__ABLY_CONNECTED__;
-            const decimate = isConnected ? 1 : 2;
-            frameCount++;
-            if (frameCount % decimate === 0) {
-                if (rendererRef.current && sceneRef.current && cameraRef.current) {
-                    rendererRef.current.render(sceneRef.current, cameraRef.current);
-                }
+            if (rendererRef.current && sceneRef.current && cameraRef.current) {
+                rendererRef.current.render(sceneRef.current, cameraRef.current);
             }
         };
 
