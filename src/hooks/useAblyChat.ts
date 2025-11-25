@@ -35,6 +35,9 @@ export function useAblyChat({ fid, matchId, onMessage, onError }: AblyChatOption
     const clientRef = useRef<Ably.Realtime | null>(null);
     const channelRef = useRef<Ably.RealtimeChannel | null>(null);
 
+    const globalAblyCache: { clients: Map<number, Ably.Realtime>, initialTokens: Map<number, any> } = (globalThis as any).__ABLY_CACHE__ || { clients: new Map(), initialTokens: new Map() };
+    (globalThis as any).__ABLY_CACHE__ = globalAblyCache;
+
     // Initialize Ably connection
     useEffect(() => {
         let mounted = true;
@@ -43,28 +46,59 @@ export function useAblyChat({ fid, matchId, onMessage, onError }: AblyChatOption
             try {
                 setIsConnecting(true);
                 setError(null);
+                
+                let client = globalAblyCache.clients.get(fid) || null;
 
-                // Initialize Ably client with token auth
-                const client = new Ably.Realtime({
-                    authCallback: async (_tokenParams: any, callback: any) => {
-                        try {
-                            const res = await fetch(`/api/ably/auth?fid=${fid}`);
-                            const token = await res.json();
-                            callback(null, token);
-                        } catch (err) {
-                            const errorInfo = { message: (err as Error).message, code: 500, statusCode: 500 };
-                            callback(errorInfo, null);
+                if (!client) {
+                    let initialToken: any | null = null;
+                    try {
+                        const res = await fetch(`/api/ably/auth?fid=${fid}`);
+                        if (!res.ok) {
+                            throw new Error(`Auth endpoint unavailable (${res.status})`);
                         }
-                    },
-                    clientId: `fid:${fid}`,
-                    // Auto-reconnect on connection loss
-                    disconnectedRetryTimeout: 3000,
-                    suspendedRetryTimeout: 10000,
-                });
+                        initialToken = await res.json();
+                        globalAblyCache.initialTokens.set(fid, initialToken);
+                    } catch (prefetchErr: any) {
+                        const err = new Error(prefetchErr.message || "Failed to initialize Ably");
+                        setError(err);
+                        setIsConnecting(false);
+                        onError?.(err);
+                        return;
+                    }
+
+                    client = new Ably.Realtime({
+                        authCallback: async (_tokenParams: any, callback: any) => {
+                            try {
+                                const cached = globalAblyCache.initialTokens.get(fid);
+                                if (cached) {
+                                    globalAblyCache.initialTokens.delete(fid);
+                                    callback(null, cached);
+                                    return;
+                                }
+                                const res = await fetch(`/api/ably/auth?fid=${fid}`);
+                                if (!res.ok) {
+                                    throw new Error(`Auth failed (${res.status})`);
+                                }
+                                const token = await res.json();
+                                callback(null, token);
+                            } catch (err) {
+                                const errorInfo = { message: (err as Error).message, code: 500, statusCode: 500 };
+                                callback(errorInfo, null);
+                            }
+                        },
+                        clientId: `fid:${fid}`,
+                        disconnectedRetryTimeout: 3000,
+                        suspendedRetryTimeout: 10000,
+                        transportParams: {
+                            remainConnectedAfterSuspend: true,
+                        },
+                    });
+
+                    globalAblyCache.clients.set(fid, client);
+                }
 
                 clientRef.current = client;
 
-                // Connection state listeners
                 client.connection.on("connected", () => {
                     if (mounted) {
                         setIsConnected(true);
@@ -90,16 +124,13 @@ export function useAblyChat({ fid, matchId, onMessage, onError }: AblyChatOption
                     }
                 });
 
-                // Subscribe to match channel
                 const channel = client.channels.get(`match:${matchId}`);
                 channelRef.current = channel;
 
-                // Listen for messages
                 await channel.subscribe("message", (message: any) => {
                     if (mounted && message.data) {
                         const chatMessage: ChatMessage = message.data;
                         setMessages((prev) => {
-                            // Prevent duplicates
                             if (prev.some((m) => m.id === chatMessage.id)) {
                                 return prev;
                             }
@@ -123,15 +154,11 @@ export function useAblyChat({ fid, matchId, onMessage, onError }: AblyChatOption
 
         initializeAbly();
 
-        // Cleanup on unmount
         return () => {
             mounted = false;
             if (channelRef.current) {
                 channelRef.current.unsubscribe();
                 channelRef.current.detach();
-            }
-            if (clientRef.current) {
-                clientRef.current.close();
             }
         };
     }, [fid, matchId, onMessage, onError]);

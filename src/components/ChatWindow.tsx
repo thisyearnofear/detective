@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import useSWR from "swr";
 import { useAblyChat } from "@/hooks/useAblyChat";
+import { EMOJI_SHORTCODES } from "@/lib/constants";
 import EmojiPicker from "./EmojiPicker";
 import VoteToggle from "./VoteToggle";
 import ProgressRingTimer from "./ProgressRingTimer";
@@ -57,7 +58,13 @@ export default function ChatWindow({
     primary: [number, number, number];
     secondary: [number, number, number];
   } | null>(null);
-  const [username, setUsername] = useState<string>("");
+  const [username, setUsername] = useState<string>(`user${fid}`);
+  const [, setUserProfile] = useState<{
+    fid: number;
+    username: string;
+    displayName: string;
+    pfpUrl: string;
+  } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // WebSocket mode (Ably)
@@ -81,7 +88,9 @@ export default function ChatWindow({
   });
 
   // Polling mode (HTTP)
-  const shouldPoll = !USE_WEBSOCKET && !match.messages;
+  const shouldPoll =
+    (!USE_WEBSOCKET || !!wsError || (!isConnecting && !isConnected)) &&
+    !match.messages;
   const {
     data: chatData,
     error: pollError,
@@ -92,7 +101,7 @@ export default function ChatWindow({
     {
       refreshInterval: 2000,
       refreshWhenHidden: false,
-    },
+    }
   );
 
   // Unified message source
@@ -109,23 +118,66 @@ export default function ChatWindow({
     }
   }, [match.messages, loadInitialMessages]);
 
-  // Fetch username for WebSocket mode
   useEffect(() => {
     if (!USE_WEBSOCKET) return;
-
-    const fetchUsername = async () => {
-      try {
-        const response = await fetch(`/api/profiles/random?fid=${fid}`);
-        if (response.ok) {
-          const data = await response.json();
-          setUsername(data.username || `user${fid}`);
-        }
-      } catch (err) {
-        console.error("Failed to fetch username:", err);
-        setUsername(`user${fid}`);
-      }
+    const globalCache: any = (globalThis as any).__PROFILE_CACHE__ || {
+      promises: new Map<number, Promise<any>>(),
+      values: new Map<number, any>(),
     };
-    fetchUsername();
+    (globalThis as any).__PROFILE_CACHE__ = globalCache;
+    const cached = globalCache.values.get(fid);
+    if (cached) {
+      setUsername(cached.username || `user${fid}`);
+      setUserProfile(cached);
+      return;
+    }
+    const pending = globalCache.promises.get(fid);
+    if (pending) {
+      pending
+        .then((profile: any) => {
+          setUsername(profile?.username || `user${fid}`);
+          setUserProfile(profile || null);
+        })
+        .catch(() => {
+          setUsername(`user${fid}`);
+          setUserProfile({
+            fid,
+            username: `user${fid}`,
+            displayName: `Player ${fid}`,
+            pfpUrl: "https://i.imgur.com/vL43u65.jpg",
+          });
+        });
+      return;
+    }
+    const p = fetch(`/api/profiles/random?fid=${fid}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        const profile = data?.userProfile || {
+          fid,
+          username: `user${fid}`,
+          displayName: `Player ${fid}`,
+          pfpUrl: "https://i.imgur.com/vL43u65.jpg",
+        };
+        globalCache.values.set(fid, profile);
+        globalCache.promises.delete(fid);
+        setUsername(profile.username || `user${fid}`);
+        setUserProfile(profile);
+        return profile;
+      })
+      .catch(() => {
+        const profile = {
+          fid,
+          username: `user${fid}`,
+          displayName: `Player ${fid}`,
+          pfpUrl: "https://i.imgur.com/vL43u65.jpg",
+        };
+        globalCache.values.set(fid, profile);
+        globalCache.promises.delete(fid);
+        setUsername(profile.username);
+        setUserProfile(profile);
+        return profile;
+      });
+    globalCache.promises.set(fid, p);
   }, [fid]);
 
   // Auto-scroll to bottom on new messages and track count
@@ -199,29 +251,11 @@ export default function ChatWindow({
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value;
 
-    // Define shortcode mappings
-    const shortcodes: Record<string, string> = {
-      ":unicorn:": "🦄",
-      ":tophat:": "🎩",
-      ":rainbow:": "🌈",
-      ":purple:": "🟣",
-      ":rocket:": "🚀",
-      ":eyes:": "👀",
-      ":fire:": "🔥",
-      ":sparkles:": "✨",
-      ":salute:": "🫡",
-      ":100:": "💯",
-      ":handshake:": "🤝",
-      ":purpleheart:": "💜",
-      ":star:": "🌟",
-      ":zap:": "⚡",
-      ":dart:": "🎯",
-      ":gem:": "💎",
-    };
-
     // Replace shortcodes with emojis
-    Object.entries(shortcodes).forEach(([code, emoji]) => {
-      value = value.replace(new RegExp(code, "g"), emoji);
+    Object.entries(EMOJI_SHORTCODES).forEach(([code, emoji]) => {
+      // Escape special regex characters in the shortcode
+      const escapedCode = code.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      value = value.replace(new RegExp(escapedCode, "g"), emoji);
     });
 
     setInput(value);
@@ -234,17 +268,21 @@ export default function ChatWindow({
 
   return (
     <div
-      className={`bg-slate-800 rounded-lg ${isCompact ? "p-4" : "p-6"} transition-all duration-300 relative ${warningLevel !== "none" ? "ring-2" : ""
-        } ${warningLevel === "warning" ? "ring-yellow-500 ring-opacity-50" : ""} ${warningLevel === "critical" ? "ring-red-500 ring-opacity-75" : ""
-        }`}
+      className={`bg-slate-800 rounded-lg ${
+        isCompact ? "p-4" : "p-6"
+      } transition-all duration-300 relative ${
+        warningLevel !== "none" ? "ring-2" : ""
+      } ${
+        warningLevel === "warning" ? "ring-yellow-500 ring-opacity-50" : ""
+      } ${warningLevel === "critical" ? "ring-red-500 ring-opacity-75" : ""}`}
       style={
         warningLevel !== "none"
           ? {
-            boxShadow:
-              warningLevel === "warning"
-                ? "inset 0 0 20px rgba(234, 179, 8, 0.2), 0 0 15px rgba(234, 179, 8, 0.15)"
-                : "inset 0 0 20px rgba(239, 68, 68, 0.25), 0 0 20px rgba(239, 68, 68, 0.2)",
-          }
+              boxShadow:
+                warningLevel === "warning"
+                  ? "inset 0 0 20px rgba(234, 179, 8, 0.2), 0 0 15px rgba(234, 179, 8, 0.15)"
+                  : "inset 0 0 20px rgba(239, 68, 68, 0.25), 0 0 20px rgba(239, 68, 68, 0.2)",
+            }
           : {}
       }
     >
@@ -275,10 +313,11 @@ export default function ChatWindow({
       {/* Warning banner */}
       {warningLevel !== "none" && !isTimeUp && (
         <div
-          className={`absolute top-0 left-0 right-0 p-3 text-center text-sm rounded-t-lg font-semibold transition-all ${warningLevel === "warning"
-            ? "bg-gradient-to-r from-yellow-500/30 to-amber-500/20 text-yellow-200 animate-inactivity-warning"
-            : "bg-gradient-to-r from-red-500/40 to-orange-500/30 text-red-100 animate-inactivity-critical"
-            }`}
+          className={`absolute top-0 left-0 right-0 p-3 text-center text-sm rounded-t-lg font-semibold transition-all ${
+            warningLevel === "warning"
+              ? "bg-gradient-to-r from-yellow-500/30 to-amber-500/20 text-yellow-200 animate-inactivity-warning"
+              : "bg-gradient-to-r from-red-500/40 to-orange-500/30 text-red-100 animate-inactivity-critical"
+          }`}
         >
           <div className="flex items-center justify-center gap-2">
             {warningLevel === "warning" && (
@@ -298,7 +337,11 @@ export default function ChatWindow({
       )}
 
       {/* Opponent Card */}
-      <div className={`flex justify-between items-start gap-4 ${isCompact ? "mb-3" : "mb-4"}`}>
+      <div
+        className={`flex justify-between items-start gap-4 ${
+          isCompact ? "mb-3" : "mb-4"
+        }`}
+      >
         <div className="flex-1">
           <OpponentCard
             opponent={match.opponent}
@@ -333,8 +376,9 @@ export default function ChatWindow({
 
       {/* Chat messages */}
       <div
-        className={`${chatHeight} overflow-y-auto bg-slate-900/50 rounded-lg ${isCompact ? "p-3" : "p-4"
-          } space-y-3 mb-4`}
+        className={`${chatHeight} overflow-y-auto bg-slate-900/50 rounded-lg ${
+          isCompact ? "p-3" : "p-4"
+        } space-y-3 mb-4`}
       >
         {error && (
           <div className="text-center text-red-400">
@@ -358,8 +402,9 @@ export default function ChatWindow({
           return (
             <div
               key={msg.id}
-              className={`flex flex-col ${msg.sender.fid === fid ? "items-end" : "items-start"
-                }`}
+              className={`flex flex-col ${
+                msg.sender.fid === fid ? "items-end" : "items-start"
+              }`}
               style={{
                 animation: isNewMessage
                   ? msg.sender.fid === fid
@@ -369,17 +414,19 @@ export default function ChatWindow({
               }}
             >
               <div
-                className={`max-w-xs ${isCompact ? "md:max-w-sm" : "md:max-w-md"
-                  } rounded-lg px-3 py-2 ${msg.sender.fid === fid
+                className={`max-w-xs ${
+                  isCompact ? "md:max-w-sm" : "md:max-w-md"
+                } rounded-lg px-3 py-2 ${
+                  msg.sender.fid === fid
                     ? "bg-blue-600 text-white"
                     : "bg-slate-700 text-gray-200"
-                  }`}
+                }`}
                 style={
                   msg.sender.fid !== fid && opponentColors
                     ? {
-                      backgroundColor: `rgba(${opponentColors.primary[0]}, ${opponentColors.primary[1]}, ${opponentColors.primary[2]}, 0.15)`,
-                      borderLeft: `3px solid rgb(${opponentColors.primary[0]}, ${opponentColors.primary[1]}, ${opponentColors.primary[2]})`,
-                    }
+                        backgroundColor: `rgba(${opponentColors.primary[0]}, ${opponentColors.primary[1]}, ${opponentColors.primary[2]}, 0.15)`,
+                        borderLeft: `3px solid rgb(${opponentColors.primary[0]}, ${opponentColors.primary[1]}, ${opponentColors.primary[2]})`,
+                      }
                     : {}
                 }
               >
@@ -402,7 +449,9 @@ export default function ChatWindow({
           <p className="text-sm text-gray-300">
             <span className="text-xs text-gray-500">Vote locked • </span>
             <span
-              className={`font-bold ${currentVote === "BOT" ? "text-red-400" : "text-green-400"}`}
+              className={`font-bold ${
+                currentVote === "BOT" ? "text-red-400" : "text-green-400"
+              }`}
             >
               {currentVote === "BOT" ? "🤖 BOT" : "👤 HUMAN"}
             </span>
@@ -411,8 +460,13 @@ export default function ChatWindow({
       ) : (
         <div className="flex gap-2">
           <input
-            className={`grow bg-slate-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${isCompact ? "text-sm" : ""
-              } ${USE_WEBSOCKET && !isConnected ? "opacity-50 cursor-not-allowed" : ""}`}
+            className={`grow bg-slate-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              isCompact ? "text-sm" : ""
+            } ${
+              USE_WEBSOCKET && !isConnected
+                ? "opacity-50 cursor-not-allowed"
+                : ""
+            }`}
             value={input}
             onChange={handleInputChange}
             onKeyPress={(e) => e.key === "Enter" && handleSend()}
