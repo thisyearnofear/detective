@@ -316,13 +316,12 @@ export default function MultiChatContainer({ fid }: Props) {
                 key={slotNumber}
                 onClick={() => setActiveTab(slotNumber)}
                 disabled={!match}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors relative border-b-2 ${voteColor} ${
-                  isActive
-                    ? "bg-blue-600 text-white"
-                    : match
-                      ? "bg-slate-700 text-gray-300 hover:bg-slate-600"
-                      : "bg-slate-800 text-gray-500 cursor-not-allowed border-slate-600"
-                }`}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors relative border-b-2 ${voteColor} ${isActive
+                  ? "bg-blue-600 text-white"
+                  : match
+                    ? "bg-slate-700 text-gray-300 hover:bg-slate-600"
+                    : "bg-slate-800 text-gray-500 cursor-not-allowed border-slate-600"
+                  }`}
               >
                 Chat {slotNumber}
                 {hasNewMessages[slotNumber] && !isActive && (

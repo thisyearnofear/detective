@@ -2,12 +2,16 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import useSWR from "swr";
+import { useAblyChat } from "@/hooks/useAblyChat";
 import EmojiPicker from "./EmojiPicker";
 import VoteToggle from "./VoteToggle";
 import ProgressRingTimer from "./ProgressRingTimer";
 import OpponentCard from "./OpponentCard";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
+
+// Feature flag for WebSocket support
+const USE_WEBSOCKET = process.env.NEXT_PUBLIC_ENABLE_WEBSOCKET === "true";
 
 type Props = {
   fid: number;
@@ -53,13 +57,34 @@ export default function ChatWindow({
     primary: [number, number, number];
     secondary: [number, number, number];
   } | null>(null);
+  const [username, setUsername] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Poll for messages if not provided (backward compatibility)
-  const shouldPoll = !match.messages;
+  // WebSocket mode (Ably)
+  const {
+    messages: wsMessages,
+    sendMessage: wsSendMessage,
+    loadInitialMessages,
+    isConnected,
+    isConnecting,
+    error: wsError,
+  } = useAblyChat({
+    fid,
+    matchId: match.id,
+    onMessage: () => {
+      setLastMessageTime(Date.now());
+      setWarningLevel("none");
+    },
+    onError: (error) => {
+      console.error("[ChatWindow] WebSocket error:", error);
+    },
+  });
+
+  // Polling mode (HTTP)
+  const shouldPoll = !USE_WEBSOCKET && !match.messages;
   const {
     data: chatData,
-    error,
+    error: pollError,
     mutate,
   } = useSWR(
     shouldPoll ? `/api/chat/batch-poll?matchIds=${match.id}` : null,
@@ -70,8 +95,38 @@ export default function ChatWindow({
     },
   );
 
-  const messages =
-    match.messages || chatData?.chats?.[match.id]?.messages || [];
+  // Unified message source
+  const messages = USE_WEBSOCKET
+    ? wsMessages
+    : match.messages || chatData?.chats?.[match.id]?.messages || [];
+
+  const error = USE_WEBSOCKET ? wsError : pollError;
+
+  // Load initial messages for WebSocket mode
+  useEffect(() => {
+    if (USE_WEBSOCKET && match.messages && match.messages.length > 0) {
+      loadInitialMessages(match.messages);
+    }
+  }, [match.messages, loadInitialMessages]);
+
+  // Fetch username for WebSocket mode
+  useEffect(() => {
+    if (!USE_WEBSOCKET) return;
+
+    const fetchUsername = async () => {
+      try {
+        const response = await fetch(`/api/profiles/random?fid=${fid}`);
+        if (response.ok) {
+          const data = await response.json();
+          setUsername(data.username || `user${fid}`);
+        }
+      } catch (err) {
+        console.error("Failed to fetch username:", err);
+        setUsername(`user${fid}`);
+      }
+    };
+    fetchUsername();
+  }, [fid]);
 
   // Auto-scroll to bottom on new messages and track count
   useEffect(() => {
@@ -98,22 +153,34 @@ export default function ChatWindow({
     return () => clearInterval(checkActivity);
   }, [lastMessageTime]);
 
-  // Reset last message time when sending
+  // Unified send message handler (WebSocket or HTTP)
   const handleSend = async () => {
     if (!input.trim()) return;
+    if (USE_WEBSOCKET && !isConnected) return;
+
     const text = input;
     setInput("");
     setLastMessageTime(Date.now());
     setWarningLevel("none");
 
-    await fetch("/api/chat/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ matchId: match.id, senderFid: fid, text }),
-    });
+    try {
+      if (USE_WEBSOCKET) {
+        // Send via WebSocket
+        await wsSendMessage(text, { fid, username });
+      }
 
-    if (shouldPoll) {
-      mutate();
+      // Always persist to server for game state
+      await fetch("/api/chat/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ matchId: match.id, senderFid: fid, text }),
+      });
+
+      if (shouldPoll) {
+        mutate();
+      }
+    } catch (error) {
+      console.error("Failed to send message:", error);
     }
   };
 
@@ -167,30 +234,51 @@ export default function ChatWindow({
 
   return (
     <div
-      className={`bg-slate-800 rounded-lg ${isCompact ? "p-4" : "p-6"} transition-all duration-300 relative ${
-        warningLevel !== "none" ? "ring-2" : ""
-      } ${warningLevel === "warning" ? "ring-yellow-500 ring-opacity-50" : ""} ${
-        warningLevel === "critical" ? "ring-red-500 ring-opacity-75" : ""
-      }`}
+      className={`bg-slate-800 rounded-lg ${isCompact ? "p-4" : "p-6"} transition-all duration-300 relative ${warningLevel !== "none" ? "ring-2" : ""
+        } ${warningLevel === "warning" ? "ring-yellow-500 ring-opacity-50" : ""} ${warningLevel === "critical" ? "ring-red-500 ring-opacity-75" : ""
+        }`}
       style={
         warningLevel !== "none"
           ? {
-              boxShadow:
-                warningLevel === "warning"
-                  ? "inset 0 0 20px rgba(234, 179, 8, 0.2), 0 0 15px rgba(234, 179, 8, 0.15)"
-                  : "inset 0 0 20px rgba(239, 68, 68, 0.25), 0 0 20px rgba(239, 68, 68, 0.2)",
-            }
+            boxShadow:
+              warningLevel === "warning"
+                ? "inset 0 0 20px rgba(234, 179, 8, 0.2), 0 0 15px rgba(234, 179, 8, 0.15)"
+                : "inset 0 0 20px rgba(239, 68, 68, 0.25), 0 0 20px rgba(239, 68, 68, 0.2)",
+          }
           : {}
       }
     >
+      {/* WebSocket connection status */}
+      {USE_WEBSOCKET && (
+        <>
+          {isConnecting && (
+            <div className="absolute top-2 right-2 flex items-center gap-2 bg-blue-500/20 px-2 py-1 rounded text-xs text-blue-300 z-10">
+              <span className="animate-pulse">●</span>
+              Connecting...
+            </div>
+          )}
+          {!isConnected && !isConnecting && (
+            <div className="absolute top-2 right-2 flex items-center gap-2 bg-red-500/20 px-2 py-1 rounded text-xs text-red-300 z-10">
+              <span>●</span>
+              Offline
+            </div>
+          )}
+          {isConnected && (
+            <div className="absolute top-2 right-2 flex items-center gap-2 bg-green-500/20 px-2 py-1 rounded text-xs text-green-300 z-10">
+              <span>●</span>
+              Live
+            </div>
+          )}
+        </>
+      )}
+
       {/* Warning banner */}
       {warningLevel !== "none" && !isTimeUp && (
         <div
-          className={`absolute top-0 left-0 right-0 p-3 text-center text-sm rounded-t-lg font-semibold transition-all ${
-            warningLevel === "warning"
-              ? "bg-gradient-to-r from-yellow-500/30 to-amber-500/20 text-yellow-200 animate-inactivity-warning"
-              : "bg-gradient-to-r from-red-500/40 to-orange-500/30 text-red-100 animate-inactivity-critical"
-          }`}
+          className={`absolute top-0 left-0 right-0 p-3 text-center text-sm rounded-t-lg font-semibold transition-all ${warningLevel === "warning"
+            ? "bg-gradient-to-r from-yellow-500/30 to-amber-500/20 text-yellow-200 animate-inactivity-warning"
+            : "bg-gradient-to-r from-red-500/40 to-orange-500/30 text-red-100 animate-inactivity-critical"
+            }`}
         >
           <div className="flex items-center justify-center gap-2">
             {warningLevel === "warning" && (
@@ -245,9 +333,8 @@ export default function ChatWindow({
 
       {/* Chat messages */}
       <div
-        className={`${chatHeight} overflow-y-auto bg-slate-900/50 rounded-lg ${
-          isCompact ? "p-3" : "p-4"
-        } space-y-3 mb-4`}
+        className={`${chatHeight} overflow-y-auto bg-slate-900/50 rounded-lg ${isCompact ? "p-3" : "p-4"
+          } space-y-3 mb-4`}
       >
         {error && (
           <div className="text-center text-red-400">
@@ -271,9 +358,8 @@ export default function ChatWindow({
           return (
             <div
               key={msg.id}
-              className={`flex flex-col ${
-                msg.sender.fid === fid ? "items-end" : "items-start"
-              }`}
+              className={`flex flex-col ${msg.sender.fid === fid ? "items-end" : "items-start"
+                }`}
               style={{
                 animation: isNewMessage
                   ? msg.sender.fid === fid
@@ -283,19 +369,17 @@ export default function ChatWindow({
               }}
             >
               <div
-                className={`max-w-xs ${
-                  isCompact ? "md:max-w-sm" : "md:max-w-md"
-                } rounded-lg px-3 py-2 ${
-                  msg.sender.fid === fid
+                className={`max-w-xs ${isCompact ? "md:max-w-sm" : "md:max-w-md"
+                  } rounded-lg px-3 py-2 ${msg.sender.fid === fid
                     ? "bg-blue-600 text-white"
                     : "bg-slate-700 text-gray-200"
-                }`}
+                  }`}
                 style={
                   msg.sender.fid !== fid && opponentColors
                     ? {
-                        backgroundColor: `rgba(${opponentColors.primary[0]}, ${opponentColors.primary[1]}, ${opponentColors.primary[2]}, 0.15)`,
-                        borderLeft: `3px solid rgb(${opponentColors.primary[0]}, ${opponentColors.primary[1]}, ${opponentColors.primary[2]})`,
-                      }
+                      backgroundColor: `rgba(${opponentColors.primary[0]}, ${opponentColors.primary[1]}, ${opponentColors.primary[2]}, 0.15)`,
+                      borderLeft: `3px solid rgb(${opponentColors.primary[0]}, ${opponentColors.primary[1]}, ${opponentColors.primary[2]})`,
+                    }
                     : {}
                 }
               >
@@ -327,13 +411,17 @@ export default function ChatWindow({
       ) : (
         <div className="flex gap-2">
           <input
-            className={`grow bg-slate-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              isCompact ? "text-sm" : ""
-            }`}
+            className={`grow bg-slate-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${isCompact ? "text-sm" : ""
+              } ${USE_WEBSOCKET && !isConnected ? "opacity-50 cursor-not-allowed" : ""}`}
             value={input}
             onChange={handleInputChange}
             onKeyPress={(e) => e.key === "Enter" && handleSend()}
-            placeholder="Type your message... (try :unicorn: or :fire:)"
+            placeholder={
+              USE_WEBSOCKET && !isConnected
+                ? "Connecting..."
+                : "Type your message... (try :unicorn: or :fire:)"
+            }
+            disabled={USE_WEBSOCKET && !isConnected}
           />
           <EmojiPicker
             onEmojiSelect={handleEmojiSelect}
@@ -342,7 +430,7 @@ export default function ChatWindow({
           <button
             className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg transition-colors"
             onClick={handleSend}
-            disabled={!input.trim()}
+            disabled={!input.trim() || (USE_WEBSOCKET && !isConnected)}
           >
             Send
           </button>

@@ -1,4 +1,4 @@
-# Detective Farcaster Mini App - Documentation Part 1: Overview & Architecture
+# Detective Farcaster Mini App - Architecture and Core Concepts
 
 ## Executive Summary
 
@@ -241,14 +241,14 @@ detective/
 - [ ] Mobile UI responsive on iOS/Android
 - [ ] Error handling for API failures graceful
 
-### Soft Launch Criteria (Phase 3-4, ~2 weeks)
+### Phase 3 Soft Launch Criteria (~2 weeks)
 
 - [ ] Production deployment on Vercel working
 - [ ] First 50-user game cycle completes without major bugs
 - [ ] Final leaderboard exports as cast
 - [ ] Cost tracking shows ~$2-5 per game
 
-### Post-Launch Success Metrics (Phase 5)
+### Post-Launch Success Metrics
 
 - **Engagement**: 80%+ of registered users play all 5 matches
 - **Retention**: 50%+ return for game cycle 2 (weekly)
