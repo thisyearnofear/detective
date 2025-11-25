@@ -11,6 +11,7 @@ import {
 } from "./types";
 import { redis, getJSON, setJSON } from "./redis";
 import { database } from "./database";
+import { getGameEventPublisher } from "./gameEventPublisher";
 
 const GAME_DURATION = 5 * 60 * 1000; // 5 minutes
 const REGISTRATION_DURATION = 1 * 60 * 1000; // 1 minute for testing
@@ -808,6 +809,11 @@ class GameManager {
     // Save match result to database (async, non-blocking)
     this.saveMatchToDatabase(match, isCorrect, voteSpeed).catch(console.error);
 
+    // Publish game event to notify client (async, non-blocking)
+    getGameEventPublisher()
+      .publishMatchEnd(this.state.cycleId, match, isCorrect, actualType)
+      .catch((err) => console.error("[lockMatchVote] Failed to publish event:", err));
+
     // Don't delete from global matches immediately - allow grace period
     console.log(`[lockMatchVote] Match ${matchId} locked. Keeping in global state for grace period.`);
 
@@ -971,6 +977,12 @@ class GameManager {
       // This ensures the full game duration is available regardless of registration time
       this.state.gameEnds = now + GAME_DURATION;
       console.log(`[updateCycleState] Game will end at ${new Date(this.state.gameEnds).toISOString()}`);
+
+      // Publish game_start event to all players
+      const playerFids = Array.from(this.state.players.keys());
+      getGameEventPublisher()
+        .publishGameStart(this.state.cycleId, playerFids)
+        .catch((err) => console.error("[updateCycleState] Failed to publish game_start:", err));
     }
     if (this.state.state === "LIVE" && now > this.state.gameEnds) {
       // Check if all players have completed their rounds before finishing
@@ -1018,6 +1030,16 @@ class GameManager {
         this.state.leaderboard = this.getLeaderboard();
         // Save final game results to database (async, non-blocking)
         this.saveGameResultsToDatabase().catch(console.error);
+
+        // Publish game_end event to all players
+        const playerFids = Array.from(this.state.players.keys());
+        const leaderboardData = this.state.leaderboard.map((entry, index) => ({
+          fid: entry.player.fid,
+          score: index + 1, // Rank (1st, 2nd, 3rd, etc.)
+        }));
+        getGameEventPublisher()
+          .publishGameEnd(this.state.cycleId, leaderboardData, playerFids)
+          .catch((err) => console.error("[updateCycleState] Failed to publish game_end:", err));
       } else {
         console.log(`[updateCycleState] Waiting for players to finish. Completed: ${completedPlayers}/${totalPlayers}, Sessions: ${this.state.playerSessions.size}, Matches: ${this.state.matches.size}. Extending game time.`);
         // Extend game time by 1 minute to allow stragglers to finish

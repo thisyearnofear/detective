@@ -214,6 +214,112 @@ Open DevTools (F12) and check for:
 
 ---
 
+## Ably Channel Monitoring Guide
+
+### Quick Commands (Browser Console)
+
+#### View All Channels
+```javascript
+window.__ablyDebug.getAllChannels()
+```
+
+Returns:
+```javascript
+{
+  "match:match-5254-203666": {
+    "state": "attached",
+    "subscriberCount": 2,
+    "subscribers": ["sub-1", "sub-2"]
+  },
+  "game:cycle-123:chat": {
+    "state": "attached",
+    "subscriberCount": 5,
+    "subscribers": ["sub-3", "sub-4", ...]
+  }
+}
+```
+
+### Watch All Channels for Changes
+```javascript
+const stop = window.__ablyDebug.watchAllChannels()
+// Logs when state changes every 2 seconds
+// Stop watching:
+stop()
+```
+
+### Watch a Specific Channel
+```javascript
+const stop = window.__ablyDebug.watchChannel("match:match-123")
+// Logs state every 2 seconds
+stop()
+```
+
+### Get Summary Statistics
+```javascript
+window.__ablyDebug.getSummary()
+```
+
+Returns:
+```javascript
+{
+  totalChannels: 5,
+  channelsByState: { attached: 4, attaching: 1, detached: 0 },
+  totalSubscribers: 15
+}
+```
+
+### Print as Table
+```javascript
+window.__ablyDebug.printChannelTable()
+```
+
+### What to Look For
+
+#### Healthy State
+- ✅ Channels in "attached" state
+- ✅ Subscriber count matches active components
+- ✅ Subscriber count stable (not rapidly changing)
+- ✅ No channels stuck in "attaching" state
+
+#### Warning Signs
+
+##### 🔴 Channels Stuck in "attaching"
+```javascript
+// Indicates network issue or Ably API problem
+window.__ablyDebug.getAllChannels()
+// Look for: { "state": "attaching", "subscriberCount": 2, ... }
+```
+
+**Action**: Check network tab in DevTools, check Ably status page
+
+##### 🔴 Rapid Subscriber Changes
+```javascript
+// Run this and watch for rapid changes
+window.__ablyDebug.watchAllChannels()
+// If subscriber count changes frequently: indicates remounting
+```
+
+**Action**: Check if parent component is re-rendering excessively
+
+##### 🔴 High Channel Count
+```javascript
+window.__ablyDebug.getSummary()
+// If totalChannels > expected matches × 2:
+```
+
+**Action**: Channels not being cleaned up - check for unsubscribe calls
+
+##### 🔴 Detached Channels Still Present
+```javascript
+// Should not happen - detached channels are removed from tracking
+window.__ablyDebug.getAllChannels()
+// If you see "detached" state, check logs
+```
+
+**Action**: File a bug - channels should auto-cleanup
+
+---
+
 ## Core Principles Compliance Report
 
 ### ✅ Adherence to Core Principles

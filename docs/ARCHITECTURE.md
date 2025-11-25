@@ -101,11 +101,44 @@ Detective is an AI-powered social deduction game on Farcaster. Players engage in
 | **Backend**        | Next.js API Routes (serverless)    | Unified codebase, Vercel deployment                |
 | **Auth**           | @farcaster/miniapp-sdk             | Native Farcaster authentication                    |
 | **Game State**     | In-memory (Map/Record)             | 50 players = negligible memory footprint           |
-| **Real-time Chat** | HTTP polling (3s interval)         | Simplicity over elegance at this scale             |
+| **Real-time Chat** | HTTP polling (3s interval) or Ably WebSocket | Configurable for performance and scalability |
 | **AI/Bot**         | Venice AI (Llama 3.3 70B)          | Privacy-first, OpenAI-compatible                   |
 | **Farcaster Data** | Neynar API                         | User validation, score filtering, content scraping |
 | **Hosting**        | Vercel                             | Free tier sufficient for this load                 |
 | **Styling**        | Tailwind CSS                       | Rapid UI iteration                                 |
+
+### Real-time Communication Architecture
+The app uses Ably WebSocket for real-time communication with a decoupled lifecycle approach:
+
+#### Ably Channel Management
+- **AblyChannelService**: Singleton service that manages channels independently from React's component lifecycle
+- **Decoupled Lifecycle**: Channels persist across component remounts with 2-second detach debounce
+- **Event-driven Updates**: Server publishes game state changes via Ably instead of frequent polling
+- **Subscriber Tracking**: Tracks active subscribers per channel to prevent unnecessary detachments
+
+#### Architecture Overview
+```
+┌─────────────────────────────────────────────────────┐
+│         useAblyChat (React Hook)                    │
+│  - Mounts/unmounts with component lifecycle         │
+│  - Registers/unregisters as subscriber              │
+├─────────────────────────────────────────────────────┤
+│    getAblyChannelService (Singleton Service)        │
+│  - Persists across component mounts/unmounts        │
+│  - Manages channel attachment/detachment            │
+│  - Tracks active subscribers per channel            │
+│  - Debounces detachment with 2-second buffer        │
+├─────────────────────────────────────────────────────┤
+│        Ably Realtime (WebSocket)                    │
+│  - Per-FID client instances (shared globally)       │
+│  - Channels persist as long as needed               │
+└─────────────────────────────────────────────────────┘
+```
+
+#### Channel Strategy
+The system supports two strategies based on player count:
+- **Per-Match Channels** (≤20 players): One channel per match: `match:{matchId}`
+- **Shared Channels** (>20 players): One channel per cycle: `game:{cycleId}:chat` with message routing via `targetFids`
 
 ### API Reference
 
@@ -192,6 +225,56 @@ detective/
 - **Creator Incentives**: Engagement metrics drive visibility
 - **On-Platform**: Mini app lives entirely in Warpcast feed
 - **Viral Loop**: Leaderboard displays naturally within casts
+
+---
+
+## Implementation Changes
+
+### Ably Channel Lifecycle Refactor
+
+#### Problem Fixed
+Channels were detaching in production due to tight coupling with React lifecycle:
+- `MultiChatContainer` polls `/api/match/active` every 1 second
+- When match data changes (same match, different object reference), `ChatWindow` remounts
+- Component unmount → channel detaches immediately
+- New match arrives but old channel still detaching
+- Users see "Reconnecting..." repeatedly, messages are lost
+
+#### Solution
+Created `AblyChannelService` - a singleton service that manages channel lifecycle independently from React components.
+
+#### Key Changes
+1. **New File**: `src/lib/ablyChannelService.ts` - Centralized channel lifecycle management with subscriber tracking and detachment debounce
+2. **Modified**: `src/hooks/useAblyChat.ts` - Delegates channel management to service, removing 70+ lines of direct management code
+3. **New File**: `src/lib/ablyDebug.ts` - Browser console debugging utilities
+4. **Event-driven Updates**: Server now publishes game state changes via Ably instead of relying solely on HTTP polling
+
+#### Detachment Flow Changes
+**Before:**
+```typescript
+// Old code - immediate detach
+if (subscribers.size === 0) {
+  setTimeout(() => {
+    channel.detach(); // 500ms delay, no re-check
+  }, 500);
+}
+```
+
+**After:**
+```typescript
+// New code - smart debounce
+scheduleDetach(channelKey) {
+  setTimeout(() => {
+    // Double-check: still no subscribers?
+    if (subscribers.size === 0) {
+      channel.detach();
+    } else {
+      // New subscriber added, cancel detach
+      return;
+    }
+  }, 2000);
+}
+```
 
 ---
 

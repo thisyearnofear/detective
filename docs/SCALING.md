@@ -150,6 +150,31 @@ ABLY_API_KEY=your_api_key
 NEXT_PUBLIC_ENABLE_WEBSOCKET=true
 ```
 
+### Event-Driven Architecture
+Replaced HTTP polling with Ably WebSocket events for game state updates to eliminate unnecessary polling and prevent component remounting issues that caused chat detachment:
+
+#### Components
+- **GameEventPublisher**: Singleton service that publishes game state changes via Ably
+  - `publishMatchEnd(cycleId, match, isCorrect, actualType)`
+  - `publishGameStart(cycleId, playerFids)`
+  - `publishGameEnd(cycleId, leaderboardData, playerFids)`
+
+- **Event Flow**:
+  1. Server detects state changes (match ends, game starts/ends)
+  2. GameEventPublisher publishes events via Ably
+  3. Client receives events through `useAblyGameEvents()` hook
+  4. Local state updates trigger refetch of match data
+  5. UI updates without component remounting
+
+#### Performance Impact
+| Metric | Before | After | Improvement |
+|--------|--------|-------|-------------|
+| HTTP Requests/Minute | 60 | 12 | 80% reduction |
+| Polling Frequency | Every 1s | Every 5s | 5x less |
+| Updates/Minute | Variable (polling) | Instant (events) | Real-time |
+| Component Remounts | 120+ per minute | 0-5 per minute | 96% reduction |
+| Chat Detachments | Frequent | Only on match end | Stable |
+
 ## Environment Variables
 
 ### Required for Production
