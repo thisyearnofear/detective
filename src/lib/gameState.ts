@@ -584,6 +584,14 @@ class GameManager {
         return;
       }
 
+      // SAFEGUARD: Don't end game if no matches have been created yet
+      // This prevents the game from ending before players have a chance to play
+      if (this.state.matches.size === 0) {
+        console.warn(`[updateCycleState] No matches created yet. Extending game time.`);
+        this.state.gameEnds = now + (60 * 1000);
+        return;
+      }
+
       for (const [fid, session] of this.state.playerSessions) {
         const player = this.state.players.get(fid);
         if (player) {
@@ -604,12 +612,12 @@ class GameManager {
       const allPlayersComplete = hasPlayerSessions && completedPlayers === totalPlayers;
 
       if (allPlayersComplete || gameDurationExceeded) {
-        console.log(`[updateCycleState] Game ending. Completed players: ${completedPlayers}/${totalPlayers}, Duration exceeded: ${gameDurationExceeded}, Has sessions: ${hasPlayerSessions}`);
+        console.log(`[updateCycleState] Game ending. Completed players: ${completedPlayers}/${totalPlayers}, Duration exceeded: ${gameDurationExceeded}, Has sessions: ${hasPlayerSessions}, Matches: ${this.state.matches.size}`);
         this.state.state = "FINISHED";
         // Calculate and store the final leaderboard once the game is finished.
         this.state.leaderboard = this.getLeaderboard();
       } else {
-        console.log(`[updateCycleState] Waiting for players to finish. Completed: ${completedPlayers}/${totalPlayers}, Sessions: ${this.state.playerSessions.size}. Extending game time.`);
+        console.log(`[updateCycleState] Waiting for players to finish. Completed: ${completedPlayers}/${totalPlayers}, Sessions: ${this.state.playerSessions.size}, Matches: ${this.state.matches.size}. Extending game time.`);
         // Extend game time by 1 minute to allow stragglers to finish
         this.state.gameEnds = now + (60 * 1000);
       }
