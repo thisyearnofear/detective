@@ -43,7 +43,7 @@ export default function StarfieldBackground() {
         rendererRef.current = renderer;
 
         // Create particles - Optimized for performance
-        const POINTS_COUNT = 4000; // Reduced from 30000 to fix lag
+        const POINTS_COUNT = 1500; // Reduced from 4000 to fix frame drops
         const positions = new Float32Array(POINTS_COUNT * 3);
         const colors = new Float32Array(POINTS_COUNT * 3);
         const sizes = new Float32Array(POINTS_COUNT);

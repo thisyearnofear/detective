@@ -72,43 +72,39 @@ export default function ProgressRingTimer({
     <div className="flex flex-col items-center justify-center">
       <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
         <svg width={size} height={size} className="absolute">
-        {/* Background circle */}
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke="#334155"
-          strokeWidth="2"
-        />
-
-        {/* Progress ring */}
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke={ringColor}
-          strokeWidth="2.5"
-          strokeDasharray={circumference}
-          strokeDashoffset={strokeDashoffset}
-          strokeLinecap="round"
-          className={`transition-all ${isCritical ? "animate-pulse" : ""}`}
-          style={{
-            transformOrigin: `${size / 2}px ${size / 2}px`,
-            transform: "rotate(-90deg)",
-          }}
-        />
-
-        {/* Logo overlay */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <img 
-            src="/detective.png" 
-            alt="Detective"
-            className="w-6 h-6 opacity-60"
+          {/* Background circle */}
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="#334155"
+            strokeWidth="2"
           />
-        </div>
+
+          {/* Progress ring */}
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke={ringColor}
+            strokeWidth="2.5"
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            className={`transition-all ${isCritical ? "animate-pulse" : ""}`}
+            style={{
+              transformOrigin: `${size / 2}px ${size / 2}px`,
+              transform: "rotate(-90deg)",
+            }}
+          />
         </svg>
+        <img
+          src="/detective.png"
+          alt="Detective"
+          className={`${compact ? "w-5 h-5" : "w-7 h-7"} opacity-70`}
+        />
       </div>
 
       {/* Time display */}

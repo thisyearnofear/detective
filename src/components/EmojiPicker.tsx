@@ -1,36 +1,7 @@
 "use client";
 
 import { useState } from "react";
-
-// Popular Farcaster emojis that are culturally relevant
-const FARCASTER_EMOJIS = [
-  { emoji: "🦄", label: "unicorn", shortcode: ":unicorn:" },
-  { emoji: "🎩", label: "top hat", shortcode: ":tophat:" },
-  { emoji: "🌈", label: "rainbow", shortcode: ":rainbow:" },
-  { emoji: "🟣", label: "purple", shortcode: ":purple:" },
-  { emoji: "🚀", label: "rocket", shortcode: ":rocket:" },
-  { emoji: "👀", label: "eyes", shortcode: ":eyes:" },
-  { emoji: "🔥", label: "fire", shortcode: ":fire:" },
-  { emoji: "✨", label: "sparkles", shortcode: ":sparkles:" },
-  { emoji: "🫡", label: "salute", shortcode: ":salute:" },
-  { emoji: "💯", label: "100", shortcode: ":100:" },
-  { emoji: "🤝", label: "handshake", shortcode: ":handshake:" },
-  { emoji: "💜", label: "purple heart", shortcode: ":purpleheart:" },
-  { emoji: "🌟", label: "star", shortcode: ":star:" },
-  { emoji: "⚡", label: "lightning", shortcode: ":zap:" },
-  { emoji: "🎯", label: "target", shortcode: ":dart:" },
-  { emoji: "💎", label: "gem", shortcode: ":gem:" },
-];
-
-// Quick text shortcuts
-const TEXT_SHORTCUTS = [
-  { text: "gm", label: "good morning" },
-  { text: "gn", label: "good night" },
-  { text: "wagmi", label: "we all gonna make it" },
-  { text: "lfg", label: "let's go" },
-  { text: "fren", label: "friend" },
-  { text: "ser", label: "sir" },
-];
+import { FARCASTER_EMOJIS, TEXT_SHORTCUTS } from "@/lib/constants";
 
 interface EmojiPickerProps {
   onEmojiSelect: (emoji: string) => void;
@@ -64,9 +35,8 @@ export default function EmojiPicker({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`${buttonSize} rounded-lg bg-slate-700 hover:bg-slate-600 text-gray-300 hover:text-white transition-all ${
-          isOpen ? "bg-slate-600 text-white ring-2 ring-blue-500" : ""
-        }`}
+        className={`${buttonSize} rounded-lg bg-slate-700 hover:bg-slate-600 text-gray-300 hover:text-white transition-all ${isOpen ? "bg-slate-600 text-white ring-2 ring-blue-500" : ""
+          }`}
         title="Add emoji"
       >
         <span className={isCompact ? "text-sm" : "text-base"}>
@@ -83,21 +53,19 @@ export default function EmojiPicker({
           <div className="flex gap-1 mb-3">
             <button
               onClick={() => setShowShortcuts(false)}
-              className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
-                !showShortcuts
+              className={`px-3 py-1 rounded text-xs font-medium transition-colors ${!showShortcuts
                   ? "bg-blue-600 text-white"
                   : "bg-slate-700 text-gray-400 hover:text-white"
-              }`}
+                }`}
             >
               Emojis
             </button>
             <button
               onClick={() => setShowShortcuts(true)}
-              className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
-                showShortcuts
+              className={`px-3 py-1 rounded text-xs font-medium transition-colors ${showShortcuts
                   ? "bg-blue-600 text-white"
                   : "bg-slate-700 text-gray-400 hover:text-white"
-              }`}
+                }`}
             >
               Shortcuts
             </button>
