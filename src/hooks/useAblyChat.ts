@@ -105,6 +105,7 @@ export function useAblyChat({ fid, matchId, onMessage, onError }: AblyChatOption
                         setIsConnected(true);
                         setIsConnecting(false);
                         console.log(`[Ably] Connected for FID ${fid}`);
+                        (globalThis as any).__ABLY_CONNECTED__ = true;
                     }
                 });
 
@@ -112,6 +113,7 @@ export function useAblyChat({ fid, matchId, onMessage, onError }: AblyChatOption
                     if (mounted) {
                         setIsConnected(false);
                         console.log(`[Ably] Disconnected`);
+                        (globalThis as any).__ABLY_CONNECTED__ = false;
                     }
                 });
 
@@ -121,7 +123,8 @@ export function useAblyChat({ fid, matchId, onMessage, onError }: AblyChatOption
                         setError(err);
                         setIsConnected(false);
                         setIsConnecting(false);
-                        onError?.(err);
+                        onErrorRef.current?.(err);
+                        (globalThis as any).__ABLY_CONNECTED__ = false;
                     }
                 });
 

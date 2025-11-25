@@ -5,7 +5,14 @@ import useSWR from "swr";
 import ChatWindow from "./ChatWindow";
 import ResultsCard from "./ResultsCard";
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+const fetcher = async (url: string) => {
+  const res = await fetch(url);
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`HTTP ${res.status}${text ? `: ${text}` : ""}`);
+  }
+  return res.json();
+};
 
 type Props = {
   fid: number;
@@ -29,7 +36,12 @@ export default function MultiChatContainer({ fid }: Props) {
   const [roundResults, setRoundResults] = useState<RoundResult[]>([]);
   const [revealingMatch, setRevealingMatch] = useState<string | null>(null);
   const [revealData, setRevealData] = useState<{
-    opponent: { fid: number; username: string; displayName: string; pfpUrl: string };
+    opponent: {
+      fid: number;
+      username: string;
+      displayName: string;
+      pfpUrl: string;
+    };
     actualType: "REAL" | "BOT";
   } | null>(null);
 
@@ -111,7 +123,7 @@ export default function MultiChatContainer({ fid }: Props) {
         console.error("Error updating vote:", error);
       }
     },
-    [votes, fid],
+    [votes, fid]
   );
 
   // Handle match completion
@@ -174,11 +186,18 @@ export default function MultiChatContainer({ fid }: Props) {
       // Also refresh after a short delay to catch any async updates
       setTimeout(() => mutate(), 500);
     },
-    [fid, mutate, matchData],
+    [fid, mutate, matchData]
   );
 
   if (error) {
-    return (
+    const msg = (error as any)?.message || "";
+    const isNotLive = msg.includes("403");
+    return isNotLive ? (
+      <div className="bg-slate-800 rounded-lg p-6 text-center">
+        <p className="text-gray-400">Waiting for game to start...</p>
+        <p className="text-sm text-gray-500 mt-2">Registration ongoing</p>
+      </div>
+    ) : (
       <div className="bg-red-900/20 border border-red-500 rounded-lg p-6 text-center">
         <p className="text-red-400">Failed to load matches. Please refresh.</p>
       </div>
@@ -203,10 +222,20 @@ export default function MultiChatContainer({ fid }: Props) {
     totalRounds = 5,
   } = matchData;
 
+  if ((matchData as any).gameState && (matchData as any).gameState !== "LIVE") {
+    return (
+      <div className="bg-slate-800 rounded-lg p-6 text-center">
+        <p className="text-gray-400">Waiting for game to start...</p>
+        <p className="text-sm text-gray-500 mt-2">Registration ongoing</p>
+      </div>
+    );
+  }
+
   // Show end game screen
   if (gameFinished && roundResults.length > 0) {
     const accuracy =
-      (roundResults.filter((r) => r.correct).length / roundResults.length) * 100;
+      (roundResults.filter((r) => r.correct).length / roundResults.length) *
+      100;
 
     return (
       <ResultsCard
@@ -276,10 +305,14 @@ export default function MultiChatContainer({ fid }: Props) {
           }
 
           const currentVote = votes[match.id] || "REAL";
-          const voteColor = currentVote === "BOT" ? "border-red-500/50" : "border-green-500/50";
+          const voteColor =
+            currentVote === "BOT" ? "border-red-500/50" : "border-green-500/50";
 
           return (
-            <div key={match.id} className={`relative border-l-4 ${voteColor} transition-colors duration-300 rounded-lg overflow-hidden`}>
+            <div
+              key={match.id}
+              className={`relative border-l-4 ${voteColor} transition-colors duration-300 rounded-lg overflow-hidden`}
+            >
               {/* Chat number badge */}
               <div className="absolute -top-2 -right-2 z-10 bg-blue-600 rounded-full w-8 h-8 flex items-center justify-center text-white font-bold text-sm">
                 {slotNumber}
@@ -308,20 +341,22 @@ export default function MultiChatContainer({ fid }: Props) {
           {[1, 2].map((slotNumber) => {
             const match = slots[slotNumber];
             const isActive = activeTab === slotNumber;
-            const currentVote = match ? (votes[match.id] || "REAL") : "REAL";
-            const voteColor = currentVote === "BOT" ? "border-red-500" : "border-green-500";
+            const currentVote = match ? votes[match.id] || "REAL" : "REAL";
+            const voteColor =
+              currentVote === "BOT" ? "border-red-500" : "border-green-500";
 
             return (
               <button
                 key={slotNumber}
                 onClick={() => setActiveTab(slotNumber)}
                 disabled={!match}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors relative border-b-2 ${voteColor} ${isActive
-                  ? "bg-blue-600 text-white"
-                  : match
+                className={`px-4 py-2 rounded-lg font-medium transition-colors relative border-b-2 ${voteColor} ${
+                  isActive
+                    ? "bg-blue-600 text-white"
+                    : match
                     ? "bg-slate-700 text-gray-300 hover:bg-slate-600"
                     : "bg-slate-800 text-gray-500 cursor-not-allowed border-slate-600"
-                  }`}
+                }`}
               >
                 Chat {slotNumber}
                 {hasNewMessages[slotNumber] && !isActive && (

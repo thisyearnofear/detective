@@ -682,8 +682,15 @@ class GameManager {
   public forceStateTransition(
     newState: "REGISTRATION" | "LIVE" | "FINISHED",
   ): void {
+    const now = Date.now();
     this.state.state = newState;
-    if (newState === "FINISHED") {
+    if (newState === "REGISTRATION") {
+      this.state.registrationEnds = now + REGISTRATION_DURATION;
+      this.state.gameEnds = now + GAME_DURATION;
+    } else if (newState === "LIVE") {
+      this.state.registrationEnds = now - 1;
+      this.state.gameEnds = now + GAME_DURATION;
+    } else if (newState === "FINISHED") {
       this.state.leaderboard = this.getLeaderboard();
     }
   }
