@@ -158,6 +158,20 @@ export async function generateBotResponse(
 
   const lastUserMessage = userMessages[userMessages.length - 1] || "hello";
 
+  // Check for adaptive follow-up based on personality (if available)
+  if (bot.personality && messageHistory.length > 0) {
+    const { generateAdaptiveFollowup } = require("./botProactive");
+    const adaptiveResponse = generateAdaptiveFollowup(
+      lastUserMessage,
+      bot.personality,
+    );
+
+    if (adaptiveResponse) {
+      console.log(`[generateBotResponse] Using adaptive response: "${adaptiveResponse}"`);
+      return adaptiveResponse;
+    }
+  }
+
   // Check cache first
   const cacheKey = `${bot.fid}-${lastUserMessage}`;
   if (responseCache.has(cacheKey)) {
@@ -203,6 +217,18 @@ export async function generateBotResponse(
 
   const commonPhrases = extractCommonPhrases(recentPosts);
 
+  // Add personality context to system prompt if available
+  let personalityContext = "";
+  if (bot.personality) {
+    const traits = [];
+    if (bot.personality.initiatesConversations) traits.push("often starts conversations");
+    if (bot.personality.asksQuestions) traits.push("asks questions frequently");
+    if (bot.personality.isDebater) traits.push("opinionated/debater");
+    if (traits.length > 0) {
+      personalityContext = `\nCOMMUNICATION TRAITS: ${traits.join(", ")}`;
+    }
+  }
+
   const systemPrompt = `You are impersonating Farcaster user @${bot.username} (${bot.displayName}).
 
 CRITICAL RULES:
@@ -226,12 +252,12 @@ POSTING PATTERNS:
 
 SAMPLE POSTS SHOWING THEIR STYLE:
 ${recentPosts
-  .slice(0, 10)
-  .map((p, i) => `${i + 1}. "${p}"`)
-  .join("\n")}
+      .slice(0, 10)
+      .map((p, i) => `${i + 1}. "${p}"`)
+      .join("\n")}
 
 PHRASES THEY COMMONLY USE:
-${commonPhrases.length > 0 ? commonPhrases.join(", ") : "none identified"}
+${commonPhrases.length > 0 ? commonPhrases.join(", ") : "none identified"}${personalityContext}
 
 CURRENT CONTEXT: ${pattern} conversation
 ${conversationContext ? `\nCONVERSATION SO FAR:\n${conversationContext}` : ""}
