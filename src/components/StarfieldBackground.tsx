@@ -165,6 +165,7 @@ export default function StarfieldBackground() {
         const clock = new THREE.Clock();
         let animationFrameId: number;
 
+        let frameCount = 0;
         const animate = () => {
             animationFrameId = requestAnimationFrame(animate);
 
@@ -184,8 +185,13 @@ export default function StarfieldBackground() {
                 particlesRef.current.rotation.y = currentRotationRef.current.y;
             }
 
-            if (rendererRef.current && sceneRef.current && cameraRef.current) {
-                rendererRef.current.render(sceneRef.current, cameraRef.current);
+            const isConnected = !!(globalThis as any).__ABLY_CONNECTED__;
+            const decimate = isConnected ? 1 : 2;
+            frameCount++;
+            if (frameCount % decimate === 0) {
+                if (rendererRef.current && sceneRef.current && cameraRef.current) {
+                    rendererRef.current.render(sceneRef.current, cameraRef.current);
+                }
             }
         };
 
