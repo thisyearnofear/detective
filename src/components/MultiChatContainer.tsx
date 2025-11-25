@@ -323,6 +323,20 @@ export default function MultiChatContainer({ fid }: Props) {
     [fid, mutate, matchData]
   );
 
+  // Memoize bound handlers to prevent new function references on every render
+  const boundHandlersRef = useRef<Map<string, { onVoteToggle: () => void; onComplete: () => void }>>(new Map());
+  
+  // Get or create stable handlers for a match ID
+  const getStableHandlers = useCallback((matchId: string) => {
+    if (!boundHandlersRef.current.has(matchId)) {
+      boundHandlersRef.current.set(matchId, {
+        onVoteToggle: () => handleVoteToggle(matchId),
+        onComplete: () => handleMatchComplete(matchId),
+      });
+    }
+    return boundHandlersRef.current.get(matchId)!;
+  }, [handleVoteToggle, handleMatchComplete]);
+  
   // Memoize slots to prevent ChatWindow from re-mounting on every matchData refresh
   // Use a ref to maintain stable references when match content hasn't changed
   const previousSlotsRef = useRef<any>({});
@@ -509,6 +523,9 @@ export default function MultiChatContainer({ fid }: Props) {
           const currentVote = votes[match.id] || "REAL";
           const voteColor =
             currentVote === "BOT" ? "border-red-500/50" : "border-green-500/50";
+          
+          // Get stable handlers to prevent ChatWindow remounting
+          const stableHandlers = getStableHandlers(match.id);
 
           return (
             <div
@@ -525,8 +542,8 @@ export default function MultiChatContainer({ fid }: Props) {
                 fid={fid}
                 match={match}
                 currentVote={currentVote}
-                onVoteToggle={() => handleVoteToggle(match.id)}
-                onComplete={() => handleMatchComplete(match.id)}
+                onVoteToggle={stableHandlers.onVoteToggle}
+                onComplete={stableHandlers.onComplete}
                 isCompact={true}
                 isMobileStacked={true}
                 showVoteToggle={true}
