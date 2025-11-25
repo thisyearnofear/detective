@@ -11,8 +11,8 @@ import OpponentCard from "./OpponentCard";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
-// Feature flag for WebSocket support
-const USE_WEBSOCKET = process.env.NEXT_PUBLIC_ENABLE_WEBSOCKET === "true";
+// Feature flag for WebSocket support - defaults to true if not explicitly set to "false"
+const USE_WEBSOCKET = process.env.NEXT_PUBLIC_ENABLE_WEBSOCKET !== "false";
 
 type Props = {
   fid: number;
@@ -35,6 +35,10 @@ type Props = {
   onComplete?: () => void;
   isCompact?: boolean;
   showVoteToggle?: boolean;
+  // New props for shared channel optimization
+  cycleId?: string;
+  playerCount?: number;
+  activeMatchIds?: string[];
 };
 
 export default function ChatWindow({
@@ -46,6 +50,9 @@ export default function ChatWindow({
   isCompact = false,
   showVoteToggle = false,
   isNewMatch = false,
+  cycleId,
+  playerCount,
+  activeMatchIds,
 }: Props) {
   const [input, setInput] = useState("");
   const [isTimeUp, setIsTimeUp] = useState(false);
@@ -67,7 +74,7 @@ export default function ChatWindow({
   } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // WebSocket mode (Ably)
+  // WebSocket mode (Ably) - with shared channel optimization support
   const {
     messages: wsMessages,
     sendMessage: wsSendMessage,
@@ -75,9 +82,13 @@ export default function ChatWindow({
     isConnected,
     isConnecting,
     error: wsError,
+    strategy,
   } = useAblyChat({
     fid,
     matchId: match.id,
+    cycleId, // For shared channel strategy
+    playerCount, // Used to determine channel strategy
+    activeMatchIds, // For filtering messages in shared channel mode
     onMessage: () => {
       setLastMessageTime(Date.now());
       setWarningLevel("none");
@@ -87,8 +98,28 @@ export default function ChatWindow({
     },
   });
 
+  // Track connection attempts for better UX
+  const [connectionAttempts, setConnectionAttempts] = useState(0);
+  const maxConnectionAttempts = 3;
+
+  // Determine WebSocket availability with grace period for initial connection
   const webSocketAvailable = USE_WEBSOCKET && isConnected;
-  const shouldFallbackToPolling = USE_WEBSOCKET && (wsError || (!isConnecting && !isConnected));
+  const isInitializing = USE_WEBSOCKET && isConnecting && connectionAttempts < maxConnectionAttempts;
+  const shouldFallbackToPolling = USE_WEBSOCKET && wsError && !isConnecting && connectionAttempts >= maxConnectionAttempts;
+
+  // Track connection attempts
+  useEffect(() => {
+    if (isConnecting) {
+      setConnectionAttempts(prev => prev + 1);
+    }
+  }, [isConnecting]);
+
+  // Reset connection attempts when successfully connected
+  useEffect(() => {
+    if (isConnected) {
+      setConnectionAttempts(0);
+    }
+  }, [isConnected]);
 
   const shouldPoll = (shouldFallbackToPolling || !USE_WEBSOCKET) && !match.messages;
   const {
@@ -287,28 +318,28 @@ export default function ChatWindow({
       {/* WebSocket connection status */}
       {USE_WEBSOCKET && (
         <>
-          {isConnecting && (
+          {isInitializing && (
             <div className="absolute top-2 right-2 flex items-center gap-2 bg-blue-500/20 px-2 py-1 rounded text-xs text-blue-300 z-10">
               <span className="animate-pulse">●</span>
-              Connecting...
+              Connecting{connectionAttempts > 1 ? ` (${connectionAttempts}/${maxConnectionAttempts})` : '...'}
             </div>
           )}
-          {shouldFallbackToPolling && !isConnecting && (
+          {shouldFallbackToPolling && (
             <div className="absolute top-2 right-2 flex items-center gap-2 bg-amber-500/20 px-2 py-1 rounded text-xs text-amber-300 z-10">
               <span>●</span>
-              Polling
+              Polling mode
             </div>
           )}
-          {!isConnected && !isConnecting && !shouldFallbackToPolling && (
-            <div className="absolute top-2 right-2 flex items-center gap-2 bg-red-500/20 px-2 py-1 rounded text-xs text-red-300 z-10">
-              <span>●</span>
-              Offline
+          {!isConnected && !isConnecting && !shouldFallbackToPolling && !isInitializing && (
+            <div className="absolute top-2 right-2 flex items-center gap-2 bg-yellow-500/20 px-2 py-1 rounded text-xs text-yellow-300 z-10">
+              <span className="animate-pulse">●</span>
+              Reconnecting...
             </div>
           )}
           {isConnected && (
             <div className="absolute top-2 right-2 flex items-center gap-2 bg-green-500/20 px-2 py-1 rounded text-xs text-green-300 z-10">
               <span>●</span>
-              Live
+              Live{strategy === "shared" ? " (optimized)" : ""}
             </div>
           )}
         </>
@@ -467,19 +498,19 @@ export default function ChatWindow({
             className={`grow bg-slate-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
               isCompact ? "text-sm" : ""
             } ${
-              USE_WEBSOCKET && !isConnected
-                ? "opacity-50 cursor-not-allowed"
+              USE_WEBSOCKET && !isConnected && !shouldFallbackToPolling
+                ? "opacity-50"
                 : ""
             }`}
             value={input}
             onChange={handleInputChange}
             onKeyPress={(e) => e.key === "Enter" && handleSend()}
             placeholder={
-              USE_WEBSOCKET && !isConnected
-                ? "Connecting..."
+              USE_WEBSOCKET && !isConnected && !shouldFallbackToPolling
+                ? "Connecting to chat..."
                 : "Type your message... (try :unicorn: or :fire:)"
             }
-            disabled={USE_WEBSOCKET && !isConnected}
+            disabled={USE_WEBSOCKET && !isConnected && !shouldFallbackToPolling && isInitializing}
           />
           <EmojiPicker
             onEmojiSelect={handleEmojiSelect}
@@ -488,7 +519,7 @@ export default function ChatWindow({
           <button
             className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg transition-colors"
             onClick={handleSend}
-            disabled={!input.trim() || (USE_WEBSOCKET && !isConnected)}
+            disabled={!input.trim() || (USE_WEBSOCKET && !isConnected && !shouldFallbackToPolling && isInitializing)}
           >
             Send
           </button>

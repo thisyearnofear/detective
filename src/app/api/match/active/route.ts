@@ -63,8 +63,8 @@ export async function GET(request: NextRequest) {
     const matchesPerRound = gameState.config.simultaneousMatches;
     const maxPossibleRounds = Math.floor(
       gameState.config.gameDurationMs /
-        gameState.config.matchDurationMs /
-        matchesPerRound,
+      gameState.config.matchDurationMs /
+      matchesPerRound,
     );
     const totalRounds = Math.min(
       maxPossibleRounds,
@@ -94,6 +94,8 @@ export async function GET(request: NextRequest) {
       },
       playerRank,
       gameState: gameState.state,
+      // Include cycleId for shared channel optimization
+      cycleId: gameState.cycleId,
     });
   } catch (error) {
     console.error("Error fetching active matches:", error);
