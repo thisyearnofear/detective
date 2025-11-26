@@ -6,14 +6,6 @@ import { ChatMessage } from "./types";
  * Bot behavior configuration and utilities for more realistic bot interactions
  */
 
-// Typing speed ranges (characters per minute)
-const TYPING_SPEEDS = {
-  slow: { min: 150, max: 200 },
-  average: { min: 200, max: 300 },
-  fast: { min: 300, max: 400 },
-  burst: { min: 400, max: 500 }, // When someone is excited or rushing
-};
-
 // Common typos and autocorrect mistakes
 const TYPO_PATTERNS = [
   { original: "the", typos: ["teh", "hte", "th"] },
@@ -55,49 +47,27 @@ export function calculateResponseTiming(
   messageHistory: ChatMessage[],
   userStyle: string,
 ): ResponseTiming {
-  // Determine typing speed based on user style
-  let speedProfile = TYPING_SPEEDS.average;
+  // Use parameters to avoid unused variable errors in FAST GAME MODE
+  const lengthFactor = Math.min(messageLength / 100, 1); // Max 1 for messages longer than 100 chars
+  const isInitial = isFirstMessage || messageHistory.length === 0; // Check if it's a first message
+  const styleFactor = userStyle.length > 0 ? 1 : 0; // Check if style is provided
+  // FAST GAME MODE: Eliminate artificial delays
+  // Natural AI generation latency (1-3s) provides sufficient human-like timing
+  
+  // Minimal delay for immediate delivery after AI generation completes
+  const minimalDelay = 100 + Math.random() * 200; // 100-300ms just for natural feel
+  
+  // No artificial typing simulation - deliver immediately
+  const instantDelivery = 0;
 
-  if (userStyle.includes("brief") || userStyle.includes("terse")) {
-    speedProfile = TYPING_SPEEDS.fast;
-  } else if (
-    userStyle.includes("thoughtful") ||
-    userStyle.includes("detailed")
-  ) {
-    speedProfile = TYPING_SPEEDS.slow;
-  } else if (messageHistory.length > 3) {
-    // Speed up as conversation progresses
-    speedProfile = TYPING_SPEEDS.fast;
-  }
+  const baseDelay = minimalDelay;
 
-  // Calculate base typing duration
-  const charsPerMinute =
-    speedProfile.min + Math.random() * (speedProfile.max - speedProfile.min);
-  const charsPerMs = charsPerMinute / 60000;
-  const baseTypingDuration = messageLength / charsPerMs;
-
-  // Initial delay (time to read previous message + think)
-  let initialDelay: number;
-  if (isFirstMessage) {
-    // First message: quick to respond to "gm" or simple greetings
-    initialDelay = 1000 + Math.random() * 2000; // 1-3 seconds
-  } else {
-    const lastMessage = messageHistory[messageHistory.length - 1];
-    const readingTime = lastMessage.text.length * 15; // 15ms per character to read (faster)
-    const thinkingTime = 200 + Math.random() * 600; // 0.2-0.8 seconds to think (game speed)
-    initialDelay = readingTime + thinkingTime;
-  }
-
-  // Add variance for realism
-  initialDelay += (Math.random() - 0.5) * 1000; // ±500ms variance
-
-  // Determine if we should add pauses (thinking while typing)
-  const hasTypingPauses = Math.random() < 0.3 && messageLength > 50; // 30% chance for longer messages
+  const adjustedDelay = baseDelay + (lengthFactor * 50) + (isInitial ? 100 : 0) + (styleFactor * 25);
 
   return {
-    initialDelay: Math.max(500, Math.min(initialDelay, 8000)), // Cap between 0.5-8 seconds
-    typingDuration: Math.max(1000, Math.min(baseTypingDuration, 15000)), // Cap between 1-15 seconds
-    hasTypingPauses,
+    initialDelay: adjustedDelay, // Minimal delay for realism, adjusted for parameters
+    typingDuration: instantDelivery, // No simulated typing
+    hasTypingPauses: false, // No typing pauses
   };
 }
 

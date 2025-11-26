@@ -8,18 +8,29 @@ Can you tell if you're chatting with a real person or an AI bot trained on their
 
 For detailed information about the project, please refer to the following documentation files:
 
+### **Core Documentation**
 1. [ARCHITECTURE.md](docs/ARCHITECTURE.md) - Architecture and core concepts
-2. [DEVELOPMENT_IMPLEMENTATION.md](docs/DEVELOPMENT_IMPLEMENTATION.md) - Development guide and implementation
-3. [UI_UX_ENHANCEMENT.md](docs/UI_UX_ENHANCEMENT.md) - UI/UX design and enhancement
-4. [ADVANCED.md](docs/ADVANCED.md) - Advanced features and deployment
+2. [DEVELOPMENT.md](docs/DEVELOPMENT.md) - Development guide and implementation  
+3. [PROGRESS_LOG.md](docs/PROGRESS_LOG.md) - **NEW**: Complete development progress and current status
+4. [ACCESS_GATING.md](docs/ACCESS_GATING.md) - **NEW**: Multi-chain access control strategy
+
+### **Design & Enhancement**
+5. [UI_UX.md](docs/UI_UX.md) - UI/UX design and enhancement
+6. [GAME_DESIGN.md](docs/GAME_DESIGN.md) - Game mechanics and balance
+7. [REVEAL_REDESIGN.md](docs/REVEAL_REDESIGN.md) - Vote reveal and results system
+
+### **Advanced Features** 
+8. [ADVANCED.md](docs/ADVANCED.md) - Advanced features and deployment
+9. [SCALING.md](docs/SCALING.md) - Performance and scaling considerations
 
 ## About
 
-Detective is a Farcaster mini app where players engage in short conversations and guess whether they're speaking with another real user or an intelligent bot. The bot is trained on the player's recent Farcaster posts, making the impersonation as authentic as possible.
+Detective is a Farcaster-native social deduction game where players chat with opponents and determine: Human or AI? Built on multi-chain infrastructure (Arbitrum + Monad) with synthetic identity as a core primitive. As AI models become indistinguishable from human behavior, Detective makes detection skills playable, measurable, and economically valuable.
 
-**Current Status**: Phase 1-3 (Complete) ✅ UI/UX Enhancement Done
-**Status**: Production Ready  
+**Current Status**: Phase 1-4 (Complete) ✅ Multi-Chain Integration & Access Gating Prep
+**Status**: Production Ready with Gating Implementation  
 **Build**: ✅ Passing (Next.js 15.5.6, TypeScript strict)
+**Latest**: Farcaster SDK integration, multi-chain leaderboards, access gating preparation
 
 ## Quick Start
 
@@ -86,27 +97,23 @@ Scoring & Leaderboard
 Repeat 5 times per game cycle
 ```
 
-## UI/UX Enhancement (Nov 25, 2025) ✅
+## Latest Enhancements (January 2025) ✅
 
-### Phase 1: Visual Foundation
-- ✅ Canvas-based animated gradient background (state-aware colors)
-- ✅ SVG progress ring timer with color transitions
-- ✅ Message entrance animations (staggered 40ms per message)
-- ✅ Vote feedback animations (correct/incorrect/lock states)
+### Phase 4: Multi-Chain & Mobile Optimization  
+- ✅ **Real Farcaster SDK Integration**: Authentic miniapp experience with notifications
+- ✅ **Multi-Platform Wallet Connection**: MetaMask, WalletConnect, Farcaster SDK
+- ✅ **Registration Lobby System**: Real-time player tracking, countdown timers, game start ceremony
+- ✅ **Bot Response Optimization**: Eliminated 1-23 second artificial delays, sub-2 second responses
+- ✅ **Multi-Chain Leaderboards**: Arbitrum (NFT focus) + Monad (token focus) ranking system
+- ✅ **Mobile-First Design**: Touch-optimized UI for Farcaster mobile clients
+- ✅ **Access Gating Preparation**: Token/NFT verification infrastructure
 
-### Phase 2: Immersion & Feedback  
-- ✅ OpponentCard with color extraction from profile pictures
-- ✅ RegistrationLoader with step-by-step animations
-- ✅ RoundStartLoader with countdown
-- ✅ Color-coded chat borders (desktop) and tab indicators (mobile)
+### Phase 3: UI/UX Foundation (Nov 2025) ✅
+- ✅ Canvas-based animated backgrounds, SVG progress timers
+- ✅ OpponentCard with color extraction, registration animations  
+- ✅ Smooth transitions, error handling, results tracking
 
-### Phase 3: Polish & Edge Cases
-- ✅ Enhanced inactivity warnings with glow effects
-- ✅ Smooth round transitions with overlay effects
-- ✅ Error card component with severity levels
-- ✅ Results card with accuracy tracking
-
-**Delivered**: 16 new/enhanced components, 20+ CSS animations, zero breaking changes, <3KB bundle growth
+**Delivered**: 25+ new components, real-time features, multi-chain support, mobile optimization
 
 See [UI_UX_ROADMAP.md](UI_UX_ROADMAP.md) for detailed specs.
 

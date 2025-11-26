@@ -3,41 +3,52 @@
 import { useState, useEffect } from 'react';
 import useSWR from 'swr';
 import { Player } from '@/lib/types';
-import SpinningDetective from './SpinningDetective';
-import RegistrationLoader from './RegistrationLoader';
+import SpinningDetective from '../SpinningDetective';
+import RegistrationLoader from '../RegistrationLoader';
 
-type GamePhase = 'lobby' | 'bot_generation' | 'player_reveal' | 'countdown' | 'live';
+type GamePhase = 'lobby' | 'bot_generation' | 'player_reveal' | 'countdown';
 
 type Props = {
-  currentPlayer: Player;
-  isRegistrationOpen: boolean;
-  gameState: any;
+  currentPlayer: {
+    fid: number;
+    username: string;
+    displayName: string;
+    pfpUrl: string;
+  };
+  gameState: {
+    cycleId: string;
+    state: string;
+    playerCount: number;
+    registrationEnds: number;
+    gameEnds: number;
+    isRegistered: boolean;
+  };
 };
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
-export default function GameRegister({ currentPlayer, isRegistrationOpen, gameState }: Props) {
+export default function GameLobby({ currentPlayer, gameState }: Props) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isRegistered, setIsRegistered] = useState(gameState?.isRegistered || false);
   const [gamePhase, setGamePhase] = useState<GamePhase>('lobby');
-  
+
   // Game start sequence states
   const [botProgress, setBotProgress] = useState(0);
   const [countdown, setCountdown] = useState(5);
 
   // Fetch registered players list
   const { data: playersData } = useSWR(
-    '/api/game/players', 
-    fetcher, 
-    { 
+    '/api/game/players',
+    fetcher,
+    {
       refreshInterval: 2000,
       revalidateOnFocus: false,
     }
   );
 
   const registeredPlayers = playersData?.players || [];
-  const maxPlayers = 8; // Start with 8 players maximum
+  const maxPlayers = 8;
   const spotsLeft = maxPlayers - registeredPlayers.length;
   const isFull = spotsLeft === 0;
   const [timeLeft, setTimeLeft] = useState(0);
@@ -55,28 +66,27 @@ export default function GameRegister({ currentPlayer, isRegistrationOpen, gameSt
     return () => clearInterval(interval);
   }, [gameState?.registrationEnds]);
 
-  // Check if game should start (when lobby is full or registration ends)
+  // Check if game should start
   useEffect(() => {
     const isFull = registeredPlayers.length >= maxPlayers;
     const isTimeUp = gameState?.registrationEnds && Date.now() > gameState.registrationEnds;
-    
+
     if ((isFull || isTimeUp) && registeredPlayers.length >= 3 && gamePhase === 'lobby') {
-      // Need minimum 3 players to start, transition to game start
       const timer = setTimeout(() => {
         setGamePhase('bot_generation');
-      }, 2000); // 2 second delay before starting sequence
-      
+      }, 2000);
+
       return () => clearTimeout(timer);
     }
-  }, [registeredPlayers.length, gameState?.registrationEnds, maxPlayers, gamePhase]);
+  }, [registeredPlayers.length, gameState?.registrationEnds, gamePhase]);
 
   // Simulate bot generation progress
   useEffect(() => {
     if (gamePhase !== 'bot_generation') return;
 
     const interval = setInterval(() => {
-      setBotProgress(prev => {
-        const newProgress = prev + Math.random() * 15 + 5; // 5-20% increments
+      setBotProgress((prev) => {
+        const newProgress = prev + Math.random() * 15 + 5;
         if (newProgress >= 100) {
           setTimeout(() => setGamePhase('player_reveal'), 500);
           return 100;
@@ -104,10 +114,8 @@ export default function GameRegister({ currentPlayer, isRegistrationOpen, gameSt
     if (gamePhase !== 'countdown') return;
 
     const interval = setInterval(() => {
-      setCountdown(prev => {
+      setCountdown((prev) => {
         if (prev <= 1) {
-          setGamePhase('live');
-          handleGameStart();
           return 0;
         }
         return prev - 1;
@@ -142,21 +150,11 @@ export default function GameRegister({ currentPlayer, isRegistrationOpen, gameSt
     }
   };
 
-  const handleGameStart = () => {
-    // This will trigger the main game flow
-    // The parent component should handle the transition to LIVE state
-    console.log('Game starting with players:', registeredPlayers);
-  };
-
   const formatTimeLeft = (ms: number) => {
     const minutes = Math.floor(ms / 60000);
     const seconds = Math.floor((ms % 60000) / 1000);
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
-
-  if (!isRegistrationOpen) {
-    return null;
-  }
 
   // Bot generation phase
   if (gamePhase === 'bot_generation') {
@@ -172,14 +170,13 @@ export default function GameRegister({ currentPlayer, isRegistrationOpen, gameSt
           </p>
         </div>
 
-        {/* Progress Bar */}
         <div className="bg-slate-900/50 border border-white/10 rounded-xl p-4 md:p-6 backdrop-blur-sm">
           <div className="flex justify-between items-center mb-3 md:mb-4">
             <span className="text-xs md:text-sm font-medium text-white">Bot Generation</span>
             <span className="text-xs md:text-sm font-bold text-blue-400">{Math.round(botProgress)}%</span>
           </div>
           <div className="w-full bg-slate-700/50 h-2 md:h-3 rounded-full overflow-hidden">
-            <div 
+            <div
               className="h-full bg-gradient-to-r from-blue-500 to-purple-600 transition-all duration-200"
               style={{ width: `${botProgress}%` }}
             />
@@ -202,15 +199,23 @@ export default function GameRegister({ currentPlayer, isRegistrationOpen, gameSt
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
           {registeredPlayers.map((player: Player) => (
-            <div key={player.fid} className="bg-slate-900/50 border border-white/10 rounded-lg p-3 md:p-4 text-center animate-fade-in backdrop-blur-sm">
+            <div
+              key={player.fid}
+              className="bg-slate-900/50 border border-white/10 rounded-lg p-3 md:p-4 text-center animate-fade-in backdrop-blur-sm"
+            >
               <div className="text-3xl md:text-4xl mb-2 md:mb-3">👤</div>
-              <div className="text-sm md:text-base font-bold text-white truncate">@{player.username}</div>
+              <div className="text-sm md:text-base font-bold text-white truncate">
+                @{player.username}
+              </div>
               <div className="text-xs text-gray-400 mt-1">Real Player</div>
             </div>
           ))}
-          
+
           {registeredPlayers.map((_: Player, idx: number) => (
-            <div key={`bot-${idx}`} className="bg-slate-900/50 border border-purple-500/30 rounded-lg p-3 md:p-4 text-center animate-fade-in backdrop-blur-sm">
+            <div
+              key={`bot-${idx}`}
+              className="bg-slate-900/50 border border-purple-500/30 rounded-lg p-3 md:p-4 text-center animate-fade-in backdrop-blur-sm"
+            >
               <div className="text-3xl md:text-4xl mb-2 md:mb-3">🤖</div>
               <div className="text-sm md:text-base font-bold text-purple-300">AI Bot {idx + 1}</div>
               <div className="text-xs text-gray-400 mt-1">AI Opponent</div>
@@ -233,18 +238,19 @@ export default function GameRegister({ currentPlayer, isRegistrationOpen, gameSt
         </div>
         <div className="space-y-2 text-center">
           <p className="text-gray-400 text-xs md:text-sm">Prepare yourself...</p>
-          <p className="text-xs text-gray-500">You'll manage {registeredPlayers.length} simultaneous conversations</p>
+          <p className="text-xs text-gray-500">
+            You'll manage {registeredPlayers.length} simultaneous conversations
+          </p>
         </div>
       </div>
     );
   }
 
-  // Lobby phase - show registration interface
+  // Lobby phase - registration interface
   return (
     <div className="space-y-6">
       <RegistrationLoader isVisible={isLoading} />
-      
-      {/* Registration Status Header */}
+
       <div className="text-center">
         <h2 className="hero-title text-2xl md:text-3xl font-black text-stroke mb-2">
           Game Lobby
@@ -254,21 +260,21 @@ export default function GameRegister({ currentPlayer, isRegistrationOpen, gameSt
         </p>
       </div>
 
-      {/* Registration Progress */}
       <div className="bg-slate-900/50 border border-white/10 rounded-xl p-4 md:p-6 backdrop-blur-sm">
         <div className="flex justify-between items-center mb-3 md:mb-4">
           <span className="text-xs md:text-sm font-medium text-white">Players Registered</span>
-          <span className="text-xs md:text-sm font-bold text-blue-400">{registeredPlayers.length}/{maxPlayers}</span>
+          <span className="text-xs md:text-sm font-bold text-blue-400">
+            {registeredPlayers.length}/{maxPlayers}
+          </span>
         </div>
         <div className="w-full bg-slate-700/50 h-2 md:h-3 rounded-full overflow-hidden">
-          <div 
+          <div
             className="h-full bg-gradient-to-r from-blue-500 to-purple-600 transition-all duration-500 ease-out"
             style={{ width: `${(registeredPlayers.length / maxPlayers) * 100}%` }}
           />
         </div>
       </div>
 
-      {/* Time Remaining */}
       <div className="bg-slate-900/50 border border-white/10 rounded-xl p-4 md:p-6 text-center backdrop-blur-sm">
         <span className="text-xs text-gray-400 uppercase tracking-wide">Time Remaining</span>
         <div className="text-4xl md:text-5xl font-black text-white mt-2">
@@ -276,7 +282,6 @@ export default function GameRegister({ currentPlayer, isRegistrationOpen, gameSt
         </div>
       </div>
 
-      {/* Registered Players List */}
       {registeredPlayers.length > 0 && (
         <div className="bg-slate-900/50 border border-white/10 rounded-xl p-4 md:p-6 backdrop-blur-sm">
           <h3 className="font-bold text-white mb-4 text-sm md:text-base">Registered Players</h3>
@@ -308,7 +313,6 @@ export default function GameRegister({ currentPlayer, isRegistrationOpen, gameSt
         </div>
       )}
 
-      {/* Registration Button */}
       {!isRegistered ? (
         <button
           onClick={handleRegister}

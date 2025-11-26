@@ -3,13 +3,13 @@ import { NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
 import { NextRequest } from "next/server";
 import { getScheduledBotResponse, markBotResponseDelivered, recordBotDeliveryFailure } from "@/lib/botScheduler";
-import { getGameEventPublisher } from "@/lib/gameEventPublisher";
+// import { getGameEventPublisher } from "@/lib/gameEventPublisher"; // TODO: Use when needed
 import { getAblyServerManager } from "@/lib/ablyChannelManager";
 
 /**
  * API route to poll messages for multiple matches at once.
  * This reduces the number of requests when handling simultaneous chats.
- * 
+ *
  * Also delivers any scheduled bot responses that are ready.
  */
 export async function GET(request: NextRequest) {
@@ -36,8 +36,8 @@ export async function GET(request: NextRequest) {
 
     // Collect messages for all matches
     const chatsByMatch: Record<string, any> = {};
-    const gameState = await gameManager.getGameState();
-    const eventPublisher = getGameEventPublisher();
+    // const gameState = await gameManager.getGameState(); // TODO: Use when needed
+    // const eventPublisher = getGameEventPublisher(); // TODO: Use when needed
     const ablyManager = getAblyServerManager();
 
     for (const matchId of matchIds) {
@@ -65,14 +65,8 @@ export async function GET(request: NextRequest) {
             };
             await ablyManager.publishToMatchChannel(matchId, chatMessage);
             
-            // Also publish game event for monitoring
-            await eventPublisher.publishChatMessage(
-              gameState.cycleId,
-              matchId,
-              match.player.fid,
-              scheduledBot.botFid,
-              scheduledBot.response
-            );
+            // NOTE: Removed duplicate publishChatMessage to prevent bot response duplication
+            // The match channel publish above is sufficient for real-time delivery
             console.log(`[batch-poll] ✓ Published bot response via Ably for match ${matchId}`);
           } catch (error) {
             // Record failure for retry logic

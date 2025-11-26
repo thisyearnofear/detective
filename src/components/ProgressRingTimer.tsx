@@ -38,8 +38,12 @@ export default function ProgressRingTimer({
   }, [duration]);
 
   useEffect(() => {
+    // Frontend grace period to match backend auto-lock timing
+    const FRONTEND_GRACE_PERIOD = 3000; // 3 seconds to sync with backend grace periods
+    
     // Use server end time if provided, otherwise calculate from duration
-    const endTime = serverEndTime || (Date.now() + duration * 1000);
+    const baseEndTime = serverEndTime || (Date.now() + duration * 1000);
+    const endTime = baseEndTime + FRONTEND_GRACE_PERIOD;
     
     // Don't start timer if duration is too short (likely stale data)
     if (duration <= 0 && !serverEndTime) {
@@ -52,10 +56,14 @@ export default function ProgressRingTimer({
       const secondsLeft = timeLeft / 1000;
 
       setRemaining(secondsLeft);
-      setIsWarning(secondsLeft <= 30 && secondsLeft > 0);
-      setIsCritical(secondsLeft <= 10);
+      
+      // Show warnings based on original timer (without grace period)
+      // This keeps the UI warnings at the expected 60s/30s/10s marks
+      const originalSecondsLeft = Math.max(0, (baseEndTime - now) / 1000);
+      setIsWarning(originalSecondsLeft <= 30 && originalSecondsLeft > 10);
+      setIsCritical(originalSecondsLeft <= 10 && originalSecondsLeft > 0);
 
-      // Only trigger onComplete once
+      // Only trigger onComplete once when grace period expires
       if (secondsLeft <= 0 && !hasCompletedRef.current) {
         hasCompletedRef.current = true;
         setRemaining(0);

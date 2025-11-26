@@ -8,7 +8,6 @@
 import { gameManager } from "./gameState";
 import { getScheduledBotResponse, markBotResponseDelivered, recordBotDeliveryFailure } from "./botScheduler";
 import { getAblyServerManager } from "./ablyChannelManager";
-import { getGameEventPublisher } from "./gameEventPublisher";
 import { redis } from "./redis";
 
 let isRunning = false;
@@ -24,9 +23,7 @@ async function checkAndDeliverReadyResponses() {
     
     if (keys.length === 0) return;
 
-    const gameState = await gameManager.getGameState();
     const ablyManager = getAblyServerManager();
-    const eventPublisher = getGameEventPublisher();
 
     for (const key of keys) {
       const matchId = key.replace("bot:scheduled:", "");
@@ -49,7 +46,7 @@ async function checkAndDeliverReadyResponses() {
           await gameManager.addMessageToMatch(matchId, scheduledBot.response, scheduledBot.botFid);
           await markBotResponseDelivered(matchId);
 
-          // Publish to match channel immediately
+          // Publish to match channel immediately (ONLY ONE CHANNEL TO AVOID DUPLICATION)
           const chatMessage = {
             id: `${Date.now()}-${scheduledBot.botFid}-${Math.random().toString(36).substr(2, 9)}`,
             text: scheduledBot.response,
@@ -61,14 +58,8 @@ async function checkAndDeliverReadyResponses() {
           };
           await ablyManager.publishToMatchChannel(matchId, chatMessage);
 
-          // Also publish game event for monitoring
-          await eventPublisher.publishChatMessage(
-            gameState.cycleId,
-            matchId,
-            match.player.fid,
-            scheduledBot.botFid,
-            scheduledBot.response
-          );
+          // NOTE: Removed duplicate publishChatMessage to prevent bot response duplication
+          // The match channel publish above is sufficient for real-time delivery
 
           console.log(`[BotResponseDelivery] ✓ Immediately delivered bot response for ${matchId}`);
         } catch (error) {
@@ -99,7 +90,7 @@ export function startBotResponseDelivery() {
     checkAndDeliverReadyResponses().catch(err => {
       console.error("[BotResponseDelivery] Unexpected error:", err);
     });
-  }, 500); // Check every 500ms for quick delivery
+  }, 100); // Check every 100ms for ultra-fast delivery
 
   // Stop on process exit
   if (typeof process !== "undefined") {
