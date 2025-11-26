@@ -239,6 +239,73 @@ class InMemoryDatabase {
             .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())
             .slice(0, limit);
     }
+
+    async getLeaderboardNearPlayer(fid: number, chain?: string, limit: number = 10): Promise<DbLeaderboardEntry[]> {
+        // In-memory implementation doesn't support chain filtering
+        console.log(`[InMemoryDB] getLeaderboardNearPlayer called with chain: ${chain || 'all'}`);
+        const allEntries = await this.getGlobalLeaderboard(1000); // Get all entries to find the player's position
+        const playerIndex = allEntries.findIndex(entry => entry.fid === fid);
+
+        if (playerIndex === -1) {
+            // If player not found, return empty array or top entries
+            return allEntries.slice(0, limit);
+        }
+
+        // Calculate start index to center the player in the results
+        const startIndex = Math.max(0, playerIndex - Math.floor(limit / 2));
+        const endIndex = Math.min(allEntries.length, startIndex + limit);
+
+        return allEntries.slice(startIndex, endIndex);
+    }
+
+    async getTopPlayers(chain?: string, limit: number = 100): Promise<DbLeaderboardEntry[]> {
+        // For in-memory implementation, chain is ignored
+        console.log(`[InMemoryDB] getTopPlayers called with chain: ${chain || 'all'}`);
+        return await this.getGlobalLeaderboard(limit);
+    }
+
+    async getFriendsLeaderboard(fid: number, chain?: string, limit: number = 100): Promise<DbLeaderboardEntry[]> {
+        // For in-memory implementation, return empty array or global leaderboard
+        // Note: fid is used for API compatibility but not implemented in in-memory version
+        console.log(`[InMemoryDB] getFriendsLeaderboard called for fid: ${fid}, chain: ${chain || 'all'}`);
+        return await this.getGlobalLeaderboard(limit);
+    }
+
+    async getCurrentGameLeaderboard(chain?: string, limit: number = 100): Promise<DbLeaderboardEntry[]> {
+        // In-memory implementation uses global leaderboard as fallback
+        console.log(`[InMemoryDB] getCurrentGameLeaderboard called with chain: ${chain || 'all'}`);
+        return await this.getGlobalLeaderboard(limit);
+    }
+
+    async getSeasonLeaderboard(chain?: string, timeframe?: string, limit: number = 100): Promise<DbLeaderboardEntry[]> {
+        // In-memory implementation uses global leaderboard as fallback
+        console.log(`[InMemoryDB] getSeasonLeaderboard called with chain: ${chain || 'all'}, timeframe: ${timeframe || 'all'}`);
+        return await this.getGlobalLeaderboard(limit);
+    }
+
+    async getAllTimeLeaderboard(chain?: string, limit: number = 100): Promise<DbLeaderboardEntry[]> {
+        // In-memory implementation uses global leaderboard as fallback
+        console.log(`[InMemoryDB] getAllTimeLeaderboard called with chain: ${chain || 'all'}`);
+        return await this.getGlobalLeaderboard(limit);
+    }
+
+    async getNFTHolderLeaderboard(chain?: string, timeframe?: string, limit: number = 100): Promise<DbLeaderboardEntry[]> {
+        // In-memory implementation uses global leaderboard as fallback
+        console.log(`[InMemoryDB] getNFTHolderLeaderboard called with chain: ${chain || 'all'}, timeframe: ${timeframe || 'all'}`);
+        return await this.getGlobalLeaderboard(limit);
+    }
+
+    async getTokenHolderLeaderboard(chain?: string, timeframe?: string, limit: number = 100): Promise<DbLeaderboardEntry[]> {
+        // In-memory implementation uses global leaderboard as fallback
+        console.log(`[InMemoryDB] getTokenHolderLeaderboard called with chain: ${chain || 'all'}, timeframe: ${timeframe || 'all'}`);
+        return await this.getGlobalLeaderboard(limit);
+    }
+
+    async getCrossChainLeaderboard(limit: number = 100): Promise<DbLeaderboardEntry[]> {
+        // In-memory implementation uses global leaderboard as fallback
+        console.log('[InMemoryDB] getCrossChainLeaderboard called');
+        return await this.getGlobalLeaderboard(limit);
+    }
 }
 
 /**
@@ -563,6 +630,223 @@ class PostgresDatabase {
         return result.rows;
     }
 
+    async getLeaderboardNearPlayer(fid: number, chain: string = 'arbitrum', limit: number = 10): Promise<DbLeaderboardEntry[]> {
+        const pool = await this.getPool();
+
+        // Note: The chain parameter is for API compatibility.
+        // Currently, player stats are tracked across all chains.
+        // In a full implementation, this would filter by chain.
+        console.log(`[PostgresDB] getLeaderboardNearPlayer called with chain: ${chain}`);
+
+        // First, get the player's rank
+        const rankQuery = `
+            SELECT ROW_NUMBER() OVER (ORDER BY accuracy DESC, avg_speed_ms ASC) as rank
+            FROM player_stats
+            WHERE total_matches >= 5 AND fid = $1
+        `;
+        const rankResult = await pool.query(rankQuery, [fid]);
+
+        if (rankResult.rows.length === 0) {
+            // If player doesn't exist or doesn't qualify, return top players
+            return await this.getGlobalLeaderboard(limit);
+        }
+
+        const playerRank = rankResult.rows[0].rank;
+
+        // Calculate the range of ranks to fetch
+        const startRank = Math.max(1, playerRank - Math.floor(limit / 2));
+
+        // Get players in that rank range
+        const result = await pool.query(`
+            SELECT
+                fid, username, display_name, pfp_url, accuracy, avg_speed_ms,
+                total_matches, total_games, COALESCE(total_wins, 0) as total_wins,
+                ROW_NUMBER() OVER (ORDER BY accuracy DESC, avg_speed_ms ASC) as rank
+            FROM player_stats
+            WHERE total_matches >= 5
+            ORDER BY accuracy DESC, avg_speed_ms ASC
+            OFFSET $1 LIMIT $2
+        `, [startRank - 1, limit]);
+
+        return result.rows;
+    }
+
+    async getTopPlayers(chain: string = 'arbitrum', limit: number = 100): Promise<DbLeaderboardEntry[]> {
+        const pool = await this.getPool();
+
+        // Note: The chain parameter is for API compatibility.
+        // Currently, player stats are tracked across all chains.
+        // In a full implementation, this would filter by chain.
+        console.log(`[PostgresDB] getTopPlayers called with chain: ${chain}`);
+
+        const result = await pool.query(
+            `SELECT
+                fid, username, display_name, pfp_url, accuracy, avg_speed_ms, total_matches,
+                total_games, COALESCE(total_wins, 0) as total_wins,
+                ROW_NUMBER() OVER (ORDER BY accuracy DESC, avg_speed_ms ASC) as rank
+            FROM player_stats
+            WHERE total_matches >= 5
+            ORDER BY accuracy DESC, avg_speed_ms ASC
+            LIMIT $1`,
+            [limit]
+        );
+        return result.rows;
+    }
+
+    async getFriendsLeaderboard(fid: number, chain: string = 'arbitrum', limit: number = 100): Promise<DbLeaderboardEntry[]> {
+        // For now, this is a simplified implementation.
+        // In a real implementation, you would have a friends relationship system.
+        // For now, we'll return the global leaderboard as fallback.
+
+        // Note: The fid and chain parameters are for API compatibility.
+        // Currently, friend relationships don't consider chains.
+        console.log(`[PostgresDB] getFriendsLeaderboard called for fid: ${fid}, with chain: ${chain}`);
+
+        const pool = await this.getPool();
+        const result = await pool.query(
+            `SELECT
+                fid, username, display_name, pfp_url, accuracy, avg_speed_ms, total_matches,
+                total_games, COALESCE(total_wins, 0) as total_wins,
+                ROW_NUMBER() OVER (ORDER BY accuracy DESC, avg_speed_ms ASC) as rank
+            FROM player_stats
+            WHERE total_matches >= 5
+            ORDER BY accuracy DESC, avg_speed_ms ASC
+            LIMIT $1`,
+            [limit]
+        );
+        return result.rows;
+    }
+
+    async getCurrentGameLeaderboard(chain: string = 'arbitrum', limit: number = 100): Promise<DbLeaderboardEntry[]> {
+        const pool = await this.getPool();
+
+        // Note: The chain parameter is for API compatibility.
+        // Currently, player stats are tracked across all chains.
+        // In a full implementation, this would filter by chain.
+        console.log(`[PostgresDB] getCurrentGameLeaderboard called with chain: ${chain}`);
+
+        const result = await pool.query(
+            `SELECT
+                fid, username, display_name, pfp_url, accuracy, avg_speed_ms, total_matches,
+                total_games, COALESCE(total_wins, 0) as total_wins,
+                ROW_NUMBER() OVER (ORDER BY accuracy DESC, avg_speed_ms ASC) as rank
+            FROM player_stats
+            WHERE total_matches >= 5
+            ORDER BY accuracy DESC, avg_speed_ms ASC
+            LIMIT $1`,
+            [limit]
+        );
+        return result.rows;
+    }
+
+    async getSeasonLeaderboard(chain: string = 'arbitrum', timeframe: string = '7d', limit: number = 100): Promise<DbLeaderboardEntry[]> {
+        // For now, using the global leaderboard as a fallback
+        // In a real implementation, this would filter by season/timeframe
+
+        // Note: The chain and timeframe parameters are for API compatibility.
+        console.log(`[PostgresDB] getSeasonLeaderboard called with chain: ${chain}, timeframe: ${timeframe}`);
+
+        const pool = await this.getPool();
+        const result = await pool.query(
+            `SELECT
+                fid, username, display_name, pfp_url, accuracy, avg_speed_ms, total_matches,
+                total_games, COALESCE(total_wins, 0) as total_wins,
+                ROW_NUMBER() OVER (ORDER BY accuracy DESC, avg_speed_ms ASC) as rank
+            FROM player_stats
+            WHERE total_matches >= 5
+            ORDER BY accuracy DESC, avg_speed_ms ASC
+            LIMIT $1`,
+            [limit]
+        );
+        return result.rows;
+    }
+
+    async getAllTimeLeaderboard(chain: string = 'arbitrum', limit: number = 100): Promise<DbLeaderboardEntry[]> {
+        const pool = await this.getPool();
+
+        // Note: The chain parameter is for API compatibility.
+        // Currently, player stats are tracked across all chains.
+        // In a full implementation, this would filter by chain.
+        console.log(`[PostgresDB] getAllTimeLeaderboard called with chain: ${chain}`);
+
+        const result = await pool.query(
+            `SELECT
+                fid, username, display_name, pfp_url, accuracy, avg_speed_ms, total_matches,
+                total_games, COALESCE(total_wins, 0) as total_wins,
+                ROW_NUMBER() OVER (ORDER BY accuracy DESC, avg_speed_ms ASC) as rank
+            FROM player_stats
+            WHERE total_matches >= 5
+            ORDER BY accuracy DESC, avg_speed_ms ASC
+            LIMIT $1`,
+            [limit]
+        );
+        return result.rows;
+    }
+
+    async getNFTHolderLeaderboard(chain: string = 'arbitrum', timeframe: string = '7d', limit: number = 100): Promise<DbLeaderboardEntry[]> {
+        // For now, using the global leaderboard as a fallback
+        // In a real implementation, this would filter for NFT holders
+
+        // Note: The chain and timeframe parameters are for API compatibility.
+        console.log(`[PostgresDB] getNFTHolderLeaderboard called with chain: ${chain}, timeframe: ${timeframe}`);
+
+        const pool = await this.getPool();
+        const result = await pool.query(
+            `SELECT
+                fid, username, display_name, pfp_url, accuracy, avg_speed_ms, total_matches,
+                total_games, COALESCE(total_wins, 0) as total_wins,
+                ROW_NUMBER() OVER (ORDER BY accuracy DESC, avg_speed_ms ASC) as rank
+            FROM player_stats
+            WHERE total_matches >= 5
+            ORDER BY accuracy DESC, avg_speed_ms ASC
+            LIMIT $1`,
+            [limit]
+        );
+        return result.rows;
+    }
+
+    async getTokenHolderLeaderboard(chain: string = 'monad', timeframe: string = '7d', limit: number = 100): Promise<DbLeaderboardEntry[]> {
+        // For now, using the global leaderboard as a fallback
+        // In a real implementation, this would filter for token holders
+
+        // Note: The chain and timeframe parameters are for API compatibility.
+        console.log(`[PostgresDB] getTokenHolderLeaderboard called with chain: ${chain}, timeframe: ${timeframe}`);
+
+        const pool = await this.getPool();
+        const result = await pool.query(
+            `SELECT
+                fid, username, display_name, pfp_url, accuracy, avg_speed_ms, total_matches,
+                total_games, COALESCE(total_wins, 0) as total_wins,
+                ROW_NUMBER() OVER (ORDER BY accuracy DESC, avg_speed_ms ASC) as rank
+            FROM player_stats
+            WHERE total_matches >= 5
+            ORDER BY accuracy DESC, avg_speed_ms ASC
+            LIMIT $1`,
+            [limit]
+        );
+        return result.rows;
+    }
+
+    async getCrossChainLeaderboard(limit: number = 100): Promise<DbLeaderboardEntry[]> {
+        // For now, using the global leaderboard as a fallback
+        // In a real implementation, this would aggregate results from multiple chains
+        console.log('[PostgresDB] getCrossChainLeaderboard called');
+
+        const pool = await this.getPool();
+        const result = await pool.query(
+            `SELECT
+                fid, username, display_name, pfp_url, accuracy, avg_speed_ms, total_matches,
+                total_games, COALESCE(total_wins, 0) as total_wins,
+                ROW_NUMBER() OVER (ORDER BY accuracy DESC, avg_speed_ms ASC) as rank
+            FROM player_stats
+            WHERE total_matches >= 5
+            ORDER BY accuracy DESC, avg_speed_ms ASC
+            LIMIT $1`,
+            [limit]
+        );
+        return result.rows;
+    }
+
     async close(): Promise<void> {
         if (this.pool) {
             await this.pool.end();
@@ -593,6 +877,15 @@ export interface IDatabase {
     saveGameResult(result: Omit<DbGameResult, "id" | "created_at">): Promise<void>;
     getGameResultsByCycle(cycleId: string): Promise<DbGameResult[]>;
     getGameResultsByPlayer(fid: number, limit?: number): Promise<DbGameResult[]>;
+    getLeaderboardNearPlayer(fid: number, chain?: string, limit?: number): Promise<DbLeaderboardEntry[]>;
+    getTopPlayers(chain?: string, limit?: number): Promise<DbLeaderboardEntry[]>;
+    getFriendsLeaderboard(fid: number, chain?: string, limit?: number): Promise<DbLeaderboardEntry[]>;
+    getCurrentGameLeaderboard(chain?: string, limit?: number): Promise<DbLeaderboardEntry[]>;
+    getSeasonLeaderboard(chain?: string, timeframe?: string, limit?: number): Promise<DbLeaderboardEntry[]>;
+    getAllTimeLeaderboard(chain?: string, limit?: number): Promise<DbLeaderboardEntry[]>;
+    getNFTHolderLeaderboard(chain?: string, timeframe?: string, limit?: number): Promise<DbLeaderboardEntry[]>;
+    getTokenHolderLeaderboard(chain?: string, timeframe?: string, limit?: number): Promise<DbLeaderboardEntry[]>;
+    getCrossChainLeaderboard(limit?: number): Promise<DbLeaderboardEntry[]>;
 }
 
 // Create database instance

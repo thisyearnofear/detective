@@ -11,6 +11,7 @@ interface ErrorCardProps {
   icon?: string;
   actionLabel?: string;
   onAction?: () => void;
+  action?: { text: string; href?: string }; // For link-based actions
   onDismiss?: () => void;
   autoClose?: number; // ms, 0 = no auto-close
 }
@@ -22,6 +23,7 @@ export default function ErrorCard({
   icon,
   actionLabel,
   onAction,
+  action,
   onDismiss,
   autoClose = 0,
 }: ErrorCardProps) {
@@ -92,23 +94,38 @@ export default function ErrorCard({
         </div>
 
         {/* Action Button (if provided) */}
-        {actionLabel && (
+        {(actionLabel || action) && (
           <div className="flex-shrink-0">
-            <button
-              onClick={() => {
-                onAction?.();
-                setIsVisible(false);
-              }}
-              className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                severity === "error"
-                  ? "bg-red-600/50 hover:bg-red-600 text-red-100"
-                  : severity === "warning"
-                    ? "bg-yellow-600/50 hover:bg-yellow-600 text-yellow-100"
-                    : "bg-blue-600/50 hover:bg-blue-600 text-blue-100"
-              }`}
-            >
-              {actionLabel}
-            </button>
+            {action?.href ? (
+              <a
+                href={action.href}
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                  severity === "error"
+                    ? "bg-red-600/50 hover:bg-red-600 text-red-100"
+                    : severity === "warning"
+                      ? "bg-yellow-600/50 hover:bg-yellow-600 text-yellow-100"
+                      : "bg-blue-600/50 hover:bg-blue-600 text-blue-100"
+                }`}
+              >
+                {action.text}
+              </a>
+            ) : (
+              <button
+                onClick={() => {
+                  onAction?.();
+                  setIsVisible(false);
+                }}
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                  severity === "error"
+                    ? "bg-red-600/50 hover:bg-red-600 text-red-100"
+                    : severity === "warning"
+                      ? "bg-yellow-600/50 hover:bg-yellow-600 text-yellow-100"
+                      : "bg-blue-600/50 hover:bg-blue-600 text-blue-100"
+                }`}
+              >
+                {actionLabel}
+              </button>
+            )}
           </div>
         )}
 

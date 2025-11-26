@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import BottomLinks from '@/components/BottomLinks';
+import WagmiProviderWrapper from '@/components/providers/WagmiProvider';
 
 export const metadata: Metadata = {
   title: 'Detective - Is That You?',
@@ -44,8 +45,17 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="theme-color" content="#0f172a" />
+      </head>
       <body className="text-white">
-        {children}
+        <WagmiProviderWrapper>
+          {children}
+        </WagmiProviderWrapper>
         <BottomLinks />
         {/* SVG Filter for Gooey Effect */}
         <svg className="svg-filters" xmlns="http://www.w3.org/2000/svg" version="1.1">

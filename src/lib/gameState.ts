@@ -247,35 +247,36 @@ class GameManager {
       return [];
     }
 
-    // Check existing matches
+    // Check existing matches - add grace period to prevent premature endings
     let activeMatchCount = 0;
     let hasExpiredMatches = false;
+    const MATCH_END_GRACE_PERIOD = 2000; // 2 second grace period to prevent premature endings
 
     for (const [slotNum, matchId] of session.activeMatches) {
       const match = this.state!.matches.get(matchId);
       if (!match) {
         session.activeMatches.delete(slotNum);
         hasExpiredMatches = true;
-      } else if (match.endTime <= now && !match.voteLocked) {
-        // Auto-lock expired match
+      } else if ((match.endTime + MATCH_END_GRACE_PERIOD) <= now && !match.voteLocked) {
+        // Auto-lock expired match (with grace period)
         this.lockMatchVote(matchId);
         hasExpiredMatches = true;
-      } else if (match.endTime <= now && match.voteLocked) {
-        // Already locked
+      } else if ((match.endTime + MATCH_END_GRACE_PERIOD) <= now && match.voteLocked) {
+        // Already locked (with grace period)
         hasExpiredMatches = true;
         session.activeMatches.delete(slotNum);
       } else {
-        // Still active
+        // Still active (including grace period)
         matches.push(match);
         activeMatchCount++;
       }
     }
 
-    // Round progression logic
-    const GRACE_PERIOD_MS = 5000;
-    const isGracePeriodOver = session.nextRoundStartTime && now >= (session.nextRoundStartTime + GRACE_PERIOD_MS);
-    const isRoundComplete = activeMatchCount === 0 && (session.activeMatches.size === 0 || (hasExpiredMatches && isGracePeriodOver));
-    const isTimeForNextRound = session.nextRoundStartTime && now >= (session.nextRoundStartTime + GRACE_PERIOD_MS);
+    // Round progression logic - extend grace period to prevent premature round transitions
+    const ROUND_TRANSITION_GRACE_PERIOD = 8000; // Increased to 8 seconds
+    const isGracePeriodOver = session.nextRoundStartTime && now >= (session.nextRoundStartTime + ROUND_TRANSITION_GRACE_PERIOD);
+    const isRoundComplete = activeMatchCount === 0 && session.activeMatches.size === 0 && hasExpiredMatches;
+    const isTimeForNextRound = session.nextRoundStartTime && now >= (session.nextRoundStartTime + ROUND_TRANSITION_GRACE_PERIOD) && isGracePeriodOver; // Ensure grace period is over before advancing
 
     if (!session.nextRoundStartTime && activeMatchCount === 0) {
       // Start round 1
@@ -352,7 +353,9 @@ class GameManager {
     match.currentVote = vote;
     match.voteHistory.push({ vote, timestamp: Date.now() });
 
-    if (Date.now() >= match.endTime) {
+    // Only auto-lock if significantly past end time (with grace period)
+    const VOTE_LOCK_GRACE_PERIOD = 3000; // 3 second grace period
+    if (Date.now() >= (match.endTime + VOTE_LOCK_GRACE_PERIOD)) {
       this.lockMatchVote(matchId);
     }
 
