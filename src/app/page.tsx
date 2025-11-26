@@ -145,11 +145,11 @@ export default function Home() {
         <AnimatedGridBackdrop images={gridImages} />
 
         {/* Layer 3: Content Container - Perfect centering */}
-        <div className={`relative z-10 w-full max-w-2xl flex flex-col items-center justify-center transition-all duration-1000 ease-[cubic-bezier(0.22,1,0.36,1)] ${introComplete ? 'translate-y-0' : 'translate-y-[10vh]'}`}>
+        <div className="relative z-10 w-full max-w-2xl flex flex-col items-center justify-center">
 
         {/* Hero Section - The DETECTIVE Title - Perfectly centered */}
-        <div className={`w-full flex items-center justify-center transition-all duration-1000 ease-[cubic-bezier(0.22,1,0.36,1)] mb-16 ${introComplete ? 'opacity-0 scale-50 pointer-events-none h-0 mb-0' : 'opacity-100 scale-100 h-auto'}`}>
-          <h1 className="hero-title text-7xl sm:text-[10rem] md:text-[12rem] font-black text-white tracking-tighter leading-none select-none mix-blend-overlay opacity-90 text-center">
+        <div className={`w-full flex items-center justify-center transition-all duration-1000 ease-[cubic-bezier(0.22,1,0.36,1)] ${introComplete ? 'opacity-0 pointer-events-none absolute' : 'opacity-100'}`}>
+          <h1 className="hero-title text-6xl sm:text-7xl md:text-[10rem] font-black text-white tracking-tighter leading-none select-none mix-blend-overlay opacity-90 text-center">
             DETECTIVE
           </h1>
         </div>
@@ -160,14 +160,18 @@ export default function Home() {
             // Not authenticated - Perfect centering
             <div className="w-full max-w-md flex flex-col items-center space-y-12">
               {/* Clean Header - Perfectly centered */}
-              <div className="w-full flex flex-col items-center space-y-6 text-center">
+              <div className="w-full flex flex-col items-center space-y-4 text-center">
                 <div className="flex items-center justify-center w-16 h-16 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-sm">
                   <span className="text-2xl">🔍</span>
+                </div>
+                <div className="space-y-2">
+                  <h2 className="text-xl font-bold text-white">Can you spot the AI?</h2>
+                  <p className="text-sm text-gray-400">Chat with opponents. Vote: Real or Bot?</p>
                 </div>
               </div>
 
               {/* Game Status Card - Shows live game state */}
-              {gameState && (
+              {gameState ? (
                 <GameStatusCard
                   gameState={{
                     state: gameState.state,
@@ -176,6 +180,10 @@ export default function Home() {
                     gameEnds: gameState.gameEnds,
                   }}
                 />
+              ) : (
+                <div className="w-full bg-white/5 border border-white/10 rounded-xl p-6 animate-pulse">
+                  <div className="h-20 bg-white/10 rounded" />
+                </div>
               )}
 
               {/* Wallet Connect - Enhanced for real users */}
@@ -193,11 +201,9 @@ export default function Home() {
                 <CollapsibleSection title="How To Play">
                   <div className="space-y-4">
                     {[
-                      "Register for a game when registration is open",
-                      "Manage 2 simultaneous chats, each lasting 1 minute",
-                      "Vote during the chat: is each opponent real or AI?",
-                      "Complete multiple matches in rounds",
-                      "Climb the leaderboard with accuracy and speed"
+                      "Register when a game opens",
+                      "Chat with 2 opponents simultaneously",
+                      "Vote: Real human or AI bot?"
                     ].map((rule, i) => (
                       <p key={i} className="text-sm font-medium text-white/70 leading-relaxed">
                         {rule}
@@ -207,8 +213,8 @@ export default function Home() {
                 </CollapsibleSection>
 
                 {/* Features */}
-                <CollapsibleSection title="What Makes Us Different">
-                  <div className="grid grid-cols-2 gap-3 text-sm">
+                <CollapsibleSection title="Features">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
                     <div className="bg-white/5 border border-white/10 rounded-lg p-3 hover:bg-white/10 transition-colors text-left">
                       <div className="text-lg mb-1">📊</div>
                       <div className="font-medium text-white text-xs mb-1">4 Leaderboard Modes</div>
