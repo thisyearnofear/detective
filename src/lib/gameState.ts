@@ -47,7 +47,7 @@ class GameManager {
   private state: GameState | null = null;
   private initializing = false;
 
-  private constructor() {}
+  private constructor() { }
 
   public static getInstance(): GameManager {
     if (!GameManager.instance) {
@@ -188,6 +188,7 @@ class GameManager {
       ...userProfile,
       type: "REAL",
       isRegistered: true,
+      isReady: false,
       score: 0,
       voteHistory: [],
       inactivityStrikes: 0,
@@ -218,6 +219,52 @@ class GameManager {
     await persistence.saveBot(bot);
 
     return player;
+  }
+
+  /**
+   * Set player as ready and check if game should start.
+   */
+  async setPlayerReady(fid: number): Promise<boolean> {
+    await this.ensureInitialized();
+
+    const player = this.state!.players.get(fid);
+    if (!player) return false;
+
+    player.isReady = true;
+    await persistence.savePlayer(player);
+
+    // Check if we should start the game
+    const players = Array.from(this.state!.players.values());
+    const readyCount = players.filter(p => p.isReady).length;
+    const totalPlayers = players.length;
+
+    // Start if at least 4 players and all are ready
+    if (totalPlayers >= 4 && readyCount === totalPlayers) {
+      console.log("[GameManager] All players ready, starting game early");
+
+      // Transition to LIVE immediately
+      const now = Date.now();
+      this.state!.state = "LIVE";
+      this.state!.registrationEnds = now - 1;
+      this.state!.gameEnds = now + GAME_DURATION;
+      this.state!.extensionCount = 0;
+
+      await persistence.saveGameStateMeta({
+        cycleId: this.state!.cycleId,
+        state: this.state!.state,
+        registrationEnds: this.state!.registrationEnds,
+        gameEnds: this.state!.gameEnds,
+      });
+
+      const playerFids = Array.from(this.state!.players.keys());
+      getGameEventPublisher()
+        .publishGameStart(this.state!.cycleId, playerFids)
+        .catch(err => console.error("[setPlayerReady] Failed to publish game_start:", err));
+
+      return true;
+    }
+
+    return false;
   }
 
   /**

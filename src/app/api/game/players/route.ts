@@ -9,12 +9,13 @@ import { gameManager } from "@/lib/gameState";
 export async function GET() {
   try {
     const rawState = await gameManager.getRawState();
-    
+
     // Convert players map to array with essential info only
     const players = Array.from(rawState.players.values()).map(player => ({
       fid: player.fid,
       username: player.username,
       displayName: player.displayName,
+      isReady: player.isReady,
       // Don't expose sensitive data like recent casts or style analysis
     }));
 
