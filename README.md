@@ -6,22 +6,43 @@ Can you tell if you're chatting with a real person or an AI bot trained on their
 
 ## Documentation
 
-For detailed information about the project, please refer to the following documentation files:
+The documentation has been consolidated into 4 comprehensive guides covering all aspects of the Detective project:
 
-### **Core Documentation**
-1. [ARCHITECTURE.md](docs/ARCHITECTURE.md) - Architecture and core concepts
-2. [DEVELOPMENT.md](docs/DEVELOPMENT.md) - Development guide and implementation  
-3. [PROGRESS_LOG.md](docs/PROGRESS_LOG.md) - **NEW**: Complete development progress and current status
-4. [ACCESS_GATING.md](docs/ACCESS_GATING.md) - **NEW**: Multi-chain access control strategy
+### **📋 Core Documentation (4 Consolidated Guides)**
+1. [**ARCHITECTURE.md**](docs/ARCHITECTURE.md) - System architecture, development phases, and scaling guide
+2. [**GAME_DESIGN.md**](docs/GAME_DESIGN.md) - Game mechanics, UI/UX enhancements, and user experience design
+3. [**ADVANCED.md**](docs/ADVANCED.md) - WebSocket implementation, progress log, and future roadmap
+4. [**ACCESS.md**](docs/ACCESS.md) - Access control strategy, security features, and deployment scenarios
 
-### **Design & Enhancement**
-5. [UI_UX.md](docs/UI_UX.md) - UI/UX design and enhancement
-6. [GAME_DESIGN.md](docs/GAME_DESIGN.md) - Game mechanics and balance
-7. [REVEAL_REDESIGN.md](docs/REVEAL_REDESIGN.md) - Vote reveal and results system
+### **📖 What Each Guide Covers**
 
-### **Advanced Features** 
-8. [ADVANCED.md](docs/ADVANCED.md) - Advanced features and deployment
-9. [SCALING.md](docs/SCALING.md) - Performance and scaling considerations
+#### **Core Architecture Guide**
+- High-level system design and technology stack
+- Game mechanics and bot intelligence
+- Development phases (MVP → production)
+- Scaling from single server to horizontal architecture
+- Performance optimization and cost analysis
+
+#### **Game Design & UI Guide**  
+- Game flow with blockchain integration
+- UI/UX enhancement (gradients, animations, VoteToggle)
+- Homepage redesign and opponent reveal flow
+- Mobile-first responsive design principles
+- Visual consistency and accessibility
+
+#### **Advanced Implementation Guide**
+- WebSocket vs HTTP polling analysis
+- Ably WebSocket implementation with feature flags
+- Core principles compliance (enhancement first, aggressive consolidation)
+- Development progress and current status
+- Long-term roadmap and ecosystem vision
+
+#### **Access Control Guide**
+- Multi-chain access requirements (Arbitrum NFT, Monad token, whitelist)
+- Quick activation scripts and configuration
+- Security features and edge case handling
+- Monitoring, analytics, and community communication
+- Implementation timeline and deployment scenarios
 
 ## About
 
