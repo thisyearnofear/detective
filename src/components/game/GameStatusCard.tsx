@@ -61,28 +61,45 @@ export default function GameStatusCard({ gameState }: Props) {
 
   // REGISTRATION - Show countdown and opportunity to join
   if (gameState.state === 'REGISTRATION') {
+    const maxPlayers = 8;
+    const progress = Math.min(100, (gameState.playerCount / maxPlayers) * 100);
+    const isReadyToStart = gameState.playerCount >= 4;
+
     return (
       <div className="bg-gradient-to-r from-blue-900/40 to-purple-900/40 border border-blue-500/50 rounded-xl p-6 backdrop-blur-sm">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-2xl">⏱️</span>
-              <h3 className="hero-title text-xl font-black text-stroke">Registration Open</h3>
+        <div className="flex flex-col gap-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-2xl">⏱️</span>
+                <h3 className="hero-title text-xl font-black text-stroke">Registration Open</h3>
+              </div>
+              <p className="text-gray-300 text-sm mb-3">
+                Join now and compete against real players and AI opponents
+              </p>
             </div>
-            <p className="text-gray-300 text-sm mb-3">
-              Join now and compete against real players and AI opponents
-            </p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-xs text-gray-400">Time remaining</span>
-              <span className="text-2xl font-black text-blue-300">{formatTime(timeLeft)}</span>
-            </div>
-            <p className="text-xs text-gray-400 mt-2">{gameState.playerCount} players registered</p>
-          </div>
-          <div className="text-right">
-            <div className="text-sm font-bold text-green-400 bg-green-500/10 border border-green-500/30 rounded px-3 py-1">
-              Join Now
+            <div className="text-right">
+              <div className="text-sm font-bold text-green-400 bg-green-500/10 border border-green-500/30 rounded px-3 py-1">
+                Join Now
+              </div>
             </div>
           </div>
+
+          {/* Player Count Progress */}
+          <div className="space-y-2">
+            <div className="flex justify-between text-xs text-gray-400">
+              <span>{gameState.playerCount} / {maxPlayers} players registered</span>
+              {isReadyToStart && <span className="text-green-400 font-bold">Ready to start soon!</span>}
+            </div>
+            <div className="w-full bg-slate-700/50 h-2 rounded-full overflow-hidden">
+              <div
+                className={`h-full transition-all duration-500 ${isReadyToStart ? 'bg-green-500' : 'bg-blue-500'}`}
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+
+
         </div>
       </div>
     );

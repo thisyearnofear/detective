@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import MobileNavigationTabs from './MobileNavigationTabs';
 import MobileLeaderboardOptimized from './MobileLeaderboardOptimized';
 import MobileChatOptimized from './MobileChatOptimized';
-import GameRegister from './GameRegister';
+import GameLobby from './game/GameLobby';
 
 type Tab = 'game' | 'leaderboard' | 'profile';
 
@@ -34,8 +34,8 @@ export default function MobileAppContainer({
   sdkUser,
   matches = [],
   currentVotes = {},
-  onVoteToggle = () => {},
-  onMatchComplete = () => {},
+  onVoteToggle = () => { },
+  onMatchComplete = () => { },
   currentRound = 1,
   totalRounds = 5,
   cycleId = '',
@@ -80,7 +80,7 @@ export default function MobileAppContainer({
         if (gameState?.state === 'REGISTRATION') {
           return (
             <div className="p-4">
-              <GameRegister
+              <GameLobby
                 currentPlayer={sdkUser}
                 isRegistrationOpen={true}
                 gameState={gameState}
@@ -88,7 +88,7 @@ export default function MobileAppContainer({
             </div>
           );
         }
-        
+
         if (gameState?.state === 'LIVE' && matches.length > 0) {
           return (
             <MobileChatOptimized
@@ -116,7 +116,7 @@ export default function MobileAppContainer({
             >
               <div className="text-6xl mb-4">🔍</div>
               <h2 className="text-xl font-bold text-white mb-2">Detective</h2>
-              
+
               {gameState?.state === 'LIVE' ? (
                 <>
                   <p className="text-gray-400 mb-6">Waiting for next round...</p>
@@ -165,7 +165,7 @@ export default function MobileAppContainer({
               </div>
               <h2 className="text-xl font-bold text-white mb-1">@{sdkUser?.username || 'detective'}</h2>
               <p className="text-gray-400 text-sm">{sdkUser?.displayName || 'Anonymous Detective'}</p>
-              
+
               {currentRank && (
                 <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
                   <div className="text-sm text-blue-400 mb-1">Current Rank</div>
@@ -188,7 +188,7 @@ export default function MobileAppContainer({
                 <div className="text-2xl mb-2">🏆</div>
                 <div className="text-sm font-medium text-white">Rankings</div>
               </button>
-              
+
               {onQuickMatch && (
                 <button
                   onClick={onQuickMatch}

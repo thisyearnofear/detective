@@ -27,6 +27,7 @@ export interface Bot extends UserProfile {
 export interface Player extends UserProfile {
   type: "REAL";
   isRegistered: boolean;
+  isReady: boolean;
   score: number; // Player's accuracy score
   voteHistory: VoteRecord[];
   inactivityStrikes: number; // Track inactivity violations
