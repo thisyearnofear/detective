@@ -1,115 +1,24 @@
-# Detective Game Design Document
+# Detective Game Design & UI/UX
 
-## Overview
+## Game Design Overview
 
 Detective is a social deduction game where players chat with opponents and try to determine if they're talking to a real person or an AI bot trained on that person's writing style.
 
----
-
-## 1. End-of-Game UX
-
-### Current Issues
-- "Play Again" button doesn't make sense since all rounds are complete
-- "View Leaderboard" button leads nowhere useful
-
-### Proposed Changes
-
-#### A. Results Screen CTAs
-Replace current buttons with:
-
-```
-┌─────────────────────────────────────────┐
-│           GAME OVER                     │
-│                                         │
-│           67%                           │
-│         Accuracy                        │
-│                                         │
-│    [Register for Next Game]  ← Primary  │
-│    [View Full Leaderboard]   ← Secondary│
-│    [Share Results]           ← Tertiary │
-│                                         │
-│    Next game starts when 10 players     │
-│    have registered                      │
-└─────────────────────────────────────────┘
-```
-
-#### B. Leaderboard Integration
-The leaderboard should show:
-1. **Current Game Results** - Players from the just-finished game
-2. **All-Time Leaderboard** - Persistent stats from Neon database
-3. **Chain-Specific Leaderboards** - Arbitrum vs Monad rankings
-
-#### C. Database Schema for Persistent Leaderboard
-
-```sql
--- Players table (persistent across games)
-CREATE TABLE players (
-  id SERIAL PRIMARY KEY,
-  fid INTEGER UNIQUE NOT NULL,
-  username VARCHAR(255),
-  display_name VARCHAR(255),
-  pfp_url TEXT,
-  wallet_address VARCHAR(42),
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
-);
-
--- Game cycles table
-CREATE TABLE game_cycles (
-  id SERIAL PRIMARY KEY,
-  cycle_id VARCHAR(255) UNIQUE NOT NULL,
-  chain VARCHAR(50) NOT NULL, -- 'arbitrum' or 'monad'
-  state VARCHAR(20) NOT NULL, -- 'REGISTRATION', 'LIVE', 'FINISHED'
-  player_count INTEGER DEFAULT 0,
-  entry_fee_wei VARCHAR(78), -- Entry fee in wei (if applicable)
-  prize_pool_wei VARCHAR(78), -- Total prize pool
-  started_at TIMESTAMP,
-  finished_at TIMESTAMP,
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
--- Game results table (per player per game)
-CREATE TABLE game_results (
-  id SERIAL PRIMARY KEY,
-  cycle_id VARCHAR(255) REFERENCES game_cycles(cycle_id),
-  player_fid INTEGER REFERENCES players(fid),
-  accuracy DECIMAL(5,2),
-  correct_votes INTEGER,
-  total_votes INTEGER,
-  avg_speed_ms INTEGER,
-  rank INTEGER,
-  total_players INTEGER,
-  prize_won_wei VARCHAR(78),
-  created_at TIMESTAMP DEFAULT NOW(),
-  UNIQUE(cycle_id, player_fid)
-);
-
--- All-time stats (aggregated)
-CREATE TABLE player_stats (
-  player_fid INTEGER PRIMARY KEY REFERENCES players(fid),
-  total_games INTEGER DEFAULT 0,
-  total_wins INTEGER DEFAULT 0, -- #1 finishes
-  total_correct INTEGER DEFAULT 0,
-  total_votes INTEGER DEFAULT 0,
-  best_accuracy DECIMAL(5,2) DEFAULT 0,
-  avg_accuracy DECIMAL(5,2) DEFAULT 0,
-  total_earnings_wei VARCHAR(78) DEFAULT '0',
-  updated_at TIMESTAMP DEFAULT NOW()
-);
-
--- Indexes
-CREATE INDEX idx_game_results_player ON game_results(player_fid);
-CREATE INDEX idx_game_results_cycle ON game_results(cycle_id);
-CREATE INDEX idx_player_stats_accuracy ON player_stats(avg_accuracy DESC);
-```
+### Core Design Philosophy
+- **Maintain mystery**: Never hint whether opponent is real or bot via design
+- **Physics-based interactions**: Smooth momentum, friction, easing—nothing feels snappy/cheap
+- **Responsive gradients**: Background colors react intelligently to game state
+- **Orchestrated animations**: Staggered reveals, timed transitions, purposeful motion
+- **Smart loading states**: Transform wait times into immersive, branded experiences
+- **Color intelligence**: Extract opponent colors for cohesive visual context
+- **Real-time feedback**: Instant visual response to vote toggles builds confidence
 
 ---
 
-## 2. Registration Flow with Blockchain Integration
+## Game Flow & Mechanics
 
-### Game Start Trigger
+### Registration Flow with Blockchain Integration
 Instead of time-based registration, use **player-count-based triggers**:
-
 ```
 Game starts when:
 - Minimum 10 players registered, OR
@@ -117,8 +26,7 @@ Game starts when:
 - 5 minutes since first registration (if >= 6 players)
 ```
 
-### Registration Flow
-
+### Registration Interface
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    DETECTIVE                                │
@@ -141,7 +49,7 @@ Game starts when:
 │  ┌─────────────────────────────────────────────────────┐   │
 │  │  Waiting Room                                        │   │
 │  │                                                      │   │
-│  │  ████████░░░░░░░░░░░░  7/10 players                 │   │
+│  │  ████████░░░░░░░░░░░░░░  7/10 players                 │   │
 │  │                                                      │   │
 │  │  @alice  @bob  @charlie  @dave  @eve  @frank  @grace│   │
 │  │                                                      │   │
@@ -154,20 +62,15 @@ Game starts when:
 
 #### Option A: Paid Entry (Arbitrum)
 ```typescript
-// Smart contract interaction
 const ENTRY_FEE = ethers.parseEther("0.001"); // ~$3-4
 
 async function registerWithPayment(fid: number, chain: 'arbitrum') {
-  // 1. Connect wallet
   const signer = await provider.getSigner();
-  
-  // 2. Call contract to pay entry fee
   const tx = await detectiveContract.register(fid, {
     value: ENTRY_FEE
   });
   await tx.wait();
   
-  // 3. Register in backend
   await fetch('/api/game/register', {
     method: 'POST',
     body: JSON.stringify({ fid, chain, txHash: tx.hash })
@@ -178,21 +81,17 @@ async function registerWithPayment(fid: number, chain: 'arbitrum') {
 #### Option B: NFT Gating (Monad)
 ```typescript
 async function registerWithNFT(fid: number, chain: 'monad') {
-  // 1. Connect wallet
   const signer = await provider.getSigner();
   const address = await signer.getAddress();
   
-  // 2. Check NFT ownership
   const balance = await detectivePassNFT.balanceOf(address);
   if (balance === 0n) {
     throw new Error("Detective Pass NFT required");
   }
   
-  // 3. Sign message to prove ownership
   const message = `Register for Detective Game\nFID: ${fid}\nTimestamp: ${Date.now()}`;
   const signature = await signer.signMessage(message);
   
-  // 4. Register in backend
   await fetch('/api/game/register', {
     method: 'POST',
     body: JSON.stringify({ fid, chain, signature, address })
@@ -200,244 +99,323 @@ async function registerWithNFT(fid: number, chain: 'monad') {
 }
 ```
 
-### Prize Distribution
+---
 
-For paid entry games:
+## UI/UX Enhancement
+
+### What Makes Us Different - Feature Showcase
+
 ```
-Prize Pool = Entry Fee × Player Count × 0.9 (10% platform fee)
+┌─────────────────────────────────────────┐
+│         What Makes Us Different         │
+├─────────────────────────────────────────┤
+│ 📊 4 Leaderboard Modes                  │
+│ Current • Career • Insights • Multi-...  │
+├─────────────────────────────────────────┤
+│ 🌐 Multi-Chain Support                  │
+│ Arbitrum • Monad • Cross-Chain           │
+├─────────────────────────────────────────┤
+│ ⚡ Real-Time Analytics                  │
+│ Competitive insights • Trend analysis    │
+├─────────────────────────────────────────┤
+│ 🤖 AI Opponents                         │
+│ Personalized • Adaptive • Fair           │
+└─────────────────────────────────────────┘
+```
 
-Distribution:
-- 1st Place: 50% of pool
-- 2nd Place: 30% of pool
-- 3rd Place: 20% of pool
+### Dynamic Gradient Background System
+**Core Visual Layer** - Canvas-based animated gradient that responds to game state
 
-Example (10 players × 0.001 ETH):
-- Pool: 0.009 ETH
-- 1st: 0.0045 ETH
-- 2nd: 0.0027 ETH
-- 3rd: 0.0018 ETH
+**Color Scheme by Game State**:
+- **REGISTRATION**: Cool blues/purples (inviting, calm)
+- **LIVE - Dual chats**: Warm amber/coral (engagement, dual energy)
+- **Between rounds**: Teal/emerald (reset, decision clarity)
+- **Game over**: Gold/bronze (celebration, achievement)
+
+**Implementation**:
+- Two floating radial gradients that drift using trigonometric motion
+- Colors transition smoothly when game state changes
+- Canvas rendering is GPU-accelerated (30fps idle, saves battery)
+- No layout thrashing (pure canvas + transform rendering)
+
+### Opponent Card Reveal Animation
+**Match Initialization** - 3D perspective reveal with glow effect
+
+**Changes**:
+- When opponent loads, card animates in from off-screen with 3D perspective
+- Card starts at 0.7x scale + -40px translateY + opacity 0
+- Scales up, slides down, fades in over 0.6s with cubic-bezier easing
+- Background gradient pulses subtly as card completes reveal
+- Extract 2 dominant colors from opponent's pfp using histogram analysis
+- Use extracted colors to tint the frame border (subtle, not obvious)
+
+**Performance Impact**:
+- GSAP animation (single timeline, 1 element per opponent)
+- GPU-accelerated transform
+- ~1ms per frame, negligible
+
+### Chat Message Entrance Animations
+**Message Flow** - Staggered entrance with subtle bounce
+
+**Implementation**:
+```typescript
+// Incoming message: scale 0.95 → 1, opacity 0 → 1, duration 0.3s
+// Add 50ms delay before animating (simulates "opponent thinking")
+// Use ease-out cubic for natural deceleration
+// Bots still respond instantly from API, but animation hides the perfection
+```
+
+**Dual-Chat Impact**:
+- In desktop view, messages from both chats animate simultaneously
+- Creates sense of parallel conversations happening in real-time
+- Mobile: only visible chat's messages animate (no distraction from hidden tab)
+
+**Performance Impact**:
+- Staggered animations prevent layout thrashing
+- `will-change: transform` on message containers
+- ~0.5ms per message, smooth on mobile
+
+### VoteToggle Enhancement
+**Voting UX** - Enhanced with state transition animations and visual feedback
+
+**Features**:
+- Defaults to HUMAN (optimistic assumption)
+- Animated hint in first 5 seconds (wiggle left/right)
+- Locked state indicator with 🔒
+- Responsive sizing (compact mode for side-by-side)
+- Vote result feedback animation when vote finalizes
+  - Correct: subtle scale-up + glow pulse for 1.5s
+  - Incorrect: subtle shake + color shift for 1.5s
+
+**Visual Connection to Vote State**:
+- Desktop: color-coded borders on chat windows (green=voting HUMAN, red=voting BOT)
+- Mobile: color-coded tab indicator
+- Each chat has independent VoteToggle state
+
+---
+
+## Homepage Redesign
+
+### Architecture
+**New Directory Structure**:
+```
+src/components/game/
+├── GameStateView.tsx          # Orchestrator for authenticated users
+├── GameStatusCard.tsx         # Pre-auth dynamic status display
+├── GameLobby.tsx              # REGISTRATION phase
+├── GameActiveView.tsx         # LIVE phase
+└── GameFinishedView.tsx       # FINISHED phase
+```
+
+### State Machine Flow
+```
+PRE-AUTH (Unauthenticated)
+│
+├─→ GameStatusCard
+│   ├─ REGISTRATION: "Join now • 45s left"
+│   ├─ LIVE: "12 players competing • 2:30 remaining"
+│   └─ FINISHED: "View leaderboard • Next in 45s"
+│
+└─→ AuthInput
+
+POST-AUTH (Authenticated)
+│
+└─→ GameStateView
+    ├─ REGISTRATION → GameLobby
+    │  ├─ Lobby phase (register, view players)
+    │  ├─ Bot generation (AI opponent creation)
+    │  ├─ Player reveal (meet your opponents)
+    │  └─ Countdown (game starts in 5...4...3...)
+    │
+    ├─ LIVE → GameActiveView
+    │  └─ MultiChatContainer (2 simultaneous chats)
+    │
+    └─ FINISHED → GameFinishedView
+       ├─ Leaderboard
+       └─ Next cycle countdown
+```
+
+### GameStatusCard (Pre-Auth Discovery)
+Shows live game state to unauthenticated users, creating FOMO and urgency.
+
+**Features**:
+- Real-time countdown timers
+- Dynamic messaging based on game state
+- Player count display
+- Call-to-action for each phase
+- Consistent styling with game theme
+
+**States**:
+```
+⏱️ REGISTRATION OPEN
+Join now and compete • 45 seconds left
+X players registered
+
+🎮 GAME LIVE  
+X players are competing right now • 2:30 remaining
+(Live indicator with pulsing dot)
+
+🏆 GAME FINISHED
+View the leaderboard and see who won
+Next round in 45 seconds
 ```
 
 ---
 
-## 3. Multi-Chain Architecture
+## Opponent Reveal Flow Redesign
 
-### Chain Configuration
+### Problem → Solution
+**Old Flow (Poor UX)**:
+- Sequential reveals: Match 1 completes → 2s reveal → Match 2 completes → 2s reveal → jarring blank loading screen
+- Players barely process "was it a bot?" before modal vanishes
+- No context during loading, just a spinner
+- Rushed transition (4s total reveals + loading = disconnected experience)
+
+**New Flow (Unified Experience)**:
+- Batch reveals: All round matches complete → unified reveal screen with both opponents + stats
+- 6 second display minimum (easily adjustable to 5-8s)
+- Shows real-time progress: accuracy, rank, matches this round, next round countdown
+- Smooth fade into loading state (RoundStartLoader) instead of jarring blank screen
+- Single modal handles reveal + stats + context + auto-dismiss
+
+### User Experience Flow
+```
+[Game Active]
+  ↓
+[Both Matches Complete]
+  → Vote locked on both matches
+  ↓
+[RoundTransition - REVEAL PHASE] (6 seconds)
+  ┌─────────────────────────────────────┐
+  │     Round Complete                  │
+  │   Opponents Revealed                │
+  ├────────────────────────────────────┤
+  │  [Avatar] Bot  │  [Avatar] Human   │
+  │   @user123     │    @user456       │
+  │  AI Bot        │  Farcaster User   │
+  ├────────────────────────────────────┤
+  │ 75% Accuracy  │ #5 Rank  │ 2 Matches│
+  │ 3/4 correct   │ of 250   │ this round
+  │               Next Round: 2         │
+  ├────────────────────────────────────┤
+  │ ====== Progress Bar ====== (5.8s)   │
+  │ Proceeding to next round in 5.8s    │
+  └─────────────────────────────────────┘
+  ↓
+[RoundTransition - LOADING PHASE]
+  ┌─────────────────────────────────────┐
+  │      ⟳ (spinner)                    │
+  │  Preparing Round 2                  │
+  │  Finding opponents...               │
+  └─────────────────────────────────────┘
+  ↓
+[Next Round Matches Loaded]
+  → RoundTransition auto-closes
+  → Back to chat screens
+```
+
+---
+
+## Design Principles Applied
+
+### ✅ Consistency
+- Uses existing design system (white/5, borders, rounded corners)
+- Matches mission briefing styling
+- Maintains typography hierarchy
+
+### ✅ Minimalism
+- 4 compact cards in a 2x2 grid
+- Emoji icons for visual interest
+- Brief descriptions (2-3 words + details)
+- Subtle hover effects
+
+### ✅ Information Hierarchy
+1. Mission Briefing (primary)
+2. What Makes Us Different (secondary highlight)
+3. Admin Panel (footer)
+
+### ✅ Responsiveness
+- 2 columns on mobile/tablet
+- Maintains compact width (max-w-md)
+- Scales text appropriately
+
+### ✅ Mobile-First Design
+```
+Mobile (1 column):          Tablet (2 columns):
+┌──────────────────┐       ┌───────────┬───────────┐
+│ 📊 4 Leaderboard │       │ 📊 4 LB   │ 🌐 Multi │
+│    Modes         │       ├───────────┼───────────┤
+├──────────────────┤       │ ⚡ Real   │ 🤖 AI    │
+│ 🌐 Multi-Chain   │       └───────────┴───────────┘
+│    Support       │
+├──────────────────┤
+│ ⚡ Real-Time     │
+│    Analytics     │
+├──────────────────┤
+│ 🤖 AI Opponents  │
+└──────────────────┘
+```
+
+## Game Flow Implementation: No Mid-Game Results
+
+### Key Principle
+Auto-lock votes on server; show opponent reveal briefly; display final results only after all matches complete.
+
+### Architecture Changes
+
+#### Server-Side Vote Auto-Lock
+When `getActiveMatches()` detects an expired unvoted match, it automatically locks the vote. Backend is now the source of truth.
 
 ```typescript
-// src/lib/chains.ts
-export const SUPPORTED_CHAINS = {
-  arbitrum: {
-    id: 42161,
-    name: 'Arbitrum One',
-    rpcUrl: process.env.ARBITRUM_RPC_URL,
-    contracts: {
-      detective: '0x...', // Main game contract
-      treasury: '0x...',  // Fee collection
-    },
-    entryFee: '0.001', // ETH
-    entryMethod: 'payment',
-  },
-  monad: {
-    id: 10143, // Monad testnet (mainnet TBD)
-    name: 'Monad',
-    rpcUrl: process.env.MONAD_RPC_URL,
-    contracts: {
-      detective: '0x...',
-      detectivePass: '0x...', // NFT contract
-    },
-    entryFee: '0',
-    entryMethod: 'nft',
-  },
-} as const;
-```
-
-### Separate Game Queues
-
-Each chain has its own game queue:
-```
-Redis Keys:
-- game:arbitrum:current_cycle
-- game:arbitrum:players
-- game:monad:current_cycle
-- game:monad:players
-```
-
-### API Changes
-
-```typescript
-// GET /api/game/status?chain=arbitrum
-// GET /api/game/status?chain=monad
-
-// POST /api/game/register
-// Body: { fid, chain, txHash?, signature?, address? }
-
-// GET /api/leaderboard?chain=arbitrum&type=current
-// GET /api/leaderboard?chain=monad&type=alltime
-```
-
----
-
-## 4. Implementation Roadmap
-
-### Phase 1: Core Fixes (Now)
-- [x] Fix end-of-game UX
-- [x] Update ResultsCard buttons
-- [ ] Create leaderboard page at `/leaderboard`
-
-### Phase 2: Database Integration
-- [ ] Set up Neon PostgreSQL schema
-- [ ] Create API routes for persistent stats
-- [ ] Migrate leaderboard to database
-
-### Phase 3: Blockchain Integration
-- [ ] Deploy smart contracts (Arbitrum first)
-- [ ] Add wallet connection (wagmi/viem)
-- [ ] Implement paid entry flow
-- [ ] Add transaction verification
-
-### Phase 4: Multi-Chain
-- [ ] Deploy to Monad
-- [ ] Add NFT gating
-- [ ] Chain selector UI
-- [ ] Cross-chain leaderboards
-
-### Phase 5: Prize Distribution
-- [ ] Implement prize pool calculation
-- [ ] Auto-distribute prizes on game end
-- [ ] Add withdrawal UI
-
----
-
-## 5. Smart Contract Design
-
-```solidity
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
-
-contract DetectiveGame {
-    address public owner;
-    uint256 public entryFee;
-    uint256 public platformFeePercent = 10;
-    
-    struct Game {
-        uint256 id;
-        uint256 prizePool;
-        uint256 playerCount;
-        bool finished;
-        mapping(address => bool) registered;
-    }
-    
-    mapping(uint256 => Game) public games;
-    uint256 public currentGameId;
-    
-    event PlayerRegistered(uint256 gameId, address player, uint256 fid);
-    event GameStarted(uint256 gameId, uint256 playerCount);
-    event GameFinished(uint256 gameId, address[] winners, uint256[] prizes);
-    
-    function register(uint256 fid) external payable {
-        require(msg.value >= entryFee, "Insufficient entry fee");
-        require(!games[currentGameId].registered[msg.sender], "Already registered");
-        
-        games[currentGameId].registered[msg.sender] = true;
-        games[currentGameId].playerCount++;
-        games[currentGameId].prizePool += msg.value;
-        
-        emit PlayerRegistered(currentGameId, msg.sender, fid);
-        
-        // Auto-start at 10 players
-        if (games[currentGameId].playerCount >= 10) {
-            emit GameStarted(currentGameId, games[currentGameId].playerCount);
-        }
-    }
-    
-    function distributePrizes(
-        uint256 gameId,
-        address[] calldata winners,
-        uint256[] calldata percentages
-    ) external onlyOwner {
-        require(!games[gameId].finished, "Already finished");
-        
-        uint256 pool = games[gameId].prizePool;
-        uint256 platformFee = (pool * platformFeePercent) / 100;
-        uint256 prizePool = pool - platformFee;
-        
-        uint256[] memory prizes = new uint256[](winners.length);
-        
-        for (uint i = 0; i < winners.length; i++) {
-            prizes[i] = (prizePool * percentages[i]) / 100;
-            payable(winners[i]).transfer(prizes[i]);
-        }
-        
-        payable(owner).transfer(platformFee);
-        games[gameId].finished = true;
-        currentGameId++;
-        
-        emit GameFinished(gameId, winners, prizes);
-    }
+if (match.endTime <= now && !match.voteLocked) {
+  // Auto-lock vote when time expires
+  this.lockMatchVote(matchId);
 }
 ```
 
----
+#### Enhanced ResultsCard Component
+Multi-mode component handling 3 display types:
+- **`opponent-reveal`** - Shows opponent identity for 2 seconds (no correctness shown)
+- **`round-summary`** - Round accuracy (unused currently, available for future)
+- **`game-complete`** - Full game results with accuracy, rank, round breakdown
 
-## 6. UI Component Updates Needed
+#### Enhanced Leaderboard Component
+Dual-mode component with tab switcher:
+- **`current`** - Current game leaderboard (existing functionality)
+- **`career`** - Career stats dashboard showing:
+  - Total games, overall accuracy, best/worst game, avg decision speed
+  - Game history with per-game rank & accuracy
+  - Dynamic insights based on playstyle
 
-### ResultsCard.tsx
-- Change "Play Again" → "Register for Next Game"
-- Change "View Leaderboard" → Navigate to `/leaderboard?chain={chain}`
-- Add "Share Results" button (Farcaster cast composer)
-
-### GameRegister.tsx
-- Add chain selector
-- Add wallet connection
-- Show entry fee / NFT requirement
-- Show waiting room with player count
-- Real-time updates via WebSocket
-
-### New: ChainSelector.tsx
-```tsx
-<ChainSelector
-  selectedChain={chain}
-  onSelect={setChain}
-  showPlayerCounts={true}
-/>
+### Component Architecture
+**Before (Bloated)**:
+```
+MultiChatContainer
+├─ OpponentRevealCard
+├─ EndGameResultsScreen
+└─ Leaderboard
+   ├─ CareerStatsPage (via separate route)
 ```
 
-### New: WaitingRoom.tsx
-```tsx
-<WaitingRoom
-  chain={chain}
-  playerCount={7}
-  minPlayers={10}
-  maxPlayers={50}
-  registeredPlayers={[...]}
-/>
+**After (Consolidated)**:
+```
+MultiChatContainer
+├─ ResultsCard (3 modes)
+│  ├─ opponent-reveal
+│  ├─ round-summary
+│  └─ game-complete
+└─ Leaderboard (2 modes)
+   ├─ current
+   └─ career
 ```
 
-### New: LeaderboardPage.tsx
-- Full-page leaderboard at `/leaderboard`
-- Tabs: Current Game | All-Time | By Chain
-- Search/filter by username
-- Pagination
+**Result**: -524 lines, 18% code reduction, same features.
 
----
+## Visual Consistency Maintained
+- **Background**: Starfield + Grid Backdrop (unchanged)
+- **Typography**: Mission Briefing style (unchanged)
+- **Colors**: white/5, white/10, white/50 borders (consistent)
+- **Spacing**: Gap of 3 pixels, padding 3 (consistent grid)
+- **Interactivity**: Hover effects (white/10) (consistent)
 
-## Questions to Resolve
-
-1. **Entry Fee Amount**: What's the right balance between accessible and meaningful?
-   - Suggestion: Start with 0.001 ETH (~$3) on Arbitrum
-
-2. **NFT Distribution**: How will Detective Pass NFTs be distributed on Monad?
-   - Options: Airdrop to early players, mint for free, purchase
-
-3. **Prize Timing**: Distribute immediately or allow claims?
-   - Suggestion: Immediate distribution for simplicity
-
-4. **Cross-Chain Identity**: How to link same player across chains?
-   - Use Farcaster FID as primary identifier
-   - Wallet addresses are secondary
-
-5. **Minimum Players**: What if a game never reaches 10 players?
-   - Option A: Refund after timeout
-   - Option B: Start with fewer players after 5 min
-   - Suggestion: Option B with minimum 6 players
+This consolidated design approach ensures Detective provides an immersive, polished experience while maintaining the core mystery and social deduction elements that make the game compelling.
