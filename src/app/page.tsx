@@ -241,6 +241,18 @@ export default function Home() {
                   </div>
                 </CollapsibleSection>
               </div>
+
+              {/* Leaderboard Link */}
+              <div className="w-full text-center pt-6">
+                <a
+                  href="/leaderboard"
+                  className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors group"
+                >
+                  <span className="text-lg group-hover:scale-110 transition-transform">🏆</span>
+                  <span>View Leaderboard</span>
+                  <span className="text-xs opacity-50">→</span>
+                </a>
+              </div>
             </div>
           ) : (
             // Authenticated content
