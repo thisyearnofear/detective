@@ -123,6 +123,9 @@ export interface GameState {
   maxExtensions: number; // Maximum allowed extensions
   finishedAt?: number; // Timestamp when game finished (for cleanup grace period)
 
+  // Smart registration countdown
+  countdownStarted: boolean; // True once minimum players join and countdown begins
+
   // Game configuration
   config: GameConfig;
 }

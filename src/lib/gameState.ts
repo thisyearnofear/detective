@@ -28,14 +28,16 @@ import { getGameEventPublisher } from "./gameEventPublisher";
 import { inferPersonality } from "./botProactive";
 
 // Game configuration constants
-const GAME_DURATION = 5 * 60 * 1000; // 5 minutes
-const REGISTRATION_DURATION = 1 * 60 * 1000; // 1 minute for testing
+const GAME_DURATION = 3 * 60 * 1000; // 3 minutes (3 rounds * 1 min each, 2 simultaneous matches per round)
+const REGISTRATION_COUNTDOWN = 30 * 1000; // 30 second countdown once minimum players join
+const MIN_PLAYERS = 3; // Minimum players needed for a competitive game
 const MAX_PLAYERS = 50;
 const MATCH_DURATION = 60 * 1000; // 1 minute per match
 const SIMULTANEOUS_MATCHES = 2; // 2 concurrent chats
 const INACTIVITY_WARNING = 30 * 1000; // 30 seconds
 const INACTIVITY_FORFEIT = 45 * 1000; // 45 seconds
-const MAX_ROUNDS = Math.floor(GAME_DURATION / MATCH_DURATION / SIMULTANEOUS_MATCHES);
+const FIXED_ROUNDS = 3; // Fixed 3 rounds for predictable experience (6 total matches)
+const MAX_ROUNDS = FIXED_ROUNDS; // Use fixed rounds
 const USE_REDIS = process.env.USE_REDIS === "true";
 
 /**
@@ -94,6 +96,7 @@ class GameManager {
           leaderboard: [],
           extensionCount: 0,
           maxExtensions: 2,
+          countdownStarted: false, // Will be set when minimum players join
           config: {
             gameDurationMs: GAME_DURATION,
             matchDurationMs: MATCH_DURATION,
@@ -125,7 +128,7 @@ class GameManager {
     return {
       cycleId: `cycle-${now}`,
       state: "REGISTRATION",
-      registrationEnds: now + REGISTRATION_DURATION,
+      registrationEnds: now + 999999999, // Far future - countdown starts when MIN_PLAYERS join
       gameEnds: now + GAME_DURATION,
       players: new Map(),
       bots: new Map(),
@@ -134,6 +137,7 @@ class GameManager {
       leaderboard: [],
       extensionCount: 0,
       maxExtensions: 2,
+      countdownStarted: false, // Will be set to true when MIN_PLAYERS join
       config: {
         gameDurationMs: GAME_DURATION,
         matchDurationMs: MATCH_DURATION,
@@ -233,14 +237,14 @@ class GameManager {
     player.isReady = true;
     await persistence.savePlayer(player);
 
-    // Check if we should start the game
+    // Check if we should start the game early
     const players = Array.from(this.state!.players.values());
     const readyCount = players.filter(p => p.isReady).length;
     const totalPlayers = players.length;
 
-    // Start if at least 4 players and all are ready
-    if (totalPlayers >= 4 && readyCount === totalPlayers) {
-      console.log("[GameManager] All players ready, starting game early");
+    // Start if minimum players met and all are ready
+    if (totalPlayers >= MIN_PLAYERS && readyCount === totalPlayers) {
+      console.log(`[GameManager] All ${totalPlayers} players ready, starting game immediately`);
 
       // Transition to LIVE immediately
       const now = Date.now();
@@ -282,13 +286,8 @@ class GameManager {
     const now = Date.now();
     const matches: Match[] = [];
 
-    // Calculate max rounds
-    const totalOpponents = this.getAvailableOpponentsCount(fid);
-    const maxPossibleMatches = totalOpponents * SIMULTANEOUS_MATCHES;
-    const maxRounds = Math.min(
-      MAX_ROUNDS,
-      Math.ceil(maxPossibleMatches / SIMULTANEOUS_MATCHES),
-    );
+    // Use fixed rounds for predictable experience
+    const maxRounds = FIXED_ROUNDS;
 
     if (session.currentRound > maxRounds) {
       return [];
@@ -319,11 +318,10 @@ class GameManager {
       }
     }
 
-    // Round progression logic - extend grace period to prevent premature round transitions
-    const ROUND_TRANSITION_GRACE_PERIOD = 8000; // Increased to 8 seconds
-    const isGracePeriodOver = session.nextRoundStartTime && now >= (session.nextRoundStartTime + ROUND_TRANSITION_GRACE_PERIOD);
+    // Round progression logic
+    const ROUND_TRANSITION_GRACE_PERIOD = 3000; // 3 seconds after matches end
     const isRoundComplete = activeMatchCount === 0 && session.activeMatches.size === 0 && hasExpiredMatches;
-    const isTimeForNextRound = session.nextRoundStartTime && now >= (session.nextRoundStartTime + ROUND_TRANSITION_GRACE_PERIOD) && isGracePeriodOver; // Ensure grace period is over before advancing
+    const isTimeForNextRound = !session.nextRoundStartTime || (now >= (session.nextRoundStartTime + ROUND_TRANSITION_GRACE_PERIOD));
 
     if (!session.nextRoundStartTime && activeMatchCount === 0) {
       // Start round 1
@@ -339,6 +337,7 @@ class GameManager {
       }
     } else if (isRoundComplete && session.currentRound < maxRounds && isTimeForNextRound) {
       // Advance to next round
+      console.log(`[GameManager] Advancing FID ${fid} from round ${session.currentRound} to ${session.currentRound + 1}`);
       session.currentRound++;
       session.nextRoundStartTime = now + MATCH_DURATION;
       session.activeMatches.clear();
@@ -736,25 +735,34 @@ class GameManager {
     const now = Date.now();
 
     // REGISTRATION -> LIVE
-    if (
-      this.state!.state === "REGISTRATION" &&
-      now > this.state!.registrationEnds
-    ) {
-      const totalOpponents = this.getAvailableOpponentsCount(0);
+    if (this.state!.state === "REGISTRATION") {
+      const playerCount = this.state!.players.size;
 
-      if (totalOpponents < 1) {
-        this.state!.registrationEnds = now + 30000;
-        return;
+      // Start countdown once minimum players join
+      if (!this.state!.countdownStarted && playerCount >= MIN_PLAYERS) {
+        console.log(`[GameManager] Minimum ${MIN_PLAYERS} players reached, starting ${REGISTRATION_COUNTDOWN/1000}s countdown`);
+        this.state!.countdownStarted = true;
+        this.state!.registrationEnds = now + REGISTRATION_COUNTDOWN;
+        await persistence.saveGameStateMeta({
+          cycleId: this.state!.cycleId,
+          state: this.state!.state,
+          registrationEnds: this.state!.registrationEnds,
+          gameEnds: this.state!.gameEnds,
+        });
       }
 
-      this.state!.state = "LIVE";
-      this.state!.gameEnds = now + GAME_DURATION;
-      this.state!.extensionCount = 0;
+      // Only check timer if countdown has started
+      if (this.state!.countdownStarted && now > this.state!.registrationEnds) {
+        console.log(`[GameManager] Registration countdown complete, starting game with ${playerCount} players`);
+        this.state!.state = "LIVE";
+        this.state!.gameEnds = now + GAME_DURATION;
+        this.state!.extensionCount = 0;
 
-      const playerFids = Array.from(this.state!.players.keys());
-      getGameEventPublisher()
-        .publishGameStart(this.state!.cycleId, playerFids)
-        .catch(err => console.error("[updateCycleState] Failed to publish game_start:", err));
+        const playerFids = Array.from(this.state!.players.keys());
+        getGameEventPublisher()
+          .publishGameStart(this.state!.cycleId, playerFids)
+          .catch(err => console.error("[updateCycleState] Failed to publish game_start:", err));
+      }
     }
 
     // FINISHED state cleanup
