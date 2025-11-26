@@ -579,7 +579,7 @@ class GameManager {
     this.state!.state = newState;
 
     if (newState === "REGISTRATION") {
-      this.state!.registrationEnds = now + REGISTRATION_DURATION;
+      this.state!.registrationEnds = now + REGISTRATION_COUNTDOWN;
       this.state!.gameEnds = now + GAME_DURATION;
       this.state!.extensionCount = 0;
     } else if (newState === "LIVE") {
@@ -622,10 +622,6 @@ class GameManager {
       });
     }
     return this.state!.playerSessions.get(fid)!;
-  }
-
-  private getAvailableOpponentsCount(_fid: number): number {
-    return this.state!.players.size - 1 + (this.state!.bots.size - 1);
   }
 
   private createMatchForSlot(
