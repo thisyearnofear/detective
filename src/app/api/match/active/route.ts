@@ -2,9 +2,6 @@
 import { NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
 import { NextRequest } from "next/server";
-import { getScheduledBotResponse, markBotResponseDelivered, recordBotDeliveryFailure } from "@/lib/botScheduler";
-import { getGameEventPublisher } from "@/lib/gameEventPublisher";
-import { getAblyServerManager } from "@/lib/ablyChannelManager";
 
 /**
  * API route to get all active matches for a player.
@@ -41,57 +38,8 @@ export async function GET(request: NextRequest) {
     // Get all active matches for the player
     const matches = await gameManager.getActiveMatches(playerFid);
 
-    // Deliver any scheduled bot responses that are ready
-    const eventPublisher = getGameEventPublisher();
-    const ablyManager = getAblyServerManager();
-    
-    for (const match of matches) {
-      const scheduledBot = await getScheduledBotResponse(match.id);
-      if (scheduledBot) {
-        console.log(`[/api/match/active] Found scheduled bot response for match ${match.id}, bot FID ${scheduledBot.botFid}`);
-        try {
-          // Verify match still exists before attempting delivery
-          const currentMatch = await gameManager.getMatch(match.id);
-          if (!currentMatch) {
-            // Match was cleaned up, just mark as delivered
-            await markBotResponseDelivered(match.id);
-            console.log(`[/api/match/active] Match ${match.id} no longer exists, cleaned up scheduled response`);
-            continue;
-          }
-
-          // Add the scheduled bot response to the match
-          console.log(`[/api/match/active] Attempting to deliver: "${scheduledBot.response.substring(0, 50)}${scheduledBot.response.length > 50 ? '...' : ''}"`);
-          await gameManager.addMessageToMatch(match.id, scheduledBot.response, scheduledBot.botFid);
-          await markBotResponseDelivered(match.id);
-          
-          // Publish to the match channel so connected clients get notified immediately
-          const chatMessage = {
-            id: `${Date.now()}-${scheduledBot.botFid}-${Math.random().toString(36).substr(2, 9)}`,
-            text: scheduledBot.response,
-            sender: {
-              fid: scheduledBot.botFid,
-              username: currentMatch.opponent.username,
-            },
-            timestamp: Date.now(),
-          };
-          await ablyManager.publishToMatchChannel(match.id, chatMessage);
-          
-          // Also publish game event for monitoring
-          await eventPublisher.publishChatMessage(
-            gameState.cycleId,
-            match.id,
-            playerFid,
-            scheduledBot.botFid,
-            scheduledBot.response
-          );
-          console.log(`[/api/match/active] ✓ Published bot response via Ably for match ${match.id}`);
-        } catch (error) {
-          // Record failure for retry logic
-          await recordBotDeliveryFailure(match.id, error instanceof Error ? error : new Error(String(error)));
-          console.error(`[/api/match/active] ✗ FAILED to deliver bot response for match ${match.id}:`, error);
-        }
-      }
-    }
+    // NOTE: Bot response delivery is now handled exclusively by /api/chat/batch-poll
+    // Removed duplicate delivery logic from here to prevent double messages
 
     // Sanitize matches before sending to client
     const sanitizedMatches = matches.map((match) => ({
