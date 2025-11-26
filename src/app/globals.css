@@ -1,5 +1,5 @@
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Anton&family=Niramit:wght@400;600;700&family=Montserrat:wght@300;400;600;700;800;900&display=swap');
+@import "tailwindcss";
 
 * {
   margin: 0;
@@ -28,8 +28,23 @@ body {
   }
 }
 
+@keyframes fadeInScale {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .animate-flip-rotate {
   animation: flipRotate 2s ease-in-out infinite;
+}
+
+.animate-in {
+  animation: fadeInScale 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 @layer components {
