@@ -37,7 +37,6 @@ const SIMULTANEOUS_MATCHES = 2; // 2 concurrent chats
 const INACTIVITY_WARNING = 30 * 1000; // 30 seconds
 const INACTIVITY_FORFEIT = 45 * 1000; // 45 seconds
 const FIXED_ROUNDS = 3; // Fixed 3 rounds for predictable experience (6 total matches)
-const MAX_ROUNDS = FIXED_ROUNDS; // Use fixed rounds
 const USE_REDIS = process.env.USE_REDIS === "true";
 
 /**

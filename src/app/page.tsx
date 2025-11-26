@@ -145,17 +145,18 @@ export default function Home() {
         <AnimatedGridBackdrop images={gridImages} />
 
         {/* Layer 3: Content Container - Perfect centering */}
-        <div className="relative z-10 w-full max-w-2xl flex flex-col items-center justify-center">
+        <div className="relative z-10 w-full max-w-2xl flex flex-col items-center justify-center min-h-screen">
 
-        {/* Hero Section - The DETECTIVE Title - Perfectly centered */}
-        <div className={`w-full flex items-center justify-center transition-all duration-1000 ease-[cubic-bezier(0.22,1,0.36,1)] ${introComplete ? 'opacity-0 pointer-events-none absolute' : 'opacity-100'}`}>
-          <h1 className="hero-title text-6xl sm:text-7xl md:text-[10rem] font-black text-white tracking-tighter leading-none select-none mix-blend-overlay opacity-90 text-center">
+        {/* Hero Section - The DETECTIVE Title - Centered with entrance animation */}
+        <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-1000 ${introComplete ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+          <h1 className={`hero-title text-6xl sm:text-7xl md:text-[10rem] font-black text-white tracking-tighter leading-none select-none mix-blend-overlay opacity-90 text-center transition-all duration-700 ${introComplete ? '' : 'animate-in'}`}
+              style={{ animationDelay: '100ms' }}>
             DETECTIVE
           </h1>
         </div>
 
-        {/* Main Content - Clean editorial design - Perfectly centered */}
-        <div className={`w-full flex flex-col items-center transition-all duration-1000 delay-500 ${introComplete ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'}`}>
+        {/* Main Content - Fades in after hero disappears */}
+        <div className={`w-full flex flex-col items-center transition-all duration-1000 ${introComplete ? 'opacity-100' : 'opacity-0'}`}>
           {!sdkUser ? (
             // Not authenticated - Perfect centering
             <div className="w-full max-w-md flex flex-col items-center space-y-12">
