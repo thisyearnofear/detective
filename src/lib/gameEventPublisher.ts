@@ -7,12 +7,13 @@
  * Events published:
  * - round_start: New round begins with fresh matches
  * - round_end: Round completed, matches revealed
+ * - round_prepare: Next round matches are ready (explicit transition signal)
  * - match_start: Individual match starts
  * - match_end: Individual match ends (vote locked)
  * - game_start: Game transitions from REGISTRATION to LIVE
  * - game_end: Game transitions to FINISHED
  * - vote_locked: A specific match vote is finalized
- * - state_update: General game state change (round number, timer, etc.)
+ * - chat_message: Chat message added to a match
  */
 
 import { getAblyServerManager } from "./ablyChannelManager";
@@ -80,6 +81,31 @@ class GameEventPublisher {
       console.log(`[GameEventPublisher] Published round_end for round ${roundNumber}`);
     } catch (err) {
       console.error("[GameEventPublisher] Error publishing round_end:", err);
+    }
+  }
+
+  /**
+   * Publish when next round matches are ready (explicit signal for UI)
+   * Allows client to transition from reveal directly to new matches
+   */
+  async publishRoundPrepare(
+    cycleId: string,
+    roundNumber: number,
+    targetFids?: number[]
+  ): Promise<void> {
+    try {
+      await this.ablySrv.publishGameEvent(
+        cycleId,
+        "round_prepare",
+        {
+          roundNumber,
+          timestamp: Date.now(),
+        },
+        targetFids
+      );
+      console.log(`[GameEventPublisher] Published round_prepare for round ${roundNumber}`);
+    } catch (err) {
+      console.error("[GameEventPublisher] Error publishing round_prepare:", err);
     }
   }
 

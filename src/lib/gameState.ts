@@ -328,6 +328,7 @@ class GameManager {
       session.nextRoundStartTime = now + MATCH_DURATION;
 
       const selectedThisRound = new Set<number>();
+      
       for (let slotNum = 1; slotNum <= SIMULTANEOUS_MATCHES; slotNum++) {
         const match = this.createMatchForSlot(fid, slotNum as 1 | 2, session, selectedThisRound);
         if (match) {
@@ -336,6 +337,12 @@ class GameManager {
           matches.push(match);
         }
       }
+      
+      // Signal to client that first round matches are ready
+      const playerFids = [fid];
+      getGameEventPublisher()
+        .publishRoundPrepare(this.state!.cycleId, session.currentRound, playerFids)
+        .catch(err => console.error("[getActiveMatches] Failed to publish round_prepare:", err));
     } else if (isRoundComplete && session.currentRound < maxRounds && isTimeForNextRound) {
       // Advance to next round
       console.log(`[GameManager] Advancing FID ${fid} from round ${session.currentRound} to ${session.currentRound + 1}`);
@@ -343,7 +350,9 @@ class GameManager {
       session.nextRoundStartTime = now + MATCH_DURATION;
       session.activeMatches.clear();
 
+      // Track selected opponents within this round to prevent duplicates in same round
       const selectedThisRound = new Set<number>();
+      
       for (let slotNum = 1; slotNum <= SIMULTANEOUS_MATCHES; slotNum++) {
         const match = this.createMatchForSlot(fid, slotNum as 1 | 2, session, selectedThisRound);
         if (match) {
@@ -354,6 +363,12 @@ class GameManager {
           console.warn(`[GameManager] Failed to create match for FID ${fid} round ${session.currentRound} slot ${slotNum}`);
         }
       }
+      
+      // Signal to client that new round matches are ready
+      const playerFids = [fid];
+      getGameEventPublisher()
+        .publishRoundPrepare(this.state!.cycleId, session.currentRound, playerFids)
+        .catch(err => console.error("[getActiveMatches] Failed to publish round_prepare:", err));
     } else if (isRoundComplete && session.currentRound < maxRounds && !isTimeForNextRound) {
       // Grace period still active, but set the flag for next poll
       if (!session.nextRoundStartTime) {
@@ -694,22 +709,62 @@ class GameManager {
 
     if (allOpponents.length === 0) return null;
 
-    // Filter out excluded opponents (e.g., already matched this round)
-    let availableOpponents = excludeFids
+    // First filter: exclude opponents already selected this round
+    let candidates = excludeFids
       ? allOpponents.filter(o => !excludeFids.has(o.fid))
       : allOpponents;
 
-    // If all opponents excluded (rare edge case), reset to all opponents
-    if (availableOpponents.length === 0) {
-      availableOpponents = allOpponents;
+    // If all excluded (rare edge case), reset to all opponents
+    if (candidates.length === 0) {
+      candidates = allOpponents;
     }
 
-    // RANDOM selection from available opponents
-    // No sorting, no determinism, purely random
-    const randomIndex = Math.floor(Math.random() * availableOpponents.length);
-    const selectedOpponent = availableOpponents[randomIndex];
+    // Second filter: prefer opponents not faced recently
+    const totalOpponents = candidates.length;
+    const matchesPlayed = session.completedMatchIds.size;
+    const allowRepeats = matchesPlayed >= totalOpponents;
+    const maxFaceCount = allowRepeats ? Math.ceil(matchesPlayed / totalOpponents) : 1;
 
-    return selectedOpponent;
+    let availableOpponents = candidates.filter(
+      o => (session.facedOpponents.get(o.fid) || 0) < maxFaceCount,
+    );
+
+    if (availableOpponents.length === 0) {
+      availableOpponents = candidates;
+    }
+
+    // Sort by least-faced first (fair distribution)
+    availableOpponents.sort((a, b) => {
+      const aFaced = session.facedOpponents.get(a.fid) || 0;
+      const bFaced = session.facedOpponents.get(b.fid) || 0;
+      return aFaced - bFaced;
+    });
+
+    // Balance bot/player ratio: target 40-60% bots
+    const realPlayers = availableOpponents.filter(o => o.type === "REAL");
+    const bots = availableOpponents.filter(o => o.type === "BOT");
+
+    const idealBotRatio = Math.min(0.6, Math.max(0.4, bots.length / availableOpponents.length));
+    const currentBotRatio = this.calculateBotRatio(session);
+
+    if (currentBotRatio < idealBotRatio && bots.length > 0) {
+      return bots[0];
+    } else if (realPlayers.length > 0) {
+      return realPlayers[0];
+    }
+
+    return availableOpponents[0];
+  }
+
+  private calculateBotRatio(session: PlayerGameSession): number {
+    const matches = Array.from(session.completedMatchIds)
+      .map(id => this.state!.matches.get(id))
+      .filter(Boolean);
+
+    if (matches.length === 0) return 0;
+
+    const botMatches = matches.filter(m => m!.opponent.type === "BOT").length;
+    return botMatches / matches.length;
   }
 
   private async updateCycleState(): Promise<void> {

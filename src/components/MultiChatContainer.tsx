@@ -53,7 +53,9 @@ export default function MultiChatContainer({ fid }: Props) {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [lastRound, setLastRound] = useState(0);
   const [ablyCycleId, setAblyCycleId] = useState<string>("");
+  const [transitionTimeoutMessage, setTransitionTimeoutMessage] = useState<"preparing" | "delayed" | null>(null);
   const transitionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const transitionWarningRef = useRef<NodeJS.Timeout | null>(null);
 
   // Poll for active matches - but at a much slower rate now since we have events
   // Only poll occasionally for periodic sync (every 5 seconds instead of 1 second)
@@ -97,6 +99,14 @@ export default function MultiChatContainer({ fid }: Props) {
       if ((event.type === "match_end" || event.type === "round_end") && !gameFinished) {
         mutate();
       }
+      
+      // When round matches are prepared, refresh immediately to get new matches
+      // This is the explicit signal that transition is complete
+      if (event.type === "round_prepare" && !gameFinished) {
+        console.log("[MultiChatContainer] Round prepare event received, fetching new matches");
+        mutate();
+      }
+      
       // When game starts, refresh. When game ends, don't trigger more fetches
       if (event.type === "game_start") {
         mutate();
@@ -147,16 +157,23 @@ export default function MultiChatContainer({ fid }: Props) {
       if (lastRound > 0 && matchData.matches?.length === 0) {
         // We're between rounds - show transition
         setIsTransitioning(true);
+        setTransitionTimeoutMessage("preparing");
 
-        // Clear any existing timeout
-        if (transitionTimeoutRef.current) {
-          clearTimeout(transitionTimeoutRef.current);
-        }
+        // Clear any existing timeouts
+        if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
+        if (transitionWarningRef.current) clearTimeout(transitionWarningRef.current);
 
-        // Auto-clear transition after 15 seconds max (reveals: 6s + grace period: 3s + buffer: 6s)
+        // Warn after 9 seconds (reveals: 6s + grace: 3s) if still transitioning
+        transitionWarningRef.current = setTimeout(() => {
+          console.warn(`[MultiChatContainer] Round transition taking longer than expected (>9s)`);
+          setTransitionTimeoutMessage("delayed");
+        }, 9000);
+
+        // Force clear after 15 seconds max (safety net)
         transitionTimeoutRef.current = setTimeout(() => {
           console.warn(`[MultiChatContainer] Transition timeout after 15s, clearing isTransitioning`);
           setIsTransitioning(false);
+          setTransitionTimeoutMessage(null);
         }, 15000);
       }
       setLastRound(matchData.currentRound);
@@ -165,18 +182,17 @@ export default function MultiChatContainer({ fid }: Props) {
     // Clear transition when matches arrive
     if (matchData?.matches?.length > 0 && isTransitioning) {
       setIsTransitioning(false);
-      if (transitionTimeoutRef.current) {
-        clearTimeout(transitionTimeoutRef.current);
-      }
+      setTransitionTimeoutMessage(null);
+      if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
+      if (transitionWarningRef.current) clearTimeout(transitionWarningRef.current);
     }
   }, [matchData?.currentRound, matchData?.matches?.length, lastRound, isTransitioning]);
 
-  // Cleanup timeout on unmount
+  // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {
-      if (transitionTimeoutRef.current) {
-        clearTimeout(transitionTimeoutRef.current);
-      }
+      if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
+      if (transitionWarningRef.current) clearTimeout(transitionWarningRef.current);
     };
   }, []);
 
@@ -508,11 +524,15 @@ export default function MultiChatContainer({ fid }: Props) {
     }
 
     // Show loading state if transitioning between rounds
+    const loaderMessage = transitionTimeoutMessage === "delayed"
+      ? "Taking longer than expected... Stand by"
+      : "Preparing next round...";
+    
     return (
       <RoundStartLoader
         roundNumber={currentRound}
         totalRounds={totalRounds}
-        message={isTransitioning ? "Preparing next round..." : "Finding opponents..."}
+        message={loaderMessage}
         inline={true}
       />
     );
