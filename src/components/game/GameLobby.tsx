@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import useSWR from 'swr';
 import { Player, UserProfile } from '@/lib/types';
+import { prewarmAblyConnection } from '@/lib/connectionPrewarm';
 import BotGeneration from './phases/BotGeneration';
 import PlayerReveal from './phases/PlayerReveal';
 import GameCountdown from './phases/GameCountdown';
@@ -113,6 +114,12 @@ export default function GameLobby({ currentPlayer, isRegistrationOpen = true, ga
   };
 
   const handleGameStart = () => {
+    // Prewarm Ably connection for all registered players
+    registeredPlayers.forEach(player => {
+      prewarmAblyConnection(player.fid)
+        .catch(err => console.warn(`Failed to prewarm for FID ${player.fid}:`, err));
+    });
+    
     // This will trigger the main game flow
     // The parent component should handle the transition to LIVE state
     console.log('Game starting with players:', registeredPlayers);
