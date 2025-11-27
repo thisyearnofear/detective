@@ -63,7 +63,7 @@ export default function MultiChatContainer({ fid }: Props) {
     error,
     mutate,
   } = useSWR(`/api/match/active?fid=${fid}`, fetcher, {
-    refreshInterval: gameFinished ? 0 : 5000, // Stop polling when game ends
+    refreshInterval: isTransitioning ? 1000 : (gameFinished ? 0 : 5000), // Poll every 1s during transitions, 5s normally
     refreshWhenHidden: false,
     revalidateOnFocus: false, // Prevent tab switching from triggering refetch
     // Keep previous data on error to prevent UI flicker
@@ -153,10 +153,11 @@ export default function MultiChatContainer({ fid }: Props) {
           clearTimeout(transitionTimeoutRef.current);
         }
 
-        // Auto-clear transition after 10 seconds max
+        // Auto-clear transition after 15 seconds max (reveals: 6s + grace period: 3s + buffer: 6s)
         transitionTimeoutRef.current = setTimeout(() => {
+          console.warn(`[MultiChatContainer] Transition timeout after 15s, clearing isTransitioning`);
           setIsTransitioning(false);
-        }, 10000);
+        }, 15000);
       }
       setLastRound(matchData.currentRound);
     }

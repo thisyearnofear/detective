@@ -327,9 +327,11 @@ class GameManager {
       session.currentRound = 1;
       session.nextRoundStartTime = now + MATCH_DURATION;
 
+      const selectedThisRound = new Set<number>();
       for (let slotNum = 1; slotNum <= SIMULTANEOUS_MATCHES; slotNum++) {
-        const match = this.createMatchForSlot(fid, slotNum as 1 | 2, session);
+        const match = this.createMatchForSlot(fid, slotNum as 1 | 2, session, selectedThisRound);
         if (match) {
+          selectedThisRound.add(match.opponent.fid);
           session.activeMatches.set(slotNum, match.id);
           matches.push(match);
         }
@@ -341,12 +343,21 @@ class GameManager {
       session.nextRoundStartTime = now + MATCH_DURATION;
       session.activeMatches.clear();
 
+      const selectedThisRound = new Set<number>();
       for (let slotNum = 1; slotNum <= SIMULTANEOUS_MATCHES; slotNum++) {
-        const match = this.createMatchForSlot(fid, slotNum as 1 | 2, session);
+        const match = this.createMatchForSlot(fid, slotNum as 1 | 2, session, selectedThisRound);
         if (match) {
+          selectedThisRound.add(match.opponent.fid);
           session.activeMatches.set(slotNum, match.id);
           matches.push(match);
+        } else {
+          console.warn(`[GameManager] Failed to create match for FID ${fid} round ${session.currentRound} slot ${slotNum}`);
         }
+      }
+    } else if (isRoundComplete && session.currentRound < maxRounds && !isTimeForNextRound) {
+      // Grace period still active, but set the flag for next poll
+      if (!session.nextRoundStartTime) {
+        session.nextRoundStartTime = now + ROUND_TRANSITION_GRACE_PERIOD;
       }
     } else if (isRoundComplete && session.currentRound === maxRounds && isTimeForNextRound) {
       // Last round complete
@@ -628,11 +639,12 @@ class GameManager {
     fid: number,
     slotNumber: 1 | 2,
     session: PlayerGameSession,
+    excludeFids?: Set<number>,
   ): Match | null {
     const player = this.state!.players.get(fid);
     if (!player) return null;
 
-    const opponent = this.selectOpponent(fid, session);
+    const opponent = this.selectOpponent(fid, session, excludeFids);
     if (!opponent) return null;
 
     const now = Date.now();
@@ -673,6 +685,7 @@ class GameManager {
   private selectOpponent(
     playerFid: number,
     session: PlayerGameSession,
+    excludeFids?: Set<number>,
   ): Player | Bot | null {
     const allOpponents = [
       ...Array.from(this.state!.players.values()).filter(p => p.fid !== playerFid),
@@ -681,49 +694,22 @@ class GameManager {
 
     if (allOpponents.length === 0) return null;
 
-    const totalOpponents = allOpponents.length;
-    const matchesPlayed = session.completedMatchIds.size;
-    const allowRepeats = matchesPlayed >= totalOpponents;
-    const maxFaceCount = allowRepeats ? Math.ceil(matchesPlayed / totalOpponents) : 1;
+    // Filter out excluded opponents (e.g., already matched this round)
+    let availableOpponents = excludeFids
+      ? allOpponents.filter(o => !excludeFids.has(o.fid))
+      : allOpponents;
 
-    let availableOpponents = allOpponents.filter(
-      o => (session.facedOpponents.get(o.fid) || 0) < maxFaceCount,
-    );
-
+    // If all opponents excluded (rare edge case), reset to all opponents
     if (availableOpponents.length === 0) {
       availableOpponents = allOpponents;
     }
 
-    availableOpponents.sort((a, b) => {
-      const aFaced = session.facedOpponents.get(a.fid) || 0;
-      const bFaced = session.facedOpponents.get(b.fid) || 0;
-      return aFaced - bFaced;
-    });
+    // RANDOM selection from available opponents
+    // No sorting, no determinism, purely random
+    const randomIndex = Math.floor(Math.random() * availableOpponents.length);
+    const selectedOpponent = availableOpponents[randomIndex];
 
-    const realPlayers = availableOpponents.filter(o => o.type === "REAL");
-    const bots = availableOpponents.filter(o => o.type === "BOT");
-
-    const idealBotRatio = Math.min(0.6, Math.max(0.4, bots.length / availableOpponents.length));
-    const currentBotRatio = this.calculateBotRatio(session);
-
-    if (currentBotRatio < idealBotRatio && bots.length > 0) {
-      return bots[0];
-    } else if (realPlayers.length > 0) {
-      return realPlayers[0];
-    }
-
-    return availableOpponents[0];
-  }
-
-  private calculateBotRatio(session: PlayerGameSession): number {
-    const matches = Array.from(session.completedMatchIds)
-      .map(id => this.state!.matches.get(id))
-      .filter(Boolean);
-
-    if (matches.length === 0) return 0;
-
-    const botMatches = matches.filter(m => m!.opponent.type === "BOT").length;
-    return botMatches / matches.length;
+    return selectedOpponent;
   }
 
   private async updateCycleState(): Promise<void> {
