@@ -32,9 +32,9 @@ class AblyChannelService {
   private initialTokens: Map<number, any> = new Map();
   
   // Debounce time before actually detaching a channel (in ms)
-  private readonly DETACH_DEBOUNCE_MS = 2000;
+  private readonly DETACH_DEBOUNCE_MS = 1000; // Reduced from 2s for faster cleanup
   // Maximum time to wait for channel attachment
-  private readonly ATTACH_TIMEOUT_MS = 10000;
+  private readonly ATTACH_TIMEOUT_MS = 5000; // Reduced from 10s
 
   private constructor() {}
 
@@ -107,11 +107,14 @@ class AblyChannelService {
         },
         clientId: `fid:${fid}`,
         autoConnect: true,
-        reconnectTimeout: 15000,
-        realtimeRequestTimeout: 15000,
-        disconnectedRetryTimeout: 3000,
-        suspendedRetryTimeout: 10000,
-        httpOpenTimeout: 10000,
+        // Aggressive reconnection for real-time games
+        reconnectTimeout: 5000, // Reduced from 15s
+        realtimeRequestTimeout: 10000, // Reduced from 20s
+        disconnectedRetryTimeout: 1000, // Reduced from 3s
+        suspendedRetryTimeout: 5000, // Reduced from 10s
+        httpOpenTimeout: 5000, // Reduced from 10s
+        maxIdleInterval: 120000, // Increase to 2min to avoid idle timeouts
+        maxReconnectAttempts: 10, // More aggressive retries
         transportParams: {
           remainConnectedAfterSuspend: true,
         },

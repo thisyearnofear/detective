@@ -85,6 +85,7 @@ export default function GameStateView({
     case 'FINISHED':
       return (
         <GameFinishedView
+          fid={fid}
           gameState={gameState}
           onLogout={onLogout}
         />

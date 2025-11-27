@@ -7,11 +7,21 @@
 
 import { gameManager } from "./gameState";
 import { getScheduledBotResponse, markBotResponseDelivered, recordBotDeliveryFailure } from "./botScheduler";
-import { getAblyServerManager } from "./ablyChannelManager";
 import { redis } from "./redis";
+import * as Ably from "ably";
 
 let isRunning = false;
 let checkInterval: NodeJS.Timeout | null = null;
+let restClient: Ably.Rest | null = null;
+
+function getRestClient(): Ably.Rest {
+  if (!restClient) {
+    const apiKey = process.env.ABLY_API_KEY;
+    if (!apiKey) throw new Error("ABLY_API_KEY not configured");
+    restClient = new Ably.Rest(apiKey);
+  }
+  return restClient;
+}
 
 /**
  * Check all scheduled bot responses and deliver those that are ready
@@ -23,15 +33,23 @@ async function checkAndDeliverReadyResponses() {
     
     if (keys.length === 0) return;
 
-    const ablyManager = getAblyServerManager();
-
+    // Batch processing: collect all ready responses first
+    const readyResponses: Array<{ matchId: string; scheduledBot: any }> = [];
+    
     for (const key of keys) {
       const matchId = key.replace("bot:scheduled:", "");
       const scheduledBot = await getScheduledBotResponse(matchId);
 
       if (scheduledBot) {
-        console.log(`[BotResponseDelivery] ⚡ Found ready response for match ${matchId}, delivering immediately`);
-        
+        readyResponses.push({ matchId, scheduledBot });
+      }
+    }
+
+    // Deliver all ready responses in parallel for speed
+    if (readyResponses.length > 0) {
+      console.log(`[BotResponseDelivery] ⚡ Batch delivering ${readyResponses.length} responses`);
+      
+      await Promise.all(readyResponses.map(async ({ matchId, scheduledBot }) => {
         try {
           // Get current match to verify it's still active
           const match = await gameManager.getMatch(matchId);
@@ -39,16 +57,16 @@ async function checkAndDeliverReadyResponses() {
             // Match ended, clean up
             await markBotResponseDelivered(matchId);
             console.log(`[BotResponseDelivery] Match ${matchId} ended, cleaned up response`);
-            continue;
+            return;
           }
 
           // Deliver the response
           await gameManager.addMessageToMatch(matchId, scheduledBot.response, scheduledBot.botFid);
-          await markBotResponseDelivered(matchId);
-
-          // Publish to match channel immediately (ONLY ONE CHANNEL TO AVOID DUPLICATION)
+          
+          // Create message immediately with fixed ID for idempotency
+          const messageId = `${matchId}-${scheduledBot.botFid}-${Date.now()}`;
           const chatMessage = {
-            id: `${Date.now()}-${scheduledBot.botFid}-${Math.random().toString(36).substr(2, 9)}`,
+            id: messageId,
             text: scheduledBot.response,
             sender: {
               fid: scheduledBot.botFid,
@@ -56,17 +74,23 @@ async function checkAndDeliverReadyResponses() {
             },
             timestamp: Date.now(),
           };
-          await ablyManager.publishToMatchChannel(matchId, chatMessage);
 
-          // NOTE: Removed duplicate publishChatMessage to prevent bot response duplication
-          // The match channel publish above is sufficient for real-time delivery
+          // Publish directly via REST API for fastest delivery (fire and forget)
+          const restClient = getRestClient();
+          const channel = restClient.channels.get(`match:${matchId}`);
+          channel.publish("message", chatMessage).catch(err => {
+            console.error(`[BotResponseDelivery] Failed to publish to REST channel: ${err.message}`);
+          });
 
-          console.log(`[BotResponseDelivery] ✓ Immediately delivered bot response for ${matchId}`);
+          // Mark as delivered after REST publish (don't wait for response)
+          await markBotResponseDelivered(matchId);
+
+          console.log(`[BotResponseDelivery] ⚡ Delivered bot response for ${matchId}`);
         } catch (error) {
           await recordBotDeliveryFailure(matchId, error instanceof Error ? error : new Error(String(error)));
           console.error(`[BotResponseDelivery] ✗ Failed to deliver response for ${matchId}:`, error);
         }
-      }
+      }));
     }
   } catch (error) {
     console.error("[BotResponseDelivery] Error checking scheduled responses:", error);
@@ -75,7 +99,7 @@ async function checkAndDeliverReadyResponses() {
 
 /**
  * Start the background delivery service
- * Checks for ready responses every 500ms to minimize latency
+ * Checks for ready responses every 50ms to minimize latency
  */
 export function startBotResponseDelivery() {
   if (isRunning) {
@@ -84,13 +108,13 @@ export function startBotResponseDelivery() {
   }
 
   isRunning = true;
-  console.log("[BotResponseDelivery] Starting background delivery service (checking every 500ms)");
+  console.log("[BotResponseDelivery] Starting background delivery service (checking every 50ms)");
 
   checkInterval = setInterval(() => {
     checkAndDeliverReadyResponses().catch(err => {
       console.error("[BotResponseDelivery] Unexpected error:", err);
     });
-  }, 100); // Check every 100ms for ultra-fast delivery
+  }, 50); // Check every 50ms for ultra-fast delivery
 
   // Stop on process exit
   if (typeof process !== "undefined") {
