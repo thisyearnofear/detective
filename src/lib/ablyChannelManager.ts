@@ -51,6 +51,7 @@ export type GameEventPayload = {
     event:
     | "round_start"
     | "round_end"
+    | "round_prepare"
     | "match_start"
     | "match_end"
     | "game_start"
