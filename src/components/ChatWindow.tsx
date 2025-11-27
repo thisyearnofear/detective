@@ -254,13 +254,14 @@ export default function ChatWindow({
     try {
       if (webSocketAvailable) {
         await wsSendMessage(text, { fid, username });
+      } else {
+        // Only send via HTTP if WebSocket is not available
+        await fetch("/api/chat/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ matchId: match.id, senderFid: fid, text }),
+        });
       }
-
-      await fetch("/api/chat/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ matchId: match.id, senderFid: fid, text }),
-      });
 
       if (shouldPoll) {
         mutate();
