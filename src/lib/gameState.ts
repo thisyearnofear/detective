@@ -427,14 +427,16 @@ class GameManager {
     const match = this.state!.matches.get(matchId);
     if (!match || match.voteLocked) return null;
 
+    // Allow toggles only while the match is active (before endTime)
+    // Votes can be toggled freely until the timer expires
+    const now = Date.now();
+    if (now >= match.endTime) {
+      // Time is up, don't allow new toggles
+      return null;
+    }
+
     match.currentVote = vote;
     match.voteHistory.push({ vote, timestamp: Date.now() });
-
-    // Only auto-lock if significantly past end time (with grace period)
-    const VOTE_LOCK_GRACE_PERIOD = 3000; // 3 second grace period
-    if (Date.now() >= (match.endTime + VOTE_LOCK_GRACE_PERIOD)) {
-      this.lockMatchVote(matchId);
-    }
 
     await persistence.saveMatch(match);
     return match;
