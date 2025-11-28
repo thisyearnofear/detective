@@ -66,40 +66,43 @@ export default function GameStatusCard({ gameState }: Props) {
     const isReadyToStart = gameState.playerCount >= 4;
 
     return (
-      <div className="bg-gradient-to-r from-blue-900/40 to-purple-900/40 border border-blue-500/50 rounded-xl p-6 backdrop-blur-sm">
-        <div className="flex flex-col gap-4">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
+      <div className="bg-gradient-to-br from-emerald-900/30 via-blue-900/30 to-purple-900/30 border-2 border-emerald-500/40 rounded-2xl p-6 backdrop-blur-md shadow-2xl">
+        <div className="flex flex-col gap-5">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-emerald-500/20 border-2 border-emerald-400/50 rounded-xl flex items-center justify-center backdrop-blur-sm">
                 <span className="text-2xl">⏱️</span>
-                <h3 className="hero-title text-xl font-black text-stroke">Registration Open</h3>
               </div>
-              <p className="text-gray-300 text-sm mb-3">
-                Join now and compete against real players and AI opponents
-              </p>
+              <div>
+                <h3 className="text-xl font-black text-white tracking-tight">Registration Open</h3>
+                <p className="text-sm text-emerald-300/90 font-medium">Join the next game</p>
+              </div>
             </div>
-            <div className="text-right">
-              <div className="text-sm font-bold text-green-400 bg-green-500/10 border border-green-500/30 rounded px-3 py-1">
-                Join Now
-              </div>
+            <div className="status-badge open">
+              <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
+              <span>Open</span>
             </div>
           </div>
 
-          {/* Player Count Progress */}
-          <div className="space-y-2">
-            <div className="flex justify-between text-xs text-gray-400">
-              <span>{gameState.playerCount} / {maxPlayers} players registered</span>
-              {isReadyToStart && <span className="text-green-400 font-bold">Ready to start soon!</span>}
+          {/* Player Count */}
+          <div className="space-y-3">
+            <div className="flex items-baseline justify-between">
+              <span className="text-2xl font-black text-white">{gameState.playerCount} <span className="text-base text-gray-400 font-normal">/ {maxPlayers}</span></span>
+              {isReadyToStart && (
+                <span className="chip active text-xs px-3 py-1">
+                  ✓ Ready to start
+                </span>
+              )}
             </div>
-            <div className="w-full bg-slate-700/50 h-2 rounded-full overflow-hidden">
+            <div className="w-full bg-white/10 h-3 rounded-full overflow-hidden border border-white/20">
               <div
-                className={`h-full transition-all duration-500 ${isReadyToStart ? 'bg-green-500' : 'bg-blue-500'}`}
+                className={`h-full transition-all duration-700 ease-out ${isReadyToStart ? 'bg-gradient-to-r from-emerald-400 to-green-500' : 'bg-gradient-to-r from-blue-400 to-purple-500'}`}
                 style={{ width: `${progress}%` }}
               />
             </div>
+            <p className="text-xs text-gray-300 font-medium">players registered</p>
           </div>
-
-
         </div>
       </div>
     );
@@ -108,27 +111,32 @@ export default function GameStatusCard({ gameState }: Props) {
   // LIVE - Show active game with player count and time
   if (gameState.state === 'LIVE') {
     return (
-      <div className="bg-gradient-to-r from-purple-900/40 to-pink-900/40 border border-purple-500/50 rounded-xl p-6 backdrop-blur-sm">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-2xl">🎮</span>
-              <h3 className="hero-title text-xl font-black text-stroke">Game Live</h3>
+      <div className="bg-gradient-to-br from-purple-900/30 via-pink-900/30 to-fuchsia-900/30 border-2 border-purple-500/40 rounded-2xl p-6 backdrop-blur-md shadow-2xl">
+        <div className="flex flex-col gap-5">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-purple-500/20 border-2 border-purple-400/50 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                <span className="text-2xl">🎮</span>
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-white tracking-tight">Game Live</h3>
+                <p className="text-sm text-purple-300/90 font-medium">{gameState.playerCount} players competing</p>
+              </div>
             </div>
-            <p className="text-gray-300 text-sm mb-3">
-              {gameState.playerCount} players are competing right now
-            </p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-xs text-gray-400">Time remaining</span>
-              <span className="text-2xl font-black text-purple-300">{formatTime(timeLeft)}</span>
-            </div>
-            <p className="text-xs text-gray-400 mt-2">Next registration opens after game ends</p>
-          </div>
-          <div className="text-right">
-            <div className="inline-flex items-center gap-1 px-3 py-1 bg-purple-500/20 border border-purple-500/30 rounded">
+            <div className="status-badge live">
               <span className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></span>
-              <span className="text-xs font-bold text-purple-300">Live</span>
+              <span>Live</span>
             </div>
+          </div>
+
+          {/* Timer */}
+          <div className="space-y-2">
+            <p className="text-xs text-gray-300 font-medium uppercase tracking-wider">Time Remaining</p>
+            <div className="text-4xl font-black text-white tracking-tight">
+              {formatTime(timeLeft)}
+            </div>
+            <p className="text-xs text-gray-400 font-medium">Next registration opens after game ends</p>
           </div>
         </div>
       </div>
@@ -138,26 +146,31 @@ export default function GameStatusCard({ gameState }: Props) {
   // FINISHED - Show leaderboard available and countdown to next
   if (gameState.state === 'FINISHED') {
     return (
-      <div className="bg-gradient-to-r from-amber-900/40 to-orange-900/40 border border-amber-500/50 rounded-xl p-6 backdrop-blur-sm">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-2xl">🏆</span>
-              <h3 className="hero-title text-xl font-black text-stroke">Game Finished</h3>
+      <div className="bg-gradient-to-br from-amber-900/30 via-orange-900/30 to-yellow-900/30 border-2 border-amber-500/40 rounded-2xl p-6 backdrop-blur-md shadow-2xl">
+        <div className="flex flex-col gap-5">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-amber-500/20 border-2 border-amber-400/50 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                <span className="text-2xl">🏆</span>
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-white tracking-tight">Game Finished</h3>
+                <p className="text-sm text-amber-300/90 font-medium">View results & leaderboard</p>
+              </div>
             </div>
-            <p className="text-gray-300 text-sm mb-3">
-              View the leaderboard and see who won
-            </p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-xs text-gray-400">Next round in</span>
-              <span className="text-2xl font-black text-amber-300">{formatTime(timeLeft)}</span>
+            <div className="status-badge finished">
+              <span>Finished</span>
             </div>
-            <p className="text-xs text-gray-400 mt-2">Registration will reopen shortly</p>
           </div>
-          <div className="text-right">
-            <div className="text-sm font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-3 py-1">
-              View Results
+
+          {/* Next Round Timer */}
+          <div className="space-y-2">
+            <p className="text-xs text-gray-300 font-medium uppercase tracking-wider">Next Round In</p>
+            <div className="text-4xl font-black text-white tracking-tight">
+              {formatTime(timeLeft)}
             </div>
+            <p className="text-xs text-gray-400 font-medium">Registration will reopen shortly</p>
           </div>
         </div>
       </div>

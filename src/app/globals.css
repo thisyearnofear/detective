@@ -39,12 +39,27 @@ body {
   }
 }
 
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .animate-flip-rotate {
   animation: flipRotate 2s ease-in-out infinite;
 }
 
 .animate-in {
   animation: fadeInScale 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 @layer components {
@@ -129,5 +144,66 @@ body {
   .hero-title {
     font-family: "Anton", Arial, sans-serif;
     text-transform: uppercase;
+  }
+
+  /* Chip Toggle Styles */
+  .chip {
+    @apply relative inline-flex items-center justify-center px-5 py-2.5 rounded-full font-semibold text-sm transition-all duration-300 cursor-pointer select-none;
+    font-family: 'Montserrat', sans-serif;
+    background: rgba(255, 255, 255, 0.08);
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+  }
+
+  .chip:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.25);
+    color: rgba(255, 255, 255, 0.9);
+    transform: translateY(-1px);
+  }
+
+  .chip.active {
+    background: rgba(255, 255, 255, 0.95);
+    border-color: rgba(255, 255, 255, 1);
+    color: #000;
+    box-shadow: 0 4px 20px rgba(255, 255, 255, 0.3);
+  }
+
+  .chip.grow:hover {
+    transform: scale(1.05);
+  }
+
+  .chip.bounce:hover {
+    animation: chipBounce 0.5s ease;
+  }
+
+  @keyframes chipBounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+  }
+
+  /* Status Badge */
+  .status-badge {
+    @apply inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold backdrop-blur-sm;
+    font-family: 'Montserrat', sans-serif;
+  }
+
+  .status-badge.live {
+    background: rgba(168, 85, 247, 0.15);
+    border: 1px solid rgba(168, 85, 247, 0.4);
+    color: rgb(216, 180, 254);
+  }
+
+  .status-badge.open {
+    background: rgba(34, 197, 94, 0.15);
+    border: 1px solid rgba(34, 197, 94, 0.4);
+    color: rgb(134, 239, 172);
+  }
+
+  .status-badge.finished {
+    background: rgba(251, 191, 36, 0.15);
+    border: 1px solid rgba(251, 191, 36, 0.4);
+    color: rgb(253, 224, 71);
   }
 }

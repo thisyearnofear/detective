@@ -320,7 +320,12 @@ class GameManager {
     // Round progression logic
     const ROUND_TRANSITION_GRACE_PERIOD = 3000; // 3 seconds after matches end
     const isRoundComplete = activeMatchCount === 0 && session.activeMatches.size === 0 && hasExpiredMatches;
-    const isTimeForNextRound = !session.nextRoundStartTime || (now >= (session.nextRoundStartTime + ROUND_TRANSITION_GRACE_PERIOD));
+    const isTimeForNextRound = !session.nextRoundStartTime || (now >= session.nextRoundStartTime);
+
+    // Debug logging for round transitions
+    if (activeMatchCount === 0 && session.activeMatches.size === 0) {
+      console.log(`[GameManager] FID ${fid} Round ${session.currentRound}: isRoundComplete=${isRoundComplete}, isTimeForNextRound=${isTimeForNextRound}, hasExpiredMatches=${hasExpiredMatches}, nextRoundStartTime=${session.nextRoundStartTime}, now=${now}`);
+    }
 
     if (!session.nextRoundStartTime && activeMatchCount === 0) {
       // Start round 1
@@ -370,9 +375,10 @@ class GameManager {
         .publishRoundPrepare(this.state!.cycleId, session.currentRound, playerFids)
         .catch(err => console.error("[getActiveMatches] Failed to publish round_prepare:", err));
     } else if (isRoundComplete && session.currentRound < maxRounds && !isTimeForNextRound) {
-      // Grace period still active, but set the flag for next poll
+      // Grace period - wait before starting next round
       if (!session.nextRoundStartTime) {
         session.nextRoundStartTime = now + ROUND_TRANSITION_GRACE_PERIOD;
+        console.log(`[GameManager] Round ${session.currentRound} complete for FID ${fid}, starting ${ROUND_TRANSITION_GRACE_PERIOD}ms grace period`);
       }
     } else if (isRoundComplete && session.currentRound === maxRounds && isTimeForNextRound) {
       // Last round complete

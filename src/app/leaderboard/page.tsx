@@ -61,10 +61,10 @@ export default function LeaderboardPage() {
     const leaderboard: LeaderboardEntry[] = leaderboardData?.leaderboard || [];
 
     return (
-        <main className="min-h-screen relative overflow-hidden">
+        <main className="min-h-screen flex items-center justify-center relative overflow-hidden px-4">
             <StarfieldBackground />
 
-            <div className="relative z-10 max-w-4xl mx-auto px-4 py-8">
+            <div className="relative z-10 w-full max-w-4xl mx-auto px-4 py-8">
                 {/* Header */}
                 <div className="text-center mb-8">
                     <Link href="/" className="inline-block mb-4">

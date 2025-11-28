@@ -159,15 +159,15 @@ export default function Home() {
         <div className={`w-full flex flex-col items-center transition-all duration-1000 ${introComplete ? 'opacity-100' : 'opacity-0'}`}>
           {!sdkUser ? (
             // Not authenticated - Perfect centering
-            <div className="w-full max-w-md flex flex-col items-center space-y-12">
+            <div className="w-full max-w-md flex flex-col items-center space-y-8">
               {/* Clean Header - Perfectly centered */}
-              <div className="w-full flex flex-col items-center space-y-4 text-center">
-                <div className="flex items-center justify-center w-16 h-16 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-sm">
-                  <span className="text-2xl">🔍</span>
+              <div className="w-full flex flex-col items-center space-y-5 text-center">
+                <div className="flex items-center justify-center w-20 h-20 bg-gradient-to-br from-white/10 to-white/5 border-2 border-white/20 rounded-3xl backdrop-blur-md shadow-2xl">
+                  <span className="text-4xl">🔍</span>
                 </div>
-                <div className="space-y-2">
-                  <h2 className="text-xl font-bold text-white">Can you spot the AI?</h2>
-                  <p className="text-sm text-gray-400">Chat with opponents. Vote: Real or Bot?</p>
+                <div className="space-y-3">
+                  <h2 className="text-2xl font-black text-white tracking-tight">Can you spot the AI?</h2>
+                  <p className="text-base text-gray-300 font-medium">Chat with opponents. Vote: Real or Bot?</p>
                 </div>
               </div>
 
@@ -197,61 +197,64 @@ export default function Home() {
               </div>
 
               {/* Collapsible Sections */}
-              <div className="w-full text-center space-y-0 pt-12">
+              <div className="w-full text-center space-y-0 pt-8">
                 {/* How to Play */}
                 <CollapsibleSection title="How To Play">
                   <div className="space-y-4">
                     {[
-                      "Register when a game opens",
-                      "Chat with 2 opponents simultaneously",
-                      "Vote: Real human or AI bot?"
+                      { icon: "1️⃣", text: "Register when a game opens" },
+                      { icon: "2️⃣", text: "Chat with 2 opponents simultaneously" },
+                      { icon: "3️⃣", text: "Vote: Real human or AI bot?" }
                     ].map((rule, i) => (
-                      <p key={i} className="text-sm font-medium text-white/70 leading-relaxed">
-                        {rule}
-                      </p>
+                      <div key={i} className="flex items-center gap-3 text-left">
+                        <span className="text-xl">{rule.icon}</span>
+                        <p className="text-sm font-semibold text-white/90 leading-relaxed">
+                          {rule.text}
+                        </p>
+                      </div>
                     ))}
                   </div>
                 </CollapsibleSection>
 
                 {/* Features */}
                 <CollapsibleSection title="Features">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div className="bg-white/5 border border-white/10 rounded-lg p-3 hover:bg-white/10 transition-colors text-left">
-                      <div className="text-lg mb-1">📊</div>
-                      <div className="font-medium text-white text-xs mb-1">4 Leaderboard Modes</div>
-                      <div className="text-xs text-gray-400">Current • Career • Insights • Multi-Chain</div>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="bg-white/8 border-2 border-white/15 rounded-xl p-4 hover:bg-white/12 hover:border-white/25 transition-all duration-300 text-left group">
+                      <div className="text-2xl mb-2 group-hover:scale-110 transition-transform">📊</div>
+                      <div className="font-bold text-white text-sm mb-1.5">4 Leaderboard Modes</div>
+                      <div className="text-xs text-gray-300 leading-relaxed">Current • Career • Insights • Multi-Chain</div>
                     </div>
 
-                    <div className="bg-white/5 border border-white/10 rounded-lg p-3 hover:bg-white/10 transition-colors text-left">
-                      <div className="text-lg mb-1">🌐</div>
-                      <div className="font-medium text-white text-xs mb-1">Multi-Chain Support</div>
-                      <div className="text-xs text-gray-400">Arbitrum • Monad • Cross-Chain</div>
+                    <div className="bg-white/8 border-2 border-white/15 rounded-xl p-4 hover:bg-white/12 hover:border-white/25 transition-all duration-300 text-left group">
+                      <div className="text-2xl mb-2 group-hover:scale-110 transition-transform">🌐</div>
+                      <div className="font-bold text-white text-sm mb-1.5">Multi-Chain Support</div>
+                      <div className="text-xs text-gray-300 leading-relaxed">Arbitrum • Monad • Cross-Chain</div>
                     </div>
 
-                    <div className="bg-white/5 border border-white/10 rounded-lg p-3 hover:bg-white/10 transition-colors text-left">
-                      <div className="text-lg mb-1">⚡</div>
-                      <div className="font-medium text-white text-xs mb-1">Real-Time Analytics</div>
-                      <div className="text-xs text-gray-400">Competitive insights • Trend analysis</div>
+                    <div className="bg-white/8 border-2 border-white/15 rounded-xl p-4 hover:bg-white/12 hover:border-white/25 transition-all duration-300 text-left group">
+                      <div className="text-2xl mb-2 group-hover:scale-110 transition-transform">⚡</div>
+                      <div className="font-bold text-white text-sm mb-1.5">Real-Time Analytics</div>
+                      <div className="text-xs text-gray-300 leading-relaxed">Competitive insights • Trend analysis</div>
                     </div>
 
-                    <div className="bg-white/5 border border-white/10 rounded-lg p-3 hover:bg-white/10 transition-colors text-left">
-                      <div className="text-lg mb-1">🤖</div>
-                      <div className="font-medium text-white text-xs mb-1">AI Opponents</div>
-                      <div className="text-xs text-gray-400">Personalized • Adaptive • Fair</div>
+                    <div className="bg-white/8 border-2 border-white/15 rounded-xl p-4 hover:bg-white/12 hover:border-white/25 transition-all duration-300 text-left group">
+                      <div className="text-2xl mb-2 group-hover:scale-110 transition-transform">🤖</div>
+                      <div className="font-bold text-white text-sm mb-1.5">AI Opponents</div>
+                      <div className="text-xs text-gray-300 leading-relaxed">Personalized • Adaptive • Fair</div>
                     </div>
                   </div>
                 </CollapsibleSection>
               </div>
 
               {/* Leaderboard Link */}
-              <div className="w-full text-center pt-6">
+              <div className="w-full text-center pt-4">
                 <a
                   href="/leaderboard"
-                  className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors group"
+                  className="chip grow inline-flex items-center gap-2"
                 >
-                  <span className="text-lg group-hover:scale-110 transition-transform">🏆</span>
-                  <span>View Leaderboard</span>
-                  <span className="text-xs opacity-50">→</span>
+                  <span className="text-xl">🏆</span>
+                  <span className="font-bold">View Leaderboard</span>
+                  <span className="text-xs opacity-60">→</span>
                 </a>
               </div>
             </div>
