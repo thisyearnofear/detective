@@ -21,13 +21,13 @@ export default function CollapsibleSection({ title, children, defaultOpen = fals
     <div className="border-t border-white/10">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between py-4 px-0 hover:text-white/70 transition-colors"
+        className="w-full flex items-center justify-between py-5 px-0 hover:bg-white/5 transition-all duration-300 rounded-lg group"
       >
-        <h3 className="text-xs font-medium text-white/50 uppercase tracking-[0.3em]">
+        <h3 className="text-sm font-bold text-white/80 group-hover:text-white uppercase tracking-wider">
           {title}
         </h3>
         <span
-          className={`text-white/50 transition-transform duration-300 ${
+          className={`text-white/60 group-hover:text-white transition-all duration-300 ${
             isOpen ? 'rotate-180' : ''
           }`}
         >
@@ -36,7 +36,7 @@ export default function CollapsibleSection({ title, children, defaultOpen = fals
       </button>
 
       {isOpen && (
-        <div className="pb-4 animate-fade-in">
+        <div className="pb-6 animate-fade-in">
           {children}
         </div>
       )}

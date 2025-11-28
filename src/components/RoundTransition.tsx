@@ -15,8 +15,8 @@ type RevealData = {
 
 interface RoundTransitionProps {
   isVisible: boolean;
-  phase?: "reveal" | "loading"; // reveal: show opponent(s) + stats, loading: show next round prep
-  reveals?: RevealData[]; // Multiple reveals for batch display
+  phase?: "reveal" | "loading";
+  reveals?: RevealData[];
   stats?: {
     accuracy: number;
     correct: number;
@@ -25,8 +25,6 @@ interface RoundTransitionProps {
     totalPlayers?: number;
   };
   nextRoundNumber?: number;
-  displayDuration?: number; // Reveal duration in ms (5-8s recommended)
-  onComplete?: () => void;
 }
 
 export default function RoundTransition({
@@ -35,34 +33,12 @@ export default function RoundTransition({
   reveals = [],
   stats,
   nextRoundNumber,
-  displayDuration = 6000,
-  onComplete,
 }: RoundTransitionProps) {
   const [mounted, setMounted] = useState(false);
-  const [countdown, setCountdown] = useState(displayDuration / 1000);
 
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  // Reveal display timer
-  useEffect(() => {
-    if (!isVisible || phase !== "reveal") return;
-
-    setCountdown(displayDuration / 1000);
-    const interval = setInterval(() => {
-      setCountdown((prev) => {
-        const next = Math.max(0, prev - 0.1);
-        if (next <= 0) {
-          onComplete?.();
-          return 0;
-        }
-        return next;
-      });
-    }, 100);
-
-    return () => clearInterval(interval);
-  }, [isVisible, phase, displayDuration, onComplete]);
 
   if (!isVisible || !mounted) return null;
 
@@ -161,15 +137,15 @@ export default function RoundTransition({
             </div>
           )}
 
-          {/* Auto-dismiss countdown */}
+          {/* Status message - waiting for next round */}
           <div className="text-center">
             <div className="w-full bg-slate-700 rounded-full h-1 mb-2">
               <div
-                className="bg-gradient-to-r from-blue-500 to-blue-400 h-1 rounded-full transition-all duration-100"
-                style={{ width: `${(countdown / (displayDuration / 1000)) * 100}%` }}
+                className="bg-gradient-to-r from-blue-500 to-blue-400 h-1 rounded-full transition-all duration-100 animate-pulse"
+                style={{ width: `100%` }}
               />
             </div>
-            <p className="text-xs text-gray-400">Proceeding to next round in {countdown.toFixed(1)}s</p>
+            <p className="text-xs text-gray-400">Waiting for next round to start...</p>
           </div>
         </div>
       </div>

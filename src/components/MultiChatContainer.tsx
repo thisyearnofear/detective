@@ -103,7 +103,9 @@ export default function MultiChatContainer({ fid }: Props) {
       // When round matches are prepared, refresh immediately to get new matches
       // This is the explicit signal that transition is complete
       if (event.type === "round_prepare" && !gameFinished) {
-        console.log("[MultiChatContainer] Round prepare event received, fetching new matches");
+        console.log("[MultiChatContainer] Round prepare event received, clearing reveal screen and fetching new matches");
+        setShowRevealScreen(false);
+        setBatchReveals([]);
         mutate();
       }
       
@@ -513,12 +515,6 @@ export default function MultiChatContainer({ fid }: Props) {
             totalPlayers: matchData?.playerPool?.totalPlayers,
           }}
           nextRoundNumber={currentRound + 1}
-          displayDuration={6000}
-          onComplete={() => {
-            setShowRevealScreen(false);
-            setBatchReveals([]);
-            setIsTransitioning(true);
-          }}
         />
       );
     }
