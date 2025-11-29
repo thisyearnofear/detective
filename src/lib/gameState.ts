@@ -178,13 +178,16 @@ class GameManager {
     await this.ensureInitialized();
 
     if (this.state!.players.size >= MAX_PLAYERS) {
-      console.warn("[registerPlayer] Max players reached");
+      console.log(`[GameManager] Registration rejected for FID ${userProfile.fid}: Game full`);
       return null;
     }
 
     if (this.state!.players.has(userProfile.fid)) {
+      console.log(`[GameManager] Player FID ${userProfile.fid} already registered`);
       return this.state!.players.get(userProfile.fid)!;
     }
+
+    console.log(`[GameManager] Registering player FID ${userProfile.fid} (${userProfile.username})`);
 
     // Create player
     const player: Player = {
@@ -294,21 +297,17 @@ class GameManager {
 
     // Check existing matches - add grace period to prevent premature endings
     let activeMatchCount = 0;
-    let hasExpiredMatches = false;
     const MATCH_END_GRACE_PERIOD = 2000; // 2 second grace period to prevent premature endings
 
     for (const [slotNum, matchId] of session.activeMatches) {
       const match = this.state!.matches.get(matchId);
       if (!match) {
         session.activeMatches.delete(slotNum);
-        hasExpiredMatches = true;
       } else if ((match.endTime + MATCH_END_GRACE_PERIOD) <= now && !match.voteLocked) {
         // Auto-lock expired match (with grace period)
         this.lockMatchVote(matchId);
-        hasExpiredMatches = true;
       } else if ((match.endTime + MATCH_END_GRACE_PERIOD) <= now && match.voteLocked) {
         // Already locked (with grace period)
-        hasExpiredMatches = true;
         session.activeMatches.delete(slotNum);
       } else {
         // Still active (including grace period)
@@ -319,12 +318,17 @@ class GameManager {
 
     // Round progression logic
     const ROUND_TRANSITION_GRACE_PERIOD = 3000; // 3 seconds after matches end
-    const isRoundComplete = activeMatchCount === 0 && session.activeMatches.size === 0 && hasExpiredMatches;
+
+    // Check if round is complete: no active matches AND player has played this round
+    // Use completedMatchesPerRound counter (doesn't rely on match objects being in memory)
+    const matchesPlayedThisRound = session.completedMatchesPerRound.get(session.currentRound) || 0;
+
+    const isRoundComplete = activeMatchCount === 0 && session.activeMatches.size === 0 && matchesPlayedThisRound > 0;
     const isTimeForNextRound = !session.nextRoundStartTime || (now >= session.nextRoundStartTime);
 
     // Debug logging for round transitions
     if (activeMatchCount === 0 && session.activeMatches.size === 0) {
-      console.log(`[GameManager] FID ${fid} Round ${session.currentRound}: isRoundComplete=${isRoundComplete}, isTimeForNextRound=${isTimeForNextRound}, hasExpiredMatches=${hasExpiredMatches}, nextRoundStartTime=${session.nextRoundStartTime}, now=${now}`);
+      console.log(`[GameManager] FID ${fid} Round ${session.currentRound}: isRoundComplete=${isRoundComplete}, isTimeForNextRound=${isTimeForNextRound}, matchesPlayedThisRound=${matchesPlayedThisRound}, nextRoundStartTime=${session.nextRoundStartTime}, now=${now}`);
     }
 
     if (!session.nextRoundStartTime && activeMatchCount === 0) {
@@ -415,6 +419,11 @@ class GameManager {
     match.messages.push(message);
     await persistence.saveMatch(match);
 
+    // Publish message to Ably for real-time delivery
+    getGameEventPublisher()
+      .publishChatMessage(this.state!.cycleId, matchId, match.player.fid, message.sender.fid, message.text)
+      .catch(err => console.error("[addMessageToMatch] Failed to publish chat message:", err));
+
     return message;
   }
 
@@ -491,6 +500,11 @@ class GameManager {
     const session = this.state!.playerSessions.get(player.fid);
     if (session) {
       session.completedMatchIds.add(matchId);
+
+      // Increment completed matches for this round
+      const currentCount = session.completedMatchesPerRound.get(match.roundNumber) || 0;
+      session.completedMatchesPerRound.set(match.roundNumber, currentCount + 1);
+
       for (const [slot, id] of session.activeMatches) {
         if (id === matchId) {
           session.activeMatches.delete(slot);
@@ -665,6 +679,7 @@ class GameManager {
         facedOpponents: new Map(),
         currentRound: 0,
         nextRoundStartTime: undefined,
+        completedMatchesPerRound: new Map(),
       });
     }
     return this.state!.playerSessions.get(fid)!;

@@ -104,6 +104,7 @@ export interface PlayerGameSession {
   facedOpponents: Map<number, number>; // opponent fid -> times faced
   currentRound: number;
   nextRoundStartTime?: number;
+  completedMatchesPerRound: Map<number, number>; // round number -> count of completed matches
 }
 
 // Defines the structure for the overall in-memory game state
