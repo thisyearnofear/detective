@@ -1,18 +1,6 @@
 // src/app/api/game/status/route.ts
 import { NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
-import { startBotResponseDelivery } from "@/lib/botResponseDelivery";
-
-/**
- * Start bot response delivery service on first request
- */
-if (typeof globalThis !== "undefined" && typeof window === "undefined") {
-  const globalAny = globalThis as any;
-  if (!globalAny.__BOT_DELIVERY_STARTED__) {
-    globalAny.__BOT_DELIVERY_STARTED__ = true;
-    startBotResponseDelivery();
-  }
-}
 
 /**
  * API route to get the current status of the game cycle.

@@ -13,9 +13,6 @@ type Props = {
   onMatchComplete: (matchId: string) => void;
   currentRound: number;
   totalRounds: number;
-  cycleId: string;
-  playerCount: number;
-  activeMatchIds: string[];
 };
 
 export default function MobileChatOptimized({
@@ -25,10 +22,7 @@ export default function MobileChatOptimized({
   onVoteToggle,
   onMatchComplete,
   currentRound,
-  totalRounds,
-  cycleId,
-  playerCount,
-  activeMatchIds
+  totalRounds
 }: Props) {
   const [activeSlot, setActiveSlot] = useState<number>(1);
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
@@ -207,11 +201,8 @@ export default function MobileChatOptimized({
                       onComplete={() => onMatchComplete(match.id)}
                       isCompact={true}
                       isMobileStacked={true}
-                      showVoteToggle={false} // We'll handle voting in the bottom bar
+                      showVoteToggle={false}
                       isNewMatch={false}
-                      cycleId={cycleId}
-                      playerCount={playerCount}
-                      activeMatchIds={activeMatchIds}
                     />
                   </div>
                 </div>

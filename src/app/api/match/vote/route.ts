@@ -11,6 +11,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { matchId, vote, fid } = body;
+    console.log(`[/api/match/vote POST] Received vote: ${vote} for match ${matchId} from FID ${fid}`);
 
     if (!matchId || !vote || !fid) {
       return NextResponse.json(
@@ -53,6 +54,7 @@ export async function POST(request: NextRequest) {
 
     // Update the vote
     const updatedMatch = await gameManager.updateMatchVote(matchId, vote);
+    console.log(`[/api/match/vote POST] updatedMatch from gameManager:`, updatedMatch ? { currentVote: updatedMatch.currentVote, voteLocked: updatedMatch.voteLocked } : null);
 
     if (!updatedMatch) {
       return NextResponse.json(

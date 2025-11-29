@@ -24,7 +24,6 @@ import {
 } from "./types";
 import * as persistence from "./gamePersistence";
 import { database } from "./database";
-import { getGameEventPublisher } from "./gameEventPublisher";
 import { inferPersonality } from "./botProactive";
 
 // Game configuration constants
@@ -262,11 +261,6 @@ class GameManager {
         gameEnds: this.state!.gameEnds,
       });
 
-      const playerFids = Array.from(this.state!.players.keys());
-      getGameEventPublisher()
-        .publishGameStart(this.state!.cycleId, playerFids)
-        .catch(err => console.error("[setPlayerReady] Failed to publish game_start:", err));
-
       return true;
     }
 
@@ -346,12 +340,6 @@ class GameManager {
           matches.push(match);
         }
       }
-
-      // Signal to client that first round matches are ready
-      const playerFids = [fid];
-      getGameEventPublisher()
-        .publishRoundPrepare(this.state!.cycleId, session.currentRound, playerFids)
-        .catch(err => console.error("[getActiveMatches] Failed to publish round_prepare:", err));
     } else if (isRoundComplete && session.currentRound < maxRounds && isTimeForNextRound) {
       // Advance to next round
       console.log(`[GameManager] Advancing FID ${fid} from round ${session.currentRound} to ${session.currentRound + 1}`);
@@ -374,10 +362,6 @@ class GameManager {
       }
 
       // Signal to client that new round matches are ready
-      const playerFids = [fid];
-      getGameEventPublisher()
-        .publishRoundPrepare(this.state!.cycleId, session.currentRound, playerFids)
-        .catch(err => console.error("[getActiveMatches] Failed to publish round_prepare:", err));
     } else if (isRoundComplete && session.currentRound < maxRounds && !isTimeForNextRound) {
       // Grace period - wait before starting next round
       if (!session.nextRoundStartTime) {
@@ -418,11 +402,6 @@ class GameManager {
 
     match.messages.push(message);
     await persistence.saveMatch(match);
-
-    // Publish message to Ably for real-time delivery
-    getGameEventPublisher()
-      .publishChatMessage(this.state!.cycleId, matchId, match.player.fid, message.sender.fid, message.text)
-      .catch(err => console.error("[addMessageToMatch] Failed to publish chat message:", err));
 
     return message;
   }
@@ -521,9 +500,6 @@ class GameManager {
     this.saveMatchToDatabase(match, isCorrect, voteSpeed).catch(console.error);
 
     // Publish event (async, non-blocking)
-    getGameEventPublisher()
-      .publishMatchEnd(this.state!.cycleId, match, isCorrect, actualType)
-      .catch(err => console.error("[lockMatchVote] Failed to publish event:", err));
 
     return isCorrect;
   }
@@ -829,10 +805,6 @@ class GameManager {
         this.state!.gameEnds = now + GAME_DURATION;
         this.state!.extensionCount = 0;
 
-        const playerFids = Array.from(this.state!.players.keys());
-        getGameEventPublisher()
-          .publishGameStart(this.state!.cycleId, playerFids)
-          .catch(err => console.error("[updateCycleState] Failed to publish game_start:", err));
       }
     }
 
@@ -888,15 +860,6 @@ class GameManager {
 
         this.saveGameResultsToDatabase().catch(console.error);
 
-        const playerFids = Array.from(this.state!.players.keys());
-        const leaderboardData = this.state!.leaderboard.map((entry, index) => ({
-          fid: entry.player.fid,
-          score: index + 1,
-        }));
-
-        getGameEventPublisher()
-          .publishGameEnd(this.state!.cycleId, leaderboardData, playerFids)
-          .catch(err => console.error("[updateCycleState] Failed to publish game_end:", err));
       } else if (this.state!.extensionCount < this.state!.maxExtensions) {
         this.state!.extensionCount++;
         this.state!.gameEnds = now + 60000;

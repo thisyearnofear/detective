@@ -20,9 +20,6 @@ type Props = {
   onMatchComplete?: (matchId: string) => void;
   currentRound?: number;
   totalRounds?: number;
-  cycleId?: string;
-  playerCount?: number;
-  activeMatchIds?: string[];
   // Other handlers
   onQuickMatch?: () => void;
   onChallengePlayer?: (targetFid: number) => void;
@@ -38,9 +35,6 @@ export default function MobileAppContainer({
   onMatchComplete = () => { },
   currentRound = 1,
   totalRounds = 5,
-  cycleId = '',
-  playerCount = 0,
-  activeMatchIds = [],
   onQuickMatch,
   onChallengePlayer
 }: Props) {
@@ -99,9 +93,6 @@ export default function MobileAppContainer({
               onMatchComplete={onMatchComplete}
               currentRound={currentRound}
               totalRounds={totalRounds}
-              cycleId={cycleId}
-              playerCount={playerCount}
-              activeMatchIds={activeMatchIds}
             />
           );
         }
