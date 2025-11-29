@@ -7,6 +7,7 @@ interface ProgressRingTimerProps {
   endTime?: number; // Absolute end time in ms (preferred - from server)
   onComplete?: () => void;
   compact?: boolean;
+  timeOffset?: number; // Server time offset for synchronization
 }
 
 export default function ProgressRingTimer({
@@ -14,6 +15,7 @@ export default function ProgressRingTimer({
   endTime: serverEndTime,
   onComplete,
   compact = false,
+  timeOffset = 0,
 }: ProgressRingTimerProps) {
   const [remaining, setRemaining] = useState(duration);
   const [isWarning, setIsWarning] = useState(false);
@@ -40,23 +42,23 @@ export default function ProgressRingTimer({
   useEffect(() => {
     // Frontend grace period to match backend auto-lock timing
     const FRONTEND_GRACE_PERIOD = 3000; // 3 seconds to sync with backend grace periods
-    
+
     // Use server end time if provided, otherwise calculate from duration
     const baseEndTime = serverEndTime || (Date.now() + duration * 1000);
     const endTime = baseEndTime + FRONTEND_GRACE_PERIOD;
-    
+
     // Don't start timer if duration is too short (likely stale data)
     if (duration <= 0 && !serverEndTime) {
       return;
     }
 
     const updateTimer = () => {
-      const now = Date.now();
+      const now = Date.now() + timeOffset; // Use synced time
       const timeLeft = Math.max(0, endTime - now);
       const secondsLeft = timeLeft / 1000;
 
       setRemaining(secondsLeft);
-      
+
       // Show warnings based on original timer (without grace period)
       // This keeps the UI warnings at the expected 60s/30s/10s marks
       const originalSecondsLeft = Math.max(0, (baseEndTime - now) / 1000);
@@ -76,7 +78,7 @@ export default function ProgressRingTimer({
     updateTimer();
 
     return () => clearInterval(interval);
-  }, [duration, serverEndTime, onComplete]);
+  }, [duration, serverEndTime, onComplete, timeOffset]);
 
   const minutes = Math.floor(remaining / 60);
   const seconds = Math.round(remaining % 60);

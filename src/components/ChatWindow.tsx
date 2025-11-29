@@ -40,6 +40,8 @@ type Props = {
   cycleId?: string;
   playerCount?: number;
   activeMatchIds?: string[];
+  // Time synchronization
+  timeOffset?: number; // Server time offset for accurate countdown
 };
 
 export default function ChatWindow({
@@ -55,6 +57,7 @@ export default function ChatWindow({
   cycleId,
   playerCount,
   activeMatchIds,
+  timeOffset = 0,
 }: Props) {
   const [input, setInput] = useState("");
   const [isTimeUp, setIsTimeUp] = useState(false);
@@ -296,7 +299,9 @@ export default function ChatWindow({
     setInput(value);
   };
 
-  const matchDuration = Math.round((match.endTime - Date.now()) / 1000);
+  // Use synced time for accurate countdown
+  const getSyncedTime = () => Date.now() + timeOffset;
+  const matchDuration = Math.round((match.endTime - getSyncedTime()) / 1000);
 
   // Determine chat height based on compact mode
   // Mobile stacked mode needs even shorter height to fit both chats on screen
@@ -395,6 +400,7 @@ export default function ChatWindow({
             endTime={match.endTime}
             onComplete={handleTimeUp}
             compact={isCompact || isMobileStacked}
+            timeOffset={timeOffset}
           />
         )}
       </div>

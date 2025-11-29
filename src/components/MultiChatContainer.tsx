@@ -56,6 +56,10 @@ export default function MultiChatContainer({ fid }: Props) {
   const [transitionTimeoutMessage, setTransitionTimeoutMessage] = useState<"preparing" | "delayed" | null>(null);
   const transitionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const transitionWarningRef = useRef<NodeJS.Timeout | null>(null);
+  const [isPreparingRound, setIsPreparingRound] = useState(false);
+
+  // Time synchronization with server
+  const [timeOffset, setTimeOffset] = useState(0); // serverTime - clientTime
 
   // Poll for active matches - but at a much slower rate now since we have events
   // Only poll occasionally for periodic sync (every 5 seconds instead of 1 second)
@@ -85,7 +89,7 @@ export default function MultiChatContainer({ fid }: Props) {
     onEvent: (event) => {
       if (!ablyCycleId) return; // Extra safety check
       console.log("[MultiChatContainer] Received game event:", event.type);
-      
+
       // Handle new chat messages (including bot responses)
       if (event.type === "chat_message") {
         const { matchId, senderFid, text } = event.data;
@@ -94,23 +98,25 @@ export default function MultiChatContainer({ fid }: Props) {
         mutate();
         return;
       }
-      
+
       // When match_end event arrives, refresh to get new matches (but not if game is finished)
       if ((event.type === "match_end" || event.type === "round_end") && !gameFinished) {
         mutate();
       }
-      
+
       // When round matches are prepared, refresh immediately to get new matches
       // This is the explicit signal that transition is complete
       if (event.type === "round_prepare" && !gameFinished) {
         console.log("[MultiChatContainer] Round prepare event received, clearing reveal screen and fetching new matches");
         setShowRevealScreen(false);
         setBatchReveals([]);
+        setIsPreparingRound(true);
         mutate();
       }
-      
+
       // When game starts, refresh. When game ends, don't trigger more fetches
       if (event.type === "game_start") {
+        setIsPreparingRound(false);
         mutate();
       }
       // Note: game_end will set gameFinished=true, which stops polling automatically
@@ -120,19 +126,32 @@ export default function MultiChatContainer({ fid }: Props) {
     },
   });
 
-  // Track successful loads and errors, and update ablyCycleId when available
+  // Track successful loads and errors, update ablyCycleId and calculate time offset
   useEffect(() => {
     if (matchData && !error) {
       setHasLoadedOnce(true);
       setConsecutiveErrors(0);
+
       // Update cycleId if provided (enables Ably events)
       if (matchData.cycleId && matchData.cycleId !== ablyCycleId) {
         setAblyCycleId(matchData.cycleId);
       }
+
+      // Calculate time offset for synchronization
+      if (matchData.serverTime) {
+        const clientTime = Date.now();
+        const newOffset = matchData.serverTime - clientTime;
+
+        // Only update if offset changed significantly (>100ms) to avoid jitter
+        if (Math.abs(newOffset - timeOffset) > 100) {
+          console.log(`[MultiChatContainer] Time offset updated: ${newOffset}ms (was: ${timeOffset}ms)`);
+          setTimeOffset(newOffset);
+        }
+      }
     } else if (error) {
       setConsecutiveErrors(prev => prev + 1);
     }
-  }, [matchData, error, ablyCycleId]);
+  }, [matchData, error, ablyCycleId, timeOffset]);
 
   // Check if game is finished (all rounds completed and no active matches)
   // Add safeguards to prevent premature game ending
@@ -156,6 +175,10 @@ export default function MultiChatContainer({ fid }: Props) {
   useEffect(() => {
     if (matchData?.currentRound && matchData.currentRound !== lastRound) {
       // Round changed
+      if (matchData.currentRound > lastRound) {
+        setIsPreparingRound(false);
+      }
+
       if (lastRound > 0 && matchData.matches?.length === 0) {
         // We're between rounds - show transition
         setIsTransitioning(true);
@@ -276,14 +299,20 @@ export default function MultiChatContainer({ fid }: Props) {
         const result = await response.json();
 
         if (!response.ok) {
-          // Revert on error
-          setVotes((prev) => ({ ...prev, [matchId]: currentVote }));
+          // Revert on error - restore to previous state
           console.error("Failed to update vote:", result.error);
+          setVotes((prev) => ({ ...prev, [matchId]: currentVote }));
+        } else {
+          // Sync with server response to ensure consistency
+          // The server returns the actual current vote after processing
+          if (result.currentVote) {
+            setVotes((prev) => ({ ...prev, [matchId]: result.currentVote }));
+          }
         }
       } catch (error) {
         // Revert on error
-        setVotes((prev) => ({ ...prev, [matchId]: currentVote }));
         console.error("Error updating vote:", error);
+        setVotes((prev) => ({ ...prev, [matchId]: currentVote }));
       }
     },
     [votes, fid]
@@ -292,6 +321,9 @@ export default function MultiChatContainer({ fid }: Props) {
   // Handle match completion - collect reveal data
   const handleMatchComplete = useCallback(
     async (matchId: string) => {
+      // Don't process completions if we're already preparing the next round
+      if (isPreparingRound) return;
+
       try {
         const response = await fetch("/api/match/vote", {
           method: "PUT",
@@ -306,18 +338,22 @@ export default function MultiChatContainer({ fid }: Props) {
           const match = matchData?.matches.find((m: any) => m.id === matchId);
           if (match) {
             // Collect reveal data for batch display
-            setBatchReveals((prev) => [
-              ...prev,
-              {
-                opponent: {
-                  fid: match.opponent.fid,
-                  username: match.opponent.username,
-                  displayName: match.opponent.displayName,
-                  pfpUrl: match.opponent.pfpUrl,
+            setBatchReveals((prev) => {
+              // Prevent duplicates
+              if (prev.some((r) => r.opponent.fid === match.opponent.fid)) return prev;
+              return [
+                ...prev,
+                {
+                  opponent: {
+                    fid: match.opponent.fid,
+                    username: match.opponent.username,
+                    displayName: match.opponent.displayName,
+                    pfpUrl: match.opponent.pfpUrl,
+                  },
+                  actualType: result.actualType,
                 },
-                actualType: result.actualType,
-              },
-            ]);
+              ];
+            });
           }
         }
 
@@ -334,12 +370,12 @@ export default function MultiChatContainer({ fid }: Props) {
       // Also refresh after a short delay to catch any async updates
       setTimeout(() => mutate(), 500);
     },
-    [fid, mutate, matchData]
+    [fid, mutate, matchData, isPreparingRound]
   );
 
   // Memoize bound handlers to prevent new function references on every render
   const boundHandlersRef = useRef<Map<string, { onVoteToggle: () => void; onComplete: () => void }>>(new Map());
-  
+
   // Get or create stable handlers for a match ID
   const getStableHandlers = useCallback((matchId: string) => {
     if (!boundHandlersRef.current.has(matchId)) {
@@ -350,7 +386,7 @@ export default function MultiChatContainer({ fid }: Props) {
     }
     return boundHandlersRef.current.get(matchId)!;
   }, [handleVoteToggle, handleMatchComplete]);
-  
+
   // Memoize slots to prevent ChatWindow from re-mounting on every matchData refresh
   // Use a ref to maintain stable references when match content hasn't changed
   const previousSlotsRef = useRef<any>({});
@@ -418,7 +454,7 @@ export default function MultiChatContainer({ fid }: Props) {
   // Calculate player count and active match IDs for shared channel optimization
   const matches = matchData?.matches || [];
   const playerCount = matchData?.playerPool?.totalPlayers || 0;
-  
+
   // Memoize activeMatchIds to prevent unnecessary re-subscriptions
   // Only create new array when actual match IDs change
   const activeMatchIds = useMemo(
@@ -494,9 +530,9 @@ export default function MultiChatContainer({ fid }: Props) {
     );
   }
 
-  if (matches.length === 0) {
+  if (matches.length === 0 || isPreparingRound) {
     // Show reveal screen if we have reveals to display
-    if (showRevealScreen && batchReveals.length > 0) {
+    if (showRevealScreen && batchReveals.length > 0 && !isPreparingRound) {
       const accuracy =
         roundResults.length > 0
           ? (roundResults.filter((r) => r.correct).length / roundResults.length) * 100
@@ -523,7 +559,7 @@ export default function MultiChatContainer({ fid }: Props) {
     const loaderMessage = transitionTimeoutMessage === "delayed"
       ? "Taking longer than expected... Stand by"
       : "Preparing next round...";
-    
+
     return (
       <RoundStartLoader
         roundNumber={currentRound}
@@ -575,7 +611,7 @@ export default function MultiChatContainer({ fid }: Props) {
           const currentVote = votes[match.id] || "REAL";
           const voteColor =
             currentVote === "BOT" ? "border-red-500/50" : "border-green-500/50";
-          
+
           // Get stable handlers to prevent ChatWindow remounting
           const stableHandlers = getStableHandlers(match.id);
 
@@ -603,6 +639,7 @@ export default function MultiChatContainer({ fid }: Props) {
                 cycleId={cycleId}
                 playerCount={playerCount}
                 activeMatchIds={activeMatchIds}
+                timeOffset={timeOffset}
               />
             </div>
           );
