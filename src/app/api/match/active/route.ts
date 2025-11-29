@@ -110,6 +110,8 @@ export async function GET(request: NextRequest) {
       // Include cycleId for shared channel optimization
       cycleId: gameState.cycleId,
       voteHistory,
+      // Server time for client synchronization
+      serverTime: Date.now(),
     });
   } catch (error) {
     console.error("Error fetching active matches:", error);

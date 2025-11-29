@@ -333,7 +333,7 @@ class GameManager {
       session.nextRoundStartTime = now + MATCH_DURATION;
 
       const selectedThisRound = new Set<number>();
-      
+
       for (let slotNum = 1; slotNum <= SIMULTANEOUS_MATCHES; slotNum++) {
         const match = this.createMatchForSlot(fid, slotNum as 1 | 2, session, selectedThisRound);
         if (match) {
@@ -342,7 +342,7 @@ class GameManager {
           matches.push(match);
         }
       }
-      
+
       // Signal to client that first round matches are ready
       const playerFids = [fid];
       getGameEventPublisher()
@@ -357,7 +357,7 @@ class GameManager {
 
       // Track selected opponents within this round to prevent duplicates in same round
       const selectedThisRound = new Set<number>();
-      
+
       for (let slotNum = 1; slotNum <= SIMULTANEOUS_MATCHES; slotNum++) {
         const match = this.createMatchForSlot(fid, slotNum as 1 | 2, session, selectedThisRound);
         if (match) {
@@ -368,7 +368,7 @@ class GameManager {
           console.warn(`[GameManager] Failed to create match for FID ${fid} round ${session.currentRound} slot ${slotNum}`);
         }
       }
-      
+
       // Signal to client that new round matches are ready
       const playerFids = [fid];
       getGameEventPublisher()
@@ -425,13 +425,24 @@ class GameManager {
     await this.ensureInitialized();
 
     const match = this.state!.matches.get(matchId);
-    if (!match || match.voteLocked) return null;
+    if (!match) {
+      console.warn(`[updateMatchVote] Match ${matchId} not found`);
+      return null;
+    }
+
+    if (match.voteLocked) {
+      console.warn(`[updateMatchVote] Match ${matchId} is locked`);
+      return null;
+    }
 
     // Allow toggles only while the match is active (before endTime)
-    // Votes can be toggled freely until the timer expires
+    // Small grace period (500ms) for network latency
     const now = Date.now();
-    if (now >= match.endTime) {
-      // Time is up, don't allow new toggles
+    const VOTE_GRACE_PERIOD = 500; // 500ms grace for network latency
+
+    if (now >= (match.endTime + VOTE_GRACE_PERIOD)) {
+      // Time is up (with grace period), don't allow new toggles
+      console.warn(`[updateMatchVote] Match ${matchId} time expired (now: ${now}, endTime: ${match.endTime}, grace: ${VOTE_GRACE_PERIOD}ms)`);
       return null;
     }
 
@@ -439,6 +450,7 @@ class GameManager {
     match.voteHistory.push({ vote, timestamp: Date.now() });
 
     await persistence.saveMatch(match);
+    console.log(`[updateMatchVote] Match ${matchId} vote updated to ${vote} (history: ${match.voteHistory.length} changes)`);
     return match;
   }
 
@@ -784,7 +796,7 @@ class GameManager {
 
       // Start countdown once minimum players join
       if (!this.state!.countdownStarted && playerCount >= MIN_PLAYERS) {
-        console.log(`[GameManager] Minimum ${MIN_PLAYERS} players reached, starting ${REGISTRATION_COUNTDOWN/1000}s countdown`);
+        console.log(`[GameManager] Minimum ${MIN_PLAYERS} players reached, starting ${REGISTRATION_COUNTDOWN / 1000}s countdown`);
         this.state!.countdownStarted = true;
         this.state!.registrationEnds = now + REGISTRATION_COUNTDOWN;
         await persistence.saveGameStateMeta({
