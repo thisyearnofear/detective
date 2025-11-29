@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import useSWR from "swr";
-import { useAblyGameEvents } from "@/hooks/useAblyChat";
 import ChatWindow from "./ChatWindow";
 import Leaderboard from "./Leaderboard";
 import RoundStartLoader from "./RoundStartLoader";
@@ -52,106 +51,48 @@ export default function MultiChatContainer({ fid }: Props) {
   // Track round transitions for loading state
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [lastRound, setLastRound] = useState(0);
-  const [ablyCycleId, setAblyCycleId] = useState<string>("");
   const [transitionTimeoutMessage, setTransitionTimeoutMessage] = useState<"preparing" | "delayed" | null>(null);
   const transitionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const transitionWarningRef = useRef<NodeJS.Timeout | null>(null);
   const [isPreparingRound, setIsPreparingRound] = useState(false);
 
   // Time synchronization with server
-  const [timeOffset, setTimeOffset] = useState(0); // serverTime - clientTime
+  const [timeOffset, setTimeOffset] = useState(0);
 
-  // Poll for active matches - but at a much slower rate now since we have events
-  // Only poll occasionally for periodic sync (every 5 seconds instead of 1 second)
-  // Stop polling when game is finished to prevent 403 errors
+  // Poll for active matches
   const {
     data: matchData,
     error,
     mutate,
   } = useSWR(`/api/match/active?fid=${fid}`, fetcher, {
-    refreshInterval: isTransitioning ? 1000 : (gameFinished ? 0 : 5000), // Poll every 1s during transitions, 5s normally
+    refreshInterval: isTransitioning ? 1000 : (gameFinished ? 0 : 2000),
     refreshWhenHidden: false,
-    revalidateOnFocus: false, // Prevent tab switching from triggering refetch
-    // Keep previous data on error to prevent UI flicker
+    revalidateOnFocus: false,
     keepPreviousData: true,
-    // Don't throw on error, let us handle it gracefully
-    shouldRetryOnError: !gameFinished, // Stop retrying when game is finished
+    shouldRetryOnError: !gameFinished,
     errorRetryCount: 3,
     errorRetryInterval: 1000,
   });
 
-  // Subscribe to game events (only when cycleId is available)
-  // This prevents React hook violations and invalid channel subscriptions
-  useAblyGameEvents({
-    fid,
-    cycleId: ablyCycleId || "placeholder", // Provide placeholder to satisfy hook requirements
-    enabled: !!ablyCycleId, // Only actually subscribe when we have a real cycleId
-    onEvent: (event) => {
-      if (!ablyCycleId) return; // Extra safety check
-      console.log("[MultiChatContainer] Received game event:", event.type);
-
-      // Handle new chat messages (including bot responses)
-      if (event.type === "chat_message") {
-        const { matchId, senderFid, text } = event.data;
-        console.log(`[MultiChatContainer] Received chat_message for match ${matchId} from FID ${senderFid}: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`);
-        // Refresh to get the updated match data with the new message
-        mutate();
-        return;
-      }
-
-      // When match_end event arrives, refresh to get new matches (but not if game is finished)
-      if ((event.type === "match_end" || event.type === "round_end") && !gameFinished) {
-        mutate();
-      }
-
-      // When round matches are prepared, refresh immediately to get new matches
-      // This is the explicit signal that transition is complete
-      if (event.type === "round_prepare" && !gameFinished) {
-        console.log("[MultiChatContainer] Round prepare event received, clearing reveal screen and fetching new matches");
-        setShowRevealScreen(false);
-        setBatchReveals([]);
-        setIsPreparingRound(true);
-        mutate();
-      }
-
-      // When game starts, refresh. When game ends, don't trigger more fetches
-      if (event.type === "game_start") {
-        setIsPreparingRound(false);
-        mutate();
-      }
-      // Note: game_end will set gameFinished=true, which stops polling automatically
-    },
-    onError: (err) => {
-      console.error("[MultiChatContainer] Game event error:", err);
-    },
-  });
-
-  // Track successful loads and errors, update ablyCycleId and calculate time offset
+  // Track successful loads and errors, calculate time offset
   useEffect(() => {
     if (matchData && !error) {
       setHasLoadedOnce(true);
       setConsecutiveErrors(0);
-
-      // Update cycleId if provided (enables Ably events)
-      if (matchData.cycleId && matchData.cycleId !== ablyCycleId) {
-        setAblyCycleId(matchData.cycleId);
-      }
 
       // Calculate time offset for synchronization
       if (matchData.serverTime) {
         const clientTime = Date.now();
         const newOffset = matchData.serverTime - clientTime;
 
-        // Only update if offset changed significantly (>100ms) to avoid jitter
         if (Math.abs(newOffset - timeOffset) > 100) {
-          console.log(`[MultiChatContainer] Time offset updated: ${newOffset}ms (was: ${timeOffset}ms)`);
           setTimeOffset(newOffset);
         }
       }
     } else if (error) {
       setConsecutiveErrors(prev => prev + 1);
     }
-  }, [matchData, error, ablyCycleId, timeOffset]);
+  }, [matchData, error, timeOffset]);
 
   // Check if game is finished (all rounds completed and no active matches)
   // Add safeguards to prevent premature game ending
@@ -451,16 +392,8 @@ export default function MultiChatContainer({ fid }: Props) {
     slots[2]?.messages?.length,
   ]);
 
-  // Calculate player count and active match IDs for shared channel optimization
+  // Get matches for display
   const matches = matchData?.matches || [];
-  const playerCount = matchData?.playerPool?.totalPlayers || 0;
-
-  // Memoize activeMatchIds to prevent unnecessary re-subscriptions
-  // Only create new array when actual match IDs change
-  const activeMatchIds = useMemo(
-    () => matches.map((m: any) => m.id),
-    [matches.map((m: any) => m.id).join(",")]
-  );
 
   // Only show error state if we've never loaded successfully OR we've had multiple consecutive errors
   // This prevents UI flicker from transient errors
@@ -494,7 +427,6 @@ export default function MultiChatContainer({ fid }: Props) {
   const {
     currentRound = 1,
     totalRounds = 5,
-    cycleId = "",
   } = matchData;
 
   if ((matchData as any).gameState && (matchData as any).gameState !== "LIVE") {
@@ -636,9 +568,6 @@ export default function MultiChatContainer({ fid }: Props) {
                 isMobileStacked={true}
                 showVoteToggle={true}
                 isNewMatch={newMatchIds.has(match.id)}
-                cycleId={cycleId}
-                playerCount={playerCount}
-                activeMatchIds={activeMatchIds}
                 timeOffset={timeOffset}
               />
             </div>

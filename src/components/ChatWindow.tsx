@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import useSWR from "swr";
-import { useAblyChat } from "@/hooks/useAblyChat";
 import { EMOJI_SHORTCODES } from "@/lib/constants";
 import EmojiPicker from "./EmojiPicker";
 import VoteToggle from "./VoteToggle";
@@ -10,9 +9,6 @@ import ProgressRingTimer from "./ProgressRingTimer";
 import OpponentCard from "./OpponentCard";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
-
-// Feature flag for WebSocket support - defaults to true if not explicitly set to "false"
-const USE_WEBSOCKET = process.env.NEXT_PUBLIC_ENABLE_WEBSOCKET !== "false";
 
 type Props = {
   fid: number;
@@ -34,14 +30,9 @@ type Props = {
   onVoteToggle?: () => void;
   onComplete?: () => void;
   isCompact?: boolean;
-  isMobileStacked?: boolean; // Extra compact mode for stacked mobile layout
+  isMobileStacked?: boolean;
   showVoteToggle?: boolean;
-  // New props for shared channel optimization
-  cycleId?: string;
-  playerCount?: number;
-  activeMatchIds?: string[];
-  // Time synchronization
-  timeOffset?: number; // Server time offset for accurate countdown
+  timeOffset?: number;
 };
 
 export default function ChatWindow({
@@ -54,171 +45,27 @@ export default function ChatWindow({
   isMobileStacked = false,
   showVoteToggle = false,
   isNewMatch = false,
-  cycleId,
-  playerCount,
-  activeMatchIds,
   timeOffset = 0,
 }: Props) {
   const [input, setInput] = useState("");
   const [isTimeUp, setIsTimeUp] = useState(false);
   const [lastMessageTime, setLastMessageTime] = useState(Date.now());
-  const [warningLevel, setWarningLevel] = useState<
-    "none" | "warning" | "critical"
-  >("none");
+  const [warningLevel, setWarningLevel] = useState<"none" | "warning" | "critical">("none");
   const [messageCount, setMessageCount] = useState(0);
   const [opponentColors, setOpponentColors] = useState<{
     primary: [number, number, number];
     secondary: [number, number, number];
   } | null>(null);
-  const [username, setUsername] = useState<string>(`user${fid}`);
-  const [, setUserProfile] = useState<{
-    fid: number;
-    username: string;
-    displayName: string;
-    pfpUrl: string;
-  } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // WebSocket mode (Ably) - with shared channel optimization support
-  const {
-    messages: wsMessages,
-    sendMessage: wsSendMessage,
-    loadInitialMessages,
-    isConnected,
-    isConnecting,
-    error: wsError,
-    strategy,
-  } = useAblyChat({
-    fid,
-    matchId: match.id,
-    cycleId, // For shared channel strategy
-    playerCount, // Used to determine channel strategy
-    activeMatchIds, // For filtering messages in shared channel mode
-    onMessage: () => {
-      setLastMessageTime(Date.now());
-      setWarningLevel("none");
-    },
-    onError: (error) => {
-      console.error("[ChatWindow] WebSocket error:", error);
-    },
-  });
-
-  // Track connection attempts for better UX
-  const [connectionAttempts, setConnectionAttempts] = useState(0);
-  const maxConnectionAttempts = 3;
-
-  // Determine WebSocket availability with grace period for initial connection
-  const webSocketAvailable = USE_WEBSOCKET && isConnected;
-  const isInitializing = USE_WEBSOCKET && isConnecting && connectionAttempts < maxConnectionAttempts;
-  const shouldFallbackToPolling = USE_WEBSOCKET && wsError && !isConnecting && connectionAttempts >= maxConnectionAttempts;
-
-  // Track connection attempts
-  useEffect(() => {
-    if (isConnecting) {
-      setConnectionAttempts(prev => prev + 1);
-    }
-  }, [isConnecting]);
-
-  // Reset connection attempts when successfully connected
-  useEffect(() => {
-    if (isConnected) {
-      setConnectionAttempts(0);
-    }
-  }, [isConnected]);
-
-  const shouldPoll = (shouldFallbackToPolling || !USE_WEBSOCKET) && !match.messages;
-  const {
-    data: chatData,
-    error: pollError,
-    mutate,
-  } = useSWR(
-    shouldPoll ? `/api/chat/batch-poll?matchIds=${match.id}` : null,
+  const { data: chatData, error, mutate } = useSWR(
+    `/api/chat/batch-poll?matchIds=${match.id}`,
     fetcher,
-    {
-      refreshInterval: shouldFallbackToPolling ? 1000 : 2000,
-      refreshWhenHidden: false,
-    }
+    { refreshInterval: 2000, refreshWhenHidden: false }
   );
 
-  const messages = webSocketAvailable
-    ? wsMessages
-    : match.messages || chatData?.chats?.[match.id]?.messages || [];
+  const messages = match.messages || chatData?.chats?.[match.id]?.messages || [];
 
-  const error = webSocketAvailable ? null : (shouldFallbackToPolling ? wsError : pollError);
-
-  // Load initial messages for WebSocket mode
-  useEffect(() => {
-    if (USE_WEBSOCKET && match.messages && match.messages.length > 0) {
-      // Only load if we don't have messages yet, to prevent overwriting live chat
-      if (messages.length === 0) {
-        loadInitialMessages(match.messages);
-      }
-    }
-  }, [match.messages, loadInitialMessages, messages.length]);
-
-  useEffect(() => {
-    if (!USE_WEBSOCKET) return;
-    const globalCache: any = (globalThis as any).__PROFILE_CACHE__ || {
-      promises: new Map<number, Promise<any>>(),
-      values: new Map<number, any>(),
-    };
-    (globalThis as any).__PROFILE_CACHE__ = globalCache;
-    const cached = globalCache.values.get(fid);
-    if (cached) {
-      setUsername(cached.username || `user${fid}`);
-      setUserProfile(cached);
-      return;
-    }
-    const pending = globalCache.promises.get(fid);
-    if (pending) {
-      pending
-        .then((profile: any) => {
-          setUsername(profile?.username || `user${fid}`);
-          setUserProfile(profile || null);
-        })
-        .catch(() => {
-          setUsername(`user${fid}`);
-          setUserProfile({
-            fid,
-            username: `user${fid}`,
-            displayName: `Player ${fid}`,
-            pfpUrl: "https://i.imgur.com/vL43u65.jpg",
-          });
-        });
-      return;
-    }
-    const p = fetch(`/api/profiles/random?fid=${fid}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        const profile = data?.userProfile || {
-          fid,
-          username: `user${fid}`,
-          displayName: `Player ${fid}`,
-          pfpUrl: "https://i.imgur.com/vL43u65.jpg",
-        };
-        globalCache.values.set(fid, profile);
-        globalCache.promises.delete(fid);
-        setUsername(profile.username || `user${fid}`);
-        setUserProfile(profile);
-        return profile;
-      })
-      .catch(() => {
-        const profile = {
-          fid,
-          username: `user${fid}`,
-          displayName: `Player ${fid}`,
-          pfpUrl: "https://i.imgur.com/vL43u65.jpg",
-        };
-        globalCache.values.set(fid, profile);
-        globalCache.promises.delete(fid);
-        setUsername(profile.username);
-        setUserProfile(profile);
-        return profile;
-      });
-    globalCache.promises.set(fid, p);
-  }, [fid]);
-
-  // Auto-scroll to bottom on new messages and track count
   useEffect(() => {
     if (messages.length !== messageCount) {
       setMessageCount(messages.length);
@@ -226,11 +73,9 @@ export default function ChatWindow({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, messageCount]);
 
-  // Track inactivity
   useEffect(() => {
     const checkActivity = setInterval(() => {
       const timeSinceLastMessage = Date.now() - lastMessageTime;
-
       if (timeSinceLastMessage > 45000) {
         setWarningLevel("critical");
       } else if (timeSinceLastMessage > 30000) {
@@ -239,36 +84,23 @@ export default function ChatWindow({
         setWarningLevel("none");
       }
     }, 1000);
-
     return () => clearInterval(checkActivity);
   }, [lastMessageTime]);
 
-  // Unified send message handler (WebSocket or HTTP)
   const handleSend = async () => {
     if (!input.trim()) return;
-    if (webSocketAvailable && !isConnected) return;
-    if (!webSocketAvailable && shouldFallbackToPolling) return;
-
     const text = input;
     setInput("");
     setLastMessageTime(Date.now());
     setWarningLevel("none");
 
     try {
-      if (webSocketAvailable) {
-        await wsSendMessage(text, { fid, username });
-      } else {
-        // Only send via HTTP if WebSocket is not available
-        await fetch("/api/chat/send", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ matchId: match.id, senderFid: fid, text }),
-        });
-      }
-
-      if (shouldPoll) {
-        mutate();
-      }
+      await fetch("/api/chat/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ matchId: match.id, senderFid: fid, text }),
+      });
+      mutate();
     } catch (error) {
       console.error("Failed to send message:", error);
     }
@@ -276,91 +108,51 @@ export default function ChatWindow({
 
   const handleTimeUp = useCallback(() => {
     setIsTimeUp(true);
-    if (onComplete) {
-      onComplete();
-    }
+    if (onComplete) onComplete();
   }, [onComplete]);
 
   const handleEmojiSelect = (emoji: string) => {
     setInput(input + emoji);
   };
 
-  // Handle emoji shortcode expansion
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value;
-
-    // Replace shortcodes with emojis
     Object.entries(EMOJI_SHORTCODES).forEach(([code, emoji]) => {
-      // Escape special regex characters in the shortcode
       const escapedCode = code.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       value = value.replace(new RegExp(escapedCode, "g"), emoji);
     });
-
     setInput(value);
   };
 
-  // Use synced time for accurate countdown
   const getSyncedTime = () => Date.now() + timeOffset;
   const matchDuration = Math.round((match.endTime - getSyncedTime()) / 1000);
-
-  // Determine chat height based on compact mode
-  // Mobile stacked mode needs even shorter height to fit both chats on screen
   const chatHeight = isMobileStacked ? "h-36" : isCompact ? "h-64" : "h-80";
 
   return (
     <div
-      className={`bg-slate-800 rounded-lg ${isMobileStacked ? "p-3" : isCompact ? "p-4" : "p-6"
-        } transition-all duration-300 relative ${warningLevel !== "none" ? "ring-2" : ""
-        } ${warningLevel === "warning" ? "ring-yellow-500 ring-opacity-50" : ""
-        } ${warningLevel === "critical" ? "ring-red-500 ring-opacity-75" : ""}`}
+      className={`bg-slate-800 rounded-lg ${isMobileStacked ? "p-3" : isCompact ? "p-4" : "p-6"} transition-all duration-300 relative ${
+        warningLevel !== "none" ? "ring-2" : ""
+      } ${warningLevel === "warning" ? "ring-yellow-500 ring-opacity-50" : ""} ${
+        warningLevel === "critical" ? "ring-red-500 ring-opacity-75" : ""
+      }`}
       style={
         warningLevel !== "none"
           ? {
-            boxShadow:
-              warningLevel === "warning"
-                ? "inset 0 0 20px rgba(234, 179, 8, 0.2), 0 0 15px rgba(234, 179, 8, 0.15)"
-                : "inset 0 0 20px rgba(239, 68, 68, 0.25), 0 0 20px rgba(239, 68, 68, 0.2)",
-          }
+              boxShadow:
+                warningLevel === "warning"
+                  ? "inset 0 0 20px rgba(234, 179, 8, 0.2), 0 0 15px rgba(234, 179, 8, 0.15)"
+                  : "inset 0 0 20px rgba(239, 68, 68, 0.25), 0 0 20px rgba(239, 68, 68, 0.2)",
+            }
           : {}
       }
     >
-      {/* WebSocket connection status */}
-      {USE_WEBSOCKET && (
-        <>
-          {isInitializing && (
-            <div className="absolute top-2 right-2 flex items-center gap-2 bg-blue-500/20 px-2 py-1 rounded text-xs text-blue-300 z-10">
-              <span className="animate-pulse">●</span>
-              Connecting{connectionAttempts > 1 ? ` (${connectionAttempts}/${maxConnectionAttempts})` : '...'}
-            </div>
-          )}
-          {shouldFallbackToPolling && (
-            <div className="absolute top-2 right-2 flex items-center gap-2 bg-amber-500/20 px-2 py-1 rounded text-xs text-amber-300 z-10">
-              <span>●</span>
-              Polling mode
-            </div>
-          )}
-          {!isConnected && !isConnecting && !shouldFallbackToPolling && !isInitializing && (
-            <div className="absolute top-2 right-2 flex items-center gap-2 bg-yellow-500/20 px-2 py-1 rounded text-xs text-yellow-300 z-10">
-              <span className="animate-pulse">●</span>
-              Reconnecting...
-            </div>
-          )}
-          {isConnected && (
-            <div className="absolute top-2 right-2 flex items-center gap-2 bg-green-500/20 px-2 py-1 rounded text-xs text-green-300 z-10">
-              <span>●</span>
-              Live{strategy === "shared" ? " (optimized)" : ""}
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Warning banner */}
       {warningLevel !== "none" && !isTimeUp && (
         <div
-          className={`absolute top-0 left-0 right-0 p-3 text-center text-sm rounded-t-lg font-semibold transition-all ${warningLevel === "warning"
-            ? "bg-gradient-to-r from-yellow-500/30 to-amber-500/20 text-yellow-200 animate-inactivity-warning"
-            : "bg-gradient-to-r from-red-500/40 to-orange-500/30 text-red-100 animate-inactivity-critical"
-            }`}
+          className={`absolute top-0 left-0 right-0 p-3 text-center text-sm rounded-t-lg font-semibold transition-all ${
+            warningLevel === "warning"
+              ? "bg-gradient-to-r from-yellow-500/30 to-amber-500/20 text-yellow-200 animate-inactivity-warning"
+              : "bg-gradient-to-r from-red-500/40 to-orange-500/30 text-red-100 animate-inactivity-critical"
+          }`}
         >
           <div className="flex items-center justify-center gap-2">
             {warningLevel === "warning" && (
@@ -379,11 +171,7 @@ export default function ChatWindow({
         </div>
       )}
 
-      {/* Opponent Card */}
-      <div
-        className={`flex justify-between items-start gap-2 ${isMobileStacked ? "mb-2" : isCompact ? "mb-3" : "mb-4"
-          }`}
-      >
+      <div className={`flex justify-between items-start gap-2 ${isMobileStacked ? "mb-2" : isCompact ? "mb-3" : "mb-4"}`}>
         <div className="flex-1 min-w-0">
           <OpponentCard
             opponent={match.opponent}
@@ -405,7 +193,6 @@ export default function ChatWindow({
         )}
       </div>
 
-      {/* Vote toggle (if enabled) */}
       {showVoteToggle && !isTimeUp && !match.voteLocked && (
         <div className={isMobileStacked ? "mb-2" : "mb-3"}>
           <VoteToggle
@@ -418,35 +205,19 @@ export default function ChatWindow({
         </div>
       )}
 
-      {/* Chat messages */}
-      <div
-        className={`${chatHeight} overflow-y-auto bg-slate-900/50 rounded-lg ${isMobileStacked ? "p-2 space-y-2" : isCompact ? "p-3 space-y-3" : "p-4 space-y-3"
-          } ${isMobileStacked ? "mb-2" : "mb-4"}`}
-      >
-        {error && (
-          <div className="text-center text-red-400">
-            Failed to load messages.
-          </div>
-        )}
-        {!chatData?.chats && !error && shouldPoll && (
-          <div className="text-center text-gray-400">Loading chat...</div>
-        )}
-        {messages.length === 0 && (
-          <div className="text-center text-gray-500">
-            Say hello! Your conversation starts now.
-          </div>
-        )}
+      <div className={`${chatHeight} overflow-y-auto bg-slate-900/50 rounded-lg ${isMobileStacked ? "p-2 space-y-2" : isCompact ? "p-3 space-y-3" : "p-4 space-y-3"} ${isMobileStacked ? "mb-2" : "mb-4"}`}>
+        {error && <div className="text-center text-red-400">Failed to load messages.</div>}
+        {!chatData?.chats && !error && <div className="text-center text-gray-400">Loading chat...</div>}
+        {messages.length === 0 && <div className="text-center text-gray-500">Say hello! Your conversation starts now.</div>}
         {messages.map((msg: any, idx: number) => {
-          // Calculate staggered delay for animation
-          const delayMs = idx * 40; // 40ms stagger between messages
-          const isNewMessage = idx >= messageCount - 1; // Last message is newest
+          const delayMs = idx * 40;
+          const isNewMessage = idx >= messageCount - 1;
           const animationDelay = isNewMessage ? `${delayMs}ms` : "0ms";
 
           return (
             <div
               key={msg.id}
-              className={`flex flex-col ${msg.sender.fid === fid ? "items-end" : "items-start"
-                }`}
+              className={`flex flex-col ${msg.sender.fid === fid ? "items-end" : "items-start"}`}
               style={{
                 animation: isNewMessage
                   ? msg.sender.fid === fid
@@ -456,46 +227,32 @@ export default function ChatWindow({
               }}
             >
               <div
-                className={`${isMobileStacked ? "max-w-[85%]" : "max-w-xs"
-                  } ${isCompact ? "md:max-w-sm" : "md:max-w-md"
-                  } rounded-lg ${isMobileStacked ? "px-2 py-1" : "px-3 py-2"} ${msg.sender.fid === fid
-                    ? "bg-blue-600 text-white"
-                    : "bg-slate-700 text-gray-200"
-                  }`}
+                className={`${isMobileStacked ? "max-w-[85%]" : "max-w-xs"} ${isCompact ? "md:max-w-sm" : "md:max-w-md"} rounded-lg ${isMobileStacked ? "px-2 py-1" : "px-3 py-2"} ${
+                  msg.sender.fid === fid ? "bg-blue-600 text-white" : "bg-slate-700 text-gray-200"
+                }`}
                 style={
                   msg.sender.fid !== fid && opponentColors
                     ? {
-                      backgroundColor: `rgba(${opponentColors.primary[0]}, ${opponentColors.primary[1]}, ${opponentColors.primary[2]}, 0.15)`,
-                      borderLeft: `3px solid rgb(${opponentColors.primary[0]}, ${opponentColors.primary[1]}, ${opponentColors.primary[2]})`,
-                    }
+                        backgroundColor: `rgba(${opponentColors.primary[0]}, ${opponentColors.primary[1]}, ${opponentColors.primary[2]}, 0.15)`,
+                        borderLeft: `3px solid rgb(${opponentColors.primary[0]}, ${opponentColors.primary[1]}, ${opponentColors.primary[2]})`,
+                      }
                     : {}
                 }
               >
-                <p className={`${isMobileStacked || isCompact ? "text-xs" : "text-sm"}`}>
-                  {msg.text}
-                </p>
+                <p className={`${isMobileStacked || isCompact ? "text-xs" : "text-sm"}`}>{msg.text}</p>
               </div>
-              {/* Hide username in mobile stacked mode to save space */}
-              {!isMobileStacked && (
-                <span className="text-xs text-gray-500 mt-1">
-                  @{msg.sender.username}
-                </span>
-              )}
+              {!isMobileStacked && <span className="text-xs text-gray-500 mt-1">@{msg.sender.username}</span>}
             </div>
           );
         })}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input area or completion message */}
       {isTimeUp || match.voteLocked ? (
         <div className={`text-center ${isMobileStacked ? "py-2" : "py-3"} bg-slate-700/50 rounded-lg`}>
           <p className={`${isMobileStacked ? "text-xs" : "text-sm"} text-gray-300`}>
             <span className="text-xs text-gray-500">Vote locked • </span>
-            <span
-              className={`font-bold ${currentVote === "BOT" ? "text-red-400" : "text-green-400"
-                }`}
-            >
+            <span className={`font-bold ${currentVote === "BOT" ? "text-red-400" : "text-green-400"}`}>
               {currentVote === "BOT" ? "🤖 BOT" : "👤 HUMAN"}
             </span>
           </p>
@@ -503,36 +260,19 @@ export default function ChatWindow({
       ) : (
         <div className={`flex ${isMobileStacked ? "gap-1" : "gap-2"}`}>
           <input
-            className={`grow bg-slate-700 rounded-lg ${isMobileStacked ? "px-2 py-1.5 text-xs" : "px-4 py-2"
-              } text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${isCompact && !isMobileStacked ? "text-sm" : ""
-              } ${USE_WEBSOCKET && (!isConnected || isConnecting) && !shouldFallbackToPolling
-                ? "opacity-50 cursor-not-allowed"
-                : ""
-              }`}
+            className={`grow bg-slate-700 rounded-lg ${isMobileStacked ? "px-2 py-1.5 text-xs" : "px-4 py-2"} text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              isCompact && !isMobileStacked ? "text-sm" : ""
+            }`}
             value={input}
             onChange={handleInputChange}
-            onKeyPress={(e) => e.key === "Enter" && (USE_WEBSOCKET && (!isConnected || isConnecting) && !shouldFallbackToPolling ? null : handleSend())}
-            placeholder={
-              USE_WEBSOCKET && (!isConnected || isConnecting) && !shouldFallbackToPolling
-                ? isConnecting ? "Connecting..." : "Reconnecting..."
-                : isMobileStacked
-                  ? "Type message..."
-                  : "Type your message... (try :unicorn: or :fire:)"
-            }
-            disabled={USE_WEBSOCKET && (!isConnected || isConnecting) && !shouldFallbackToPolling}
+            onKeyPress={(e) => e.key === "Enter" && handleSend()}
+            placeholder={isMobileStacked ? "Type message..." : "Type your message... (try :unicorn: or :fire:)"}
           />
-          {/* Hide emoji picker in mobile stacked mode to save space */}
-          {!isMobileStacked && (
-            <EmojiPicker
-              onEmojiSelect={handleEmojiSelect}
-              isCompact={isCompact}
-            />
-          )}
+          {!isMobileStacked && <EmojiPicker onEmojiSelect={handleEmojiSelect} isCompact={isCompact} />}
           <button
-            className={`bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white font-bold ${isMobileStacked ? "py-1.5 px-3 text-xs" : "py-2 px-4"
-              } rounded-lg transition-colors`}
+            className={`bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white font-bold ${isMobileStacked ? "py-1.5 px-3 text-xs" : "py-2 px-4"} rounded-lg transition-colors`}
             onClick={handleSend}
-            disabled={!input.trim() || (USE_WEBSOCKET && (!isConnected || isConnecting) && !shouldFallbackToPolling)}
+            disabled={!input.trim()}
           >
             Send
           </button>

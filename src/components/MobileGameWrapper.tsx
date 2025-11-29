@@ -61,9 +61,6 @@ export default function MobileGameWrapper({ fid, gameState, sdkUser }: Props) {
         onMatchComplete={handleMatchComplete}
         currentRound={matchData?.currentRound || 1}
         totalRounds={matchData?.totalRounds || 5}
-        cycleId={matchData?.cycleId || ''}
-        playerCount={matchData?.playerPool?.totalPlayers || 0}
-        activeMatchIds={matchData ? matchData.matches?.map((m: any) => m.id) || [] : []}
         onQuickMatch={handleQuickMatch}
         onChallengePlayer={handleChallengePlayer}
       />
