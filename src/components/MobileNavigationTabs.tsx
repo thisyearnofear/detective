@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useHaptics, useSafeArea } from '@/lib/mobile';
-import { useViewport } from '@/lib/viewport';
 
 type Tab = 'game' | 'leaderboard' | 'profile';
 
