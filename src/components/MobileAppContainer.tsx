@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useViewport, farcaster } from '@/lib/viewport';
+import { farcaster } from '@/lib/viewport';
 import MobileNavigationTabs from './MobileNavigationTabs';
 import Leaderboard from './Leaderboard';
 import ChatWindow from './ChatWindow';
