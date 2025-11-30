@@ -220,22 +220,22 @@ export default function AdminPage() {
     const gridImages = Array.from({ length: 9 }, (_, i) => `/grid-images/${i + 1}.jpg`);
 
     return (
-        <main className="min-h-screen flex items-center justify-center relative overflow-hidden px-4">
+        <main className="min-h-screen flex items-center justify-center relative overflow-hidden">
             {/* Layer 1: Starfield (deepest) */}
             <StarfieldBackground />
 
             {/* Layer 2: Grid Backdrop */}
             <AnimatedGridBackdrop images={gridImages} />
 
-            {/* Layer 3: Content Container */}
-            <div className="relative z-10 w-full max-w-5xl flex flex-col items-center">
-                {/* Header - Clean and centered */}
-                <div className="w-full flex flex-col items-center text-center mb-12">
+            {/* Layer 3: Content Container - Mobile optimized */}
+            <div className="relative z-10 w-full max-w-5xl flex flex-col items-center px-4 sm:px-6 lg:px-8 py-4 overflow-x-hidden">
+                {/* Header - Mobile optimized */}
+                <div className="w-full flex flex-col items-center text-center mb-6 sm:mb-8 lg:mb-12">
                     <div className="flex items-center justify-center w-16 h-16 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-sm mb-6">
                         <span className="text-2xl">🔧</span>
                     </div>
-                    <h1 className="text-3xl font-light text-white/90 tracking-wide mb-3">System Control</h1>
-                    <p className="text-sm text-white/60 mb-6">Game testing and administrative functions</p>
+                    <h1 className="text-2xl sm:text-3xl font-light text-white/90 tracking-wide mb-3">System Control</h1>
+                    <p className="text-sm text-white/60 mb-4 sm:mb-6">Game testing and administrative functions</p>
                     <button
                         onClick={() => router.push('/')}
                         className="inline-flex items-center px-4 py-2 text-xs bg-white/5 border border-white/10 text-white/70 rounded-lg hover:bg-white/10 hover:text-white transition-all"
@@ -259,16 +259,16 @@ export default function AdminPage() {
                     </div>
                 )}
 
-                {/* Main Content Grid - Centered */}
-                <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Main Content Grid - Mobile optimized */}
+                <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8 max-w-none">
                     {/* Game State Control - Clean editorial design */}
-                    <div className="bg-white/5 border border-white/10 rounded-2xl backdrop-blur-sm p-6">
-                        <h2 className="text-xl font-light text-white/90 tracking-wide mb-6 text-center">Game State</h2>
+                    <div className="bg-white/5 border border-white/10 rounded-2xl backdrop-blur-sm p-4 sm:p-6">
+                        <h2 className="text-lg sm:text-xl font-light text-white/90 tracking-wide mb-4 sm:mb-6 text-center">Game State</h2>
 
                         {adminData?.gameState && (
                             <div className="space-y-6">
-                                <div className="bg-white/5 border border-white/10 rounded-xl p-6">
-                                    <div className="grid grid-cols-2 gap-6 text-sm">
+                                <div className="bg-white/5 border border-white/10 rounded-xl p-3 sm:p-6">
+                                    <div className="grid grid-cols-2 gap-3 sm:gap-6 text-xs sm:text-sm">
                                         <div className="text-center">
                                             <p className="text-xs text-white/50 uppercase tracking-wider mb-2">Current State</p>
                                             <p className="text-xl font-bold text-blue-400">
@@ -298,7 +298,7 @@ export default function AdminPage() {
 
                                 <div className="space-y-4">
                                     <p className="text-xs text-white/50 uppercase tracking-wider text-center">System Transitions</p>
-                                    <div className="grid grid-cols-3 gap-3">
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
                                         <button
                                             onClick={() => handleStateTransition('REGISTRATION')}
                                             disabled={isTransitioning || adminData.gameState.state === 'REGISTRATION'}
@@ -335,8 +335,8 @@ export default function AdminPage() {
                     </div>
 
                     {/* Bulk User Registration - Clean editorial design */}
-                    <div className="bg-white/5 border border-white/10 rounded-2xl backdrop-blur-sm p-6">
-                        <h2 className="text-xl font-light text-white/90 tracking-wide mb-6 text-center">Register Test Users</h2>
+                    <div className="bg-white/5 border border-white/10 rounded-2xl backdrop-blur-sm p-4 sm:p-6">
+                        <h2 className="text-lg sm:text-xl font-light text-white/90 tracking-wide mb-4 sm:mb-6 text-center">Register Test Users</h2>
 
                         <div className="space-y-6">
                             <div>
@@ -371,11 +371,11 @@ export default function AdminPage() {
                     </div>
                 </div>
 
-                {/* Players List - Clean editorial design */}
+                {/* Players List - Mobile optimized */}
                 {adminData?.players && adminData.players.length > 0 && (
-                    <div className="w-full mt-8 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-sm p-6">
-                        <h2 className="text-xl font-light text-white/90 tracking-wide mb-6 text-center">Registered Players</h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="w-full mt-6 sm:mt-8 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-sm p-4 sm:p-6">
+                        <h2 className="text-lg sm:text-xl font-light text-white/90 tracking-wide mb-4 sm:mb-6 text-center">Registered Players</h2>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                             {adminData.players.map((player: any) => (
                                 <div key={player.fid} className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-3 backdrop-blur-sm">
                                     <img
@@ -394,11 +394,11 @@ export default function AdminPage() {
                     </div>
                 )}
 
-                {/* Bots List - Clean editorial design */}
+                {/* Bots List - Mobile optimized */}
                 {adminData?.bots && adminData.bots.length > 0 && (
-                    <div className="w-full mt-8 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-sm p-6">
-                        <h2 className="text-xl font-light text-white/90 tracking-wide mb-6 text-center">Bot Impersonations</h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="w-full mt-6 sm:mt-8 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-sm p-4 sm:p-6">
+                        <h2 className="text-lg sm:text-xl font-light text-white/90 tracking-wide mb-4 sm:mb-6 text-center">Bot Impersonations</h2>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                             {adminData.bots.map((bot: any) => (
                                 <div key={bot.fid} className="bg-white/5 border border-white/10 rounded-xl p-4 backdrop-blur-sm">
                                     <div className="flex items-center gap-3 mb-3">
