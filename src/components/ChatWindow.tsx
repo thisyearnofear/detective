@@ -18,7 +18,6 @@ import ProgressRingTimer from "./ProgressRingTimer";
 import OpponentCard from "./OpponentCard";
 import VirtualizedMessageList from "./VirtualizedMessageList";
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 type Props = {
   fid: number;
