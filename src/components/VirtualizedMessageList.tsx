@@ -8,7 +8,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useViewport, responsive } from '@/lib/viewport';
 import { useVirtualKeyboard } from '@/lib/mobile';
-import { globalCache } from '@/lib/cache';
 
 interface Message {
   id: string;
