@@ -32,7 +32,6 @@ export default function MobileNavigationTabs({
   currentRank,
   rankChange
 }: Props) {
-  const { isFarcasterFrame } = useViewport();
   const haptic = useHaptics();
   const safeArea = useSafeArea();
   const [showRankBadge, setShowRankBadge] = useState(false);
