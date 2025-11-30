@@ -161,17 +161,17 @@ export default function LeaderboardPage() {
                                     {/* Accuracy */}
                                     <div className="col-span-2 text-center">
                                         <span className={`font-bold ${
-                                            entry.accuracy >= 80 ? "text-green-400" :
-                                            entry.accuracy >= 60 ? "text-yellow-400" :
+                                            (entry.accuracy ?? 0) >= 80 ? "text-green-400" :
+                                            (entry.accuracy ?? 0) >= 60 ? "text-yellow-400" :
                                             "text-red-400"
                                         }`}>
-                                            {entry.accuracy.toFixed(1)}%
+                                            {(entry.accuracy ?? 0).toFixed(1)}%
                                         </span>
                                     </div>
 
                                     {/* Avg Speed */}
                                     <div className="col-span-2 text-center text-gray-300">
-                                        {(entry.avg_speed_ms / 1000).toFixed(1)}s
+                                        {((entry.avg_speed_ms ?? 0) / 1000).toFixed(1)}s
                                     </div>
 
                                     {/* Matches */}

@@ -30,6 +30,28 @@ const AUTOCORRECT_MISTAKES = [
   { intended: "wont", autocorrected: "won't" },
 ];
 
+// Unified response templates for consistent bot behavior
+const RESPONSE_TEMPLATES = {
+  deflectVerbose: [
+    "that's a weird thing to fixate on",
+    "why are you so concerned about that?",
+    "does it matter?",
+    "depends what you mean by that tbh",
+    "lol random question",
+  ],
+  deflectTerse: ["?", "why", "dunno"],
+  evasiveVerbose: ["interesting way to answer that"],
+  evasiveTerse: ["hmm", "..."],
+  defensiveVerbose: ["fair point"],
+  defensiveTerse: ["fair"],
+  agreeVerbose: ["yeah exactly", "right?", "lol yeah", "no cap"],
+  agreeTerse: ["fr", "right", "lol", "facts"],
+  followUpVerbose: ["you there?", "lol", "hmm", "interesting", "what do you think?"],
+  followUpTerse: ["?", "...", "yo", "hello?", "lol"],
+};
+
+export const RESPONSE_STYLES = RESPONSE_TEMPLATES;
+
 // Response timing patterns
 export interface ResponseTiming {
   initialDelay: number; // Time before starting to type (ms)
@@ -354,19 +376,25 @@ export function shouldAddRedHerring(isBot: boolean): boolean {
   }
 }
 
-export function applyRedHerring(message: string, isBot: boolean): string {
+export function applyRedHerring(message: string, isBot: boolean, userStyle?: string): string {
   if (isBot) {
-    // Make bot response too perfect
-    return (
-      message
-        .split(". ")
-        .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-        .join(". ")
-        .replace(/\s+/g, " ")
-        .trim() + "."
-    );
+    if (!userStyle) return message;
+    
+    const usesProperCaps = userStyle.includes("caps:true");
+    const isPunctilious = userStyle.includes("punct:true");
+    
+    if (usesProperCaps || isPunctilious) {
+      return (
+        message
+          .split(". ")
+          .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+          .join(". ")
+          .replace(/\s+/g, " ")
+          .trim() + "."
+      );
+    }
+    return message;
   } else {
-    // Make human response bot-like
     const templates = [
       "That's an interesting point!",
       "I appreciate your perspective.",
@@ -375,5 +403,114 @@ export function applyRedHerring(message: string, isBot: boolean): string {
       "I can see where you're coming from.",
     ];
     return templates[Math.floor(Math.random() * templates.length)];
+  }
+}
+
+export interface ConversationState {
+  botClaims: Array<{ claim: string; messageIndex: number; timestamp: number }>;
+  topicsRaised: string[];
+  stanceOnTopics: Record<string, string>;
+}
+
+export function initializeConversationState(): ConversationState {
+  return {
+    botClaims: [],
+    topicsRaised: [],
+    stanceOnTopics: {},
+  };
+}
+
+export function extractConversationTopics(message: string): string[] {
+  const topics: string[] = [];
+  
+  const topicPatterns = [
+    /monad|mainnet|blockchain|crypto|token|web3/i,
+    /wen|soon|launch|release|deploy/i,
+    /price|moon|lfg|wagmi|gm|gn/i,
+    /question|think|opinion|view|take|thoughts?/i,
+  ];
+  
+  for (const pattern of topicPatterns) {
+    if (pattern.test(message)) {
+      topics.push(pattern.source.split("|")[0].toLowerCase());
+    }
+  }
+  
+  return topics;
+}
+
+export function validateCoherence(
+  proposedResponse: string,
+  messageHistory: ChatMessage[],
+  state: ConversationState,
+): { isCoherent: boolean; reason?: string } {
+  const lower = proposedResponse.toLowerCase();
+  
+  if (messageHistory.length === 0) return { isCoherent: true };
+  
+  for (const { claim } of state.botClaims) {
+    const claimLower = claim.toLowerCase();
+    
+    if (
+      claimLower.includes("it's on mainnet") &&
+      lower.includes("not on mainnet")
+    ) {
+      return {
+        isCoherent: false,
+        reason: "contradicts earlier claim about mainnet status",
+      };
+    }
+    
+    if (
+      claimLower.includes("i think") &&
+      lower.includes("never thought that")
+    ) {
+      return {
+        isCoherent: false,
+        reason: "directly contradicts stated opinion",
+      };
+    }
+  }
+  
+  const botMessages = messageHistory.filter((m) => m.sender.fid === messageHistory[0]?.sender.fid);
+  if (botMessages.length > 0) {
+    const lastBotMessage = botMessages[botMessages.length - 1]?.text.toLowerCase() || "";
+    
+    if (
+      lastBotMessage.includes("yes") &&
+      lower.includes("no, definitely not") &&
+      messageHistory.length < 4
+    ) {
+      return {
+        isCoherent: false,
+        reason: "immediate reversal of simple affirmation",
+      };
+    }
+  }
+  
+  return { isCoherent: true };
+}
+
+export function recordBotClaim(
+  state: ConversationState,
+  message: string,
+  messageIndex: number,
+): void {
+  const topics = extractConversationTopics(message);
+  
+  state.botClaims.push({
+    claim: message,
+    messageIndex,
+    timestamp: Date.now(),
+  });
+  
+  for (const topic of topics) {
+    if (message.includes("not") || message.includes("don't")) {
+      state.stanceOnTopics[topic] = "against";
+    } else if (message.includes("yes") || message.includes("agree")) {
+      state.stanceOnTopics[topic] = "for";
+    } else {
+      state.stanceOnTopics[topic] = "neutral";
+    }
   }
 }

@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     }
 
     // Generate the response immediately but don't send it yet
-    const botResponse = await generateBotResponse(bot, match.messages);
+    const botResponse = await generateBotResponse(bot, match.messages, matchId);
 
     // Calculate realistic timing
     const timing = getBotResponseTiming(bot, match.messages, botResponse.length);
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
       if (Math.random() < 0.1 && match.endTime > Date.now() + 10000) {
         setTimeout(async () => {
           // Generate a short follow-up
-          const followUp = await generateBotResponse(bot, match.messages);
+          const followUp = await generateBotResponse(bot, match.messages, matchId);
           if (followUp && followUp.length < 50) {
             gameManager.addMessageToMatch(matchId, followUp, bot.fid);
           }

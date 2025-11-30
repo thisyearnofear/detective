@@ -10,6 +10,10 @@ import {
   applyRedHerring,
   extractUserIntent,
   ResponseTiming,
+  ConversationState,
+  initializeConversationState,
+  validateCoherence,
+  recordBotClaim,
 } from "./botBehavior";
 
 const VENICE_API_KEY = process.env.VENICE_API_KEY;
@@ -18,6 +22,18 @@ const VENICE_MODEL = "llama-3.3-70b";
 
 // In-memory cache for bot responses to save API calls during development
 const responseCache = new Map<string, string>();
+
+// Conversation state tracking per match (matchId -> ConversationState)
+const conversationStateCache = new Map<string, ConversationState>();
+
+export function getOrInitializeConversationState(
+  matchId: string,
+): ConversationState {
+  if (!conversationStateCache.has(matchId)) {
+    conversationStateCache.set(matchId, initializeConversationState());
+  }
+  return conversationStateCache.get(matchId)!;
+}
 
 /**
  * Infers the writing style of a user based on their recent casts.
@@ -77,6 +93,29 @@ export async function inferWritingStyle(casts: string[]): Promise<string> {
   }
 
   return style;
+}
+
+/**
+ * Generate a fallback response when coherence validation fails
+ */
+function generateFallbackResponse(
+  pattern: string,
+  lengthDistribution: {
+    dominantPattern: "short" | "medium" | "long" | "mixed";
+    avgLength: number;
+  },
+): string {
+  if (pattern === "greeting") {
+    return lengthDistribution.dominantPattern === "short" ? "gm" : "gm, how's it going?";
+  }
+  if (pattern === "question") {
+    return lengthDistribution.dominantPattern === "short" ? "not sure" : "honestly not too sure about that";
+  }
+  if (pattern === "humor") {
+    return lengthDistribution.dominantPattern === "short" ? "lol" : "lol that's funny";
+  }
+  
+  return lengthDistribution.dominantPattern === "short" ? "..." : "hm";
 }
 
 /**
@@ -191,10 +230,12 @@ function analyzePostLengthDistribution(posts: string[]): {
 /**
  * Generates a response for a bot based on its style and the conversation context.
  * Returns both the message and timing information for realistic delivery.
+ * Now with coherence validation.
  */
 export async function generateBotResponse(
   bot: Bot,
   messageHistory: ChatMessage[],
+  matchId?: string,
 ): Promise<string> {
   if (!VENICE_API_KEY) {
     console.error("VENICE_API_KEY is not set.");
@@ -365,9 +406,20 @@ Now respond as @${bot.username} would:`;
     let botResponse = data.choices[0]?.message?.content?.trim();
 
     if (botResponse) {
+      // Validate coherence if we have conversation state
+      if (matchId) {
+        const state = getOrInitializeConversationState(matchId);
+        const coherenceCheck = validateCoherence(botResponse, messageHistory, state);
+        
+        if (!coherenceCheck.isCoherent) {
+          console.log(`[coherenceCheck] Response rejected: ${coherenceCheck.reason}`);
+          botResponse = generateFallbackResponse(pattern, lengthDistribution);
+        }
+      }
+
       // Determine if we should add a red herring (make bot suspiciously perfect)
       if (shouldAddRedHerring(true)) {
-        botResponse = applyRedHerring(botResponse, true);
+        botResponse = applyRedHerring(botResponse, true, bot.style);
       } else {
         // Add human imperfections based on style
         const isMobile = metadata.avg_length
@@ -409,6 +461,12 @@ Now respond as @${bot.username} would:`;
         if (lastSpace > characterLimit * 0.7) {
           botResponse = botResponse.substring(0, lastSpace);
         }
+      }
+
+      // Record the bot's claim for coherence tracking
+      if (matchId) {
+        const state = getOrInitializeConversationState(matchId);
+        recordBotClaim(state, botResponse, messageHistory.length);
       }
 
       // Cache the response
