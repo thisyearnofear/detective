@@ -108,12 +108,18 @@ export default function Lobby({
                 </div>
             )}
 
-            {/* Registration Button */}
+            {/* Registration Button - Mobile optimized */}
             {!isRegistered ? (
                 <button
-                    onClick={onRegister}
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('Registration button clicked'); // Debug log
+                        onRegister();
+                    }}
                     disabled={isLoading || isFull}
-                    className="w-full px-6 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-colors text-sm md:text-base"
+                    className="w-full px-6 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-colors text-sm md:text-base touch-manipulation active:scale-[0.98] min-h-[44px]"
+                    style={{ WebkitTapHighlightColor: 'transparent' }}
                 >
                     {isLoading ? 'Registering...' : isFull ? 'Lobby Full' : 'Register for Game'}
                 </button>

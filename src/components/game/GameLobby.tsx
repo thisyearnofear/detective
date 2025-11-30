@@ -67,25 +67,41 @@ export default function GameLobby({ currentPlayer, isRegistrationOpen = true, ga
   }, [registeredPlayers.length, gameState?.registrationEnds, maxPlayers, gamePhase]);
 
   const handleRegister = async () => {
+    console.log('handleRegister called for FID:', currentPlayer.fid); // Debug log
     setIsLoading(true);
     setError(null);
 
     try {
       const response = await fetch('/api/game/register', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
         body: JSON.stringify({ fid: currentPlayer.fid }),
+        signal: AbortSignal.timeout(10000), // 10s timeout for mobile
       });
 
-      const data = await response.json();
+      console.log('Registration response status:', response.status); // Debug log
 
       if (!response.ok) {
-        throw new Error(data.error || 'An unknown error occurred.');
+        const errorText = await response.text();
+        console.log('Registration error response:', errorText); // Debug log
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          throw new Error(`Registration failed: ${response.status} ${response.statusText}`);
+        }
+        throw new Error(errorData.error || 'Registration failed');
       }
 
+      const data = await response.json();
+      console.log('Registration success:', data); // Debug log
       setIsRegistered(true);
     } catch (err: any) {
-      setError(err.message);
+      console.error('Registration error:', err); // Debug log
+      setError(err.name === 'TimeoutError' ? 'Registration timed out. Please try again.' : err.message);
     } finally {
       setIsLoading(false);
     }
