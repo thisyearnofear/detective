@@ -551,8 +551,7 @@ export default function MultiChatContainer({ fid }: Props) {
                 currentVote={currentVote}
                 onVoteToggle={stableHandlers.onVoteToggle}
                 onComplete={stableHandlers.onComplete}
-                isCompact={true}
-                isMobileStacked={true}
+                variant="minimal"
                 showVoteToggle={true}
                 isNewMatch={newMatchIds.has(match.id)}
                 timeOffset={timeOffset}
