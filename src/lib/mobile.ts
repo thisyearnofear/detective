@@ -3,7 +3,7 @@
  * Touch interactions, gestures, and mobile-first features
  */
 
-import { useCallback, useRef, useState, useEffect } from 'react';
+import React, { useCallback, useRef, useState, useEffect } from 'react';
 import { useViewport } from './viewport';
 
 // TOUCH GESTURE DETECTION
@@ -154,12 +154,12 @@ export function usePullToRefresh(
   const startY = useRef<number>(0);
   const currentY = useRef<number>(0);
 
-  const handleTouchStart = useCallback((e: TouchEvent) => {
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (!enabled || isRefreshing) return;
     startY.current = e.touches[0].clientY;
   }, [enabled, isRefreshing]);
 
-  const handleTouchMove = useCallback((e: TouchEvent) => {
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (!enabled || isRefreshing) return;
     
     currentY.current = e.touches[0].clientY;
