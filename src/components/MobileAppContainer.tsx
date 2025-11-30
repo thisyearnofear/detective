@@ -38,7 +38,6 @@ export default function MobileAppContainer({
   totalRounds = 5,
   onQuickMatch
 }: Props) {
-  const { isFarcasterFrame } = useViewport();
   const [activeTab, setActiveTab] = useState<Tab>('game');
   const [currentRank, setCurrentRank] = useState<number>();
   const [rankChange, setRankChange] = useState<number>();
