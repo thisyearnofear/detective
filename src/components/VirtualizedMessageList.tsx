@@ -102,7 +102,6 @@ export default function VirtualizedMessageList({
 
   const visibleMessages = messages.slice(startIndex, endIndex + 1);
   const totalHeight = messages.length * ITEM_HEIGHT;
-  const offsetY = startIndex * ITEM_HEIGHT;
 
   // Update container height on mount and resize
   useEffect(() => {
