@@ -27,8 +27,8 @@ export async function GET(request: NextRequest) {
 
     console.log(`[/api/match/active] FID: ${playerFid}, State: ${gameState.state}, Players: ${gameState.playerCount}, GameEnds: ${new Date(gameState.gameEnds).toISOString()}`);
 
-    if (gameState.state !== "LIVE") {
-      console.log(`[/api/match/active] Returning 403 - game state is ${gameState.state}, not LIVE`);
+    if (gameState.state !== "LIVE" && gameState.state !== "FINISHED") {
+      console.log(`[/api/match/active] Returning 403 - game state is ${gameState.state}, not LIVE or FINISHED`);
       return NextResponse.json(
         { error: "The game is not currently live.", currentState: gameState.state },
         { status: 403 },
@@ -66,20 +66,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Calculate total rounds dynamically based on player pool
-    const players = await gameManager.getAllPlayers();
-    const bots = await gameManager.getAllBots();
-    const totalPlayers = players.length;
-    const totalBots = bots.length;
-    const totalOpponents = totalPlayers - 1 + (totalBots - 1);
-    const matchesPerRound = config.simultaneousMatches;
-    const maxPossibleRounds = Math.floor(
-      config.gameDurationMs /
-      config.matchDurationMs,
-    );
-    const totalRounds = Math.min(
-      maxPossibleRounds,
-      Math.ceil(totalOpponents / matchesPerRound),
-    );
+    const totalRounds = gameManager.getTotalRounds();
 
     // Calculate leaderboard position for this player (only available after game ends)
     let playerRank = 0;
@@ -100,11 +87,6 @@ export async function GET(request: NextRequest) {
       totalRounds,
       nextRoundStartTime:
         rawState.playerSessions.get(playerFid)?.nextRoundStartTime,
-      playerPool: {
-        totalPlayers,
-        totalBots,
-        totalOpponents,
-      },
       playerRank,
       gameState: gameState.state,
       // Include cycleId for shared channel optimization
