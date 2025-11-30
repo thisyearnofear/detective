@@ -3,7 +3,7 @@
  * Consolidates all performance utilities for mobile/Farcaster mini apps
  */
 
-import { useCallback, useRef, useEffect, useMemo, useState } from 'react';
+import { useCallback, useRef, useEffect, useState } from 'react';
 
 // DEBOUNCE UTILITIES
 export function useDebounce<T extends (...args: any[]) => any>(
