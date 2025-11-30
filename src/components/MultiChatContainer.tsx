@@ -224,12 +224,12 @@ export default function MultiChatContainer({ fid }: Props) {
   // Handle vote toggle
   const handleVoteToggle = useCallback(
     async (matchId: string) => {
-      setVotes((prev) => {
+      setVotes((prev): VoteState => {
         const currentVote = prev[matchId] || "REAL";
         const newVote = currentVote === "REAL" ? "BOT" : "REAL";
         
         // Optimistic update
-        const updated = { ...prev, [matchId]: newVote };
+        const updated: VoteState = { ...prev, [matchId]: newVote };
         
         // Fire and forget - send to server but don't wait
         fetch("/api/match/vote", {

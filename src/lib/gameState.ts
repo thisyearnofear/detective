@@ -34,7 +34,6 @@ const GAME_DURATION = FIXED_ROUNDS * MATCH_DURATION; // 5 minutes total
 const REGISTRATION_COUNTDOWN = 30 * 1000; // 30 second countdown once minimum players join
 const MIN_PLAYERS = 3; // Minimum players needed for a competitive game
 const MAX_PLAYERS = 50;
-const SIMULTANEOUS_MATCHES = 2; // 2 concurrent chats
 const INACTIVITY_WARNING = 30 * 1000; // 30 seconds
 const INACTIVITY_FORFEIT = 45 * 1000; // 45 seconds
 const USE_REDIS = process.env.USE_REDIS === "true";
