@@ -54,7 +54,7 @@ export default function ChatWindow({
   timeOffset = 0,
   variant = "full",
 }: Props) {
-  const { isMobile, isFarcasterFrame } = useViewport();
+  const { isFarcasterFrame } = useViewport();
   const { safeSetState } = useMemoryOptimization();
   const processEmojis = useOptimizedEmojiProcessor();
   const haptic = useHaptics();
