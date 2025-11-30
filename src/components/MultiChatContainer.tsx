@@ -224,39 +224,26 @@ export default function MultiChatContainer({ fid }: Props) {
   // Handle vote toggle
   const handleVoteToggle = useCallback(
     async (matchId: string) => {
-      const currentVote = votes[matchId] || "REAL";
-      const newVote = currentVote === "REAL" ? "BOT" : "REAL";
-
-      // Optimistic update
-      setVotes((prev) => ({ ...prev, [matchId]: newVote }));
-
-      try {
-        const response = await fetch("/api/match/vote", {
+      setVotes((prev) => {
+        const currentVote = prev[matchId] || "REAL";
+        const newVote = currentVote === "REAL" ? "BOT" : "REAL";
+        
+        // Optimistic update
+        const updated = { ...prev, [matchId]: newVote };
+        
+        // Fire and forget - send to server but don't wait
+        fetch("/api/match/vote", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ matchId, vote: newVote, fid }),
+        }).catch((error) => {
+          console.error("Error updating vote:", error);
         });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-          // Revert on error - restore to previous state
-          console.error("Failed to update vote:", result.error);
-          setVotes((prev) => ({ ...prev, [matchId]: currentVote }));
-        } else {
-          // Sync with server response to ensure consistency
-          // The server returns the actual current vote after processing
-          if (result.currentVote) {
-            setVotes((prev) => ({ ...prev, [matchId]: result.currentVote }));
-          }
-        }
-      } catch (error) {
-        // Revert on error
-        console.error("Error updating vote:", error);
-        setVotes((prev) => ({ ...prev, [matchId]: currentVote }));
-      }
+        
+        return updated;
+      });
     },
-    [votes, fid]
+    [fid]
   );
 
   // Handle match completion - collect reveal data

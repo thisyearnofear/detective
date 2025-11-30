@@ -27,15 +27,16 @@ import { database } from "./database";
 import { inferPersonality } from "./botProactive";
 
 // Game configuration constants
-const GAME_DURATION = 3 * 60 * 1000; // 3 minutes (3 rounds * 1 min each, 2 simultaneous matches per round)
+const MATCH_DURATION = 60 * 1000; // 1 minute per match
+const SIMULTANEOUS_MATCHES = 2; // 2 concurrent chats
+const FIXED_ROUNDS = 5; // Fixed 5 rounds for predictable experience (10 total matches)
+const GAME_DURATION = FIXED_ROUNDS * MATCH_DURATION; // 5 minutes total
 const REGISTRATION_COUNTDOWN = 30 * 1000; // 30 second countdown once minimum players join
 const MIN_PLAYERS = 3; // Minimum players needed for a competitive game
 const MAX_PLAYERS = 50;
-const MATCH_DURATION = 60 * 1000; // 1 minute per match
 const SIMULTANEOUS_MATCHES = 2; // 2 concurrent chats
 const INACTIVITY_WARNING = 30 * 1000; // 30 seconds
 const INACTIVITY_FORFEIT = 45 * 1000; // 45 seconds
-const FIXED_ROUNDS = 3; // Fixed 3 rounds for predictable experience (6 total matches)
 const USE_REDIS = process.env.USE_REDIS === "true";
 
 /**
@@ -598,6 +599,13 @@ class GameManager {
   }
 
   /**
+   * Get total rounds for the game (single source of truth).
+   */
+  getTotalRounds(): number {
+    return FIXED_ROUNDS;
+  }
+
+  /**
    * Check if player is registered.
    */
   async isPlayerRegistered(fid: number): Promise<boolean> {
@@ -833,8 +841,7 @@ class GameManager {
 
       let completedPlayers = 0;
       for (const [_fid, session] of this.state!.playerSessions) {
-        const maxRounds = Math.floor(GAME_DURATION / MATCH_DURATION / SIMULTANEOUS_MATCHES);
-        if (session.currentRound > maxRounds) {
+        if (session.currentRound > FIXED_ROUNDS) {
           completedPlayers++;
         }
       }
