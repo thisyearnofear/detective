@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useHaptics, useSafeArea } from '@/lib/mobile';
+import { useViewport } from '@/lib/viewport';
 
 type Tab = 'game' | 'leaderboard' | 'profile';
 
@@ -30,6 +32,9 @@ export default function MobileNavigationTabs({
   currentRank,
   rankChange
 }: Props) {
+  const { isFarcasterFrame } = useViewport();
+  const haptic = useHaptics();
+  const safeArea = useSafeArea();
   const [showRankBadge, setShowRankBadge] = useState(false);
 
   // Show rank change animation
@@ -74,18 +79,27 @@ export default function MobileNavigationTabs({
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 bg-slate-900/95 backdrop-blur-lg border-t border-white/10">
-      {/* Safe area padding for mobile devices */}
-      <div className="px-4 py-3 pb-safe">
+    <div 
+      className="fixed bottom-0 left-0 right-0 z-50 bg-slate-900/95 backdrop-blur-lg border-t border-white/10"
+      style={{ paddingBottom: `calc(12px + ${safeArea.bottom}px)` }}
+    >
+      {/* Optimized safe area padding */}
+      <div className="px-4 py-3">
         <div className="flex justify-between items-center max-w-md mx-auto">
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => !tab.disabled && onTabChange(tab.id)}
+              onClick={() => {
+                if (!tab.disabled) {
+                  haptic('light'); // Haptic feedback on tap
+                  onTabChange(tab.id);
+                }
+              }}
               className={`
                 relative flex flex-col items-center gap-1 px-6 py-2 rounded-xl border transition-all duration-200
                 ${getTabStateClass(tab)}
                 ${tab.id === 'game' ? getGameStatePulse() : ''}
+                active:scale-95 touch-manipulation // Mobile tap optimization
               `}
               disabled={tab.disabled}
             >

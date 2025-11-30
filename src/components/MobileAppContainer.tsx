@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useViewport, farcaster } from '@/lib/viewport';
 import MobileNavigationTabs from './MobileNavigationTabs';
-import MobileLeaderboardOptimized from './MobileLeaderboardOptimized';
-import MobileChatOptimized from './MobileChatOptimized';
+import Leaderboard from './Leaderboard';
+import ChatWindow from './ChatWindow';
 import GameLobby from './game/GameLobby';
 
 type Tab = 'game' | 'leaderboard' | 'profile';
@@ -38,6 +39,7 @@ export default function MobileAppContainer({
   onQuickMatch,
   onChallengePlayer
 }: Props) {
+  const { isFarcasterFrame } = useViewport();
   const [activeTab, setActiveTab] = useState<Tab>('game');
   const [currentRank, setCurrentRank] = useState<number>();
   const [rankChange, setRankChange] = useState<number>();
@@ -85,15 +87,29 @@ export default function MobileAppContainer({
 
         if (gameState?.state === 'LIVE' && matches.length > 0) {
           return (
-            <MobileChatOptimized
-              fid={fid}
-              matches={matches}
-              currentVotes={currentVotes}
-              onVoteToggle={onVoteToggle}
-              onMatchComplete={onMatchComplete}
-              currentRound={currentRound}
-              totalRounds={totalRounds}
-            />
+            <div className="flex flex-col h-full">
+              {/* Chat header */}
+              <div className={farcaster.stickyHeader}>
+                <div className="text-center py-2">
+                  <span className="bg-slate-700 px-3 py-1 rounded-full text-xs text-blue-300">
+                    Round {currentRound} of {totalRounds}
+                  </span>
+                </div>
+              </div>
+              
+              {/* Enhanced ChatWindow */}
+              <div className="flex-1 p-4">
+                <ChatWindow
+                  fid={fid}
+                  match={matches[0]}
+                  currentVote={currentVotes[matches[0]?.id] || 'REAL'}
+                  onVoteToggle={() => onVoteToggle(matches[0]?.id)}
+                  onComplete={() => onMatchComplete(matches[0]?.id)}
+                  variant="minimal"
+                  showVoteToggle={true}
+                />
+              </div>
+            </div>
           );
         }
 
@@ -137,11 +153,9 @@ export default function MobileAppContainer({
 
       case 'leaderboard':
         return (
-          <MobileLeaderboardOptimized
-            fid={fid}
-            onChallengePlayer={onChallengePlayer}
-            onQuickMatch={onQuickMatch}
-          />
+          <div className="h-full overflow-hidden">
+            <Leaderboard fid={fid} />
+          </div>
         );
 
       case 'profile':
