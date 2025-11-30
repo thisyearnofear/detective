@@ -52,6 +52,7 @@ export default function ChatWindow({
   const [lastMessageTime, setLastMessageTime] = useState(Date.now());
   const [warningLevel, setWarningLevel] = useState<"none" | "warning" | "critical">("none");
   const [messageCount, setMessageCount] = useState(0);
+  const [cachedMessages, setCachedMessages] = useState<any[]>([]);
   const [opponentColors, setOpponentColors] = useState<{
     primary: [number, number, number];
     secondary: [number, number, number];
@@ -61,10 +62,24 @@ export default function ChatWindow({
   const { data: chatData, error, mutate } = useSWR(
     `/api/chat/batch-poll?matchIds=${match.id}`,
     fetcher,
-    { refreshInterval: 2000, refreshWhenHidden: false }
+    { refreshInterval: 2000, refreshWhenHidden: false, dedupingInterval: 1000 }
   );
 
-  const messages = match.messages || chatData?.chats?.[match.id]?.messages || [];
+  const polledMessages = chatData?.chats?.[match.id]?.messages;
+  const incomingMessages = match.messages || polledMessages;
+  
+  // Update cached messages only when we have new valid data, preventing flash when poll is loading
+  useEffect(() => {
+    if (incomingMessages && incomingMessages.length > 0) {
+      setCachedMessages(incomingMessages);
+    } else if (incomingMessages === undefined && cachedMessages.length === 0) {
+      // Only set to empty if we truly have nothing
+      setCachedMessages([]);
+    }
+    // else: keep existing cachedMessages during loading
+  }, [incomingMessages]);
+
+  const messages = cachedMessages.length > 0 ? cachedMessages : incomingMessages || [];
 
   useEffect(() => {
     if (messages.length !== messageCount) {
@@ -207,8 +222,7 @@ export default function ChatWindow({
 
       <div className={`${chatHeight} overflow-y-auto bg-slate-900/50 rounded-lg ${isMobileStacked ? "p-2 space-y-2" : isCompact ? "p-3 space-y-3" : "p-4 space-y-3"} ${isMobileStacked ? "mb-2" : "mb-4"}`}>
         {error && <div className="text-center text-red-400">Failed to load messages.</div>}
-        {!chatData?.chats && !error && <div className="text-center text-gray-400">Loading chat...</div>}
-        {messages.length === 0 && <div className="text-center text-gray-500">Say hello! Your conversation starts now.</div>}
+        {messages.length === 0 && !error && <div className="text-center text-gray-500">Say hello! Your conversation starts now.</div>}
         {messages.map((msg: any, idx: number) => {
           const delayMs = idx * 40;
           const isNewMessage = idx >= messageCount - 1;
