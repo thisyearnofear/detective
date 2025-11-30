@@ -10,6 +10,11 @@ import RoundTransition from "./RoundTransition";
 const fetcher = async (url: string) => {
   const res = await fetch(url);
   if (!res.ok) {
+    // Handle 403 specially - game not live, return the state info
+    if (res.status === 403) {
+      const data = await res.json().catch(() => ({ currentState: "UNKNOWN" }));
+      return { gameNotLive: true, currentState: data.currentState };
+    }
     const text = await res.text().catch(() => "");
     throw new Error(`HTTP ${res.status}${text ? `: ${text}` : ""}`);
   }
@@ -382,17 +387,21 @@ export default function MultiChatContainer({ fid }: Props) {
   // Get matches for display
   const matches = matchData?.matches || [];
 
+  // Check if game is not live (403 response)
+  if (matchData?.gameNotLive) {
+    return (
+      <div className="bg-slate-800 rounded-lg p-6 text-center">
+        <p className="text-gray-400">Waiting for game to start...</p>
+        <p className="text-sm text-gray-500 mt-2">Current state: {matchData.currentState}</p>
+      </div>
+    );
+  }
+
   // Only show error state if we've never loaded successfully OR we've had multiple consecutive errors
   // This prevents UI flicker from transient errors
   if (error && (!hasLoadedOnce || consecutiveErrors >= 3)) {
     const msg = (error as any)?.message || "";
-    const isNotLive = msg.includes("403");
-    return isNotLive ? (
-      <div className="bg-slate-800 rounded-lg p-6 text-center">
-        <p className="text-gray-400">Waiting for game to start...</p>
-        <p className="text-sm text-gray-500 mt-2">Registration ongoing</p>
-      </div>
-    ) : (
+    return (
       <div className="bg-red-900/20 border border-red-500 rounded-lg p-6 text-center">
         <p className="text-red-400">Failed to load matches. Please refresh.</p>
         <p className="text-xs text-gray-500 mt-2">Error: {msg}</p>
