@@ -390,7 +390,12 @@ export default function ChatWindow({
           <input
             className={`grow bg-slate-700 rounded-lg ${
               isFarcasterFrame ? "px-2 py-1.5" : "px-4 py-2"
-            } ${isFarcasterFrame ? responsive.text.small : responsive.text.medium} text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+            } text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+            style={{ 
+              fontSize: '16px', // CRITICAL: Prevents mobile zoom
+              WebkitAppearance: 'none',
+              borderRadius: '0.5rem'
+            }}
             value={input}
             onChange={handleInputChange}
             onKeyPress={(e) => e.key === "Enter" && handleSend()}

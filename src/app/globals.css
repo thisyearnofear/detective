@@ -7,6 +7,35 @@
   box-sizing: border-box;
 }
 
+/* MOBILE VIEWPORT FIX - Prevent auto-zoom on input focus */
+@supports (-webkit-touch-callout: none) {
+  input, textarea, select {
+    font-size: 16px !important;
+    transform: scale(1);
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  
+  /* Prevent zoom on any input focus */
+  input:focus, textarea:focus, select:focus {
+    font-size: 16px !important;
+  }
+}
+
+/* Additional mobile viewport stability */
+@media screen and (max-width: 768px) {
+  html {
+    -webkit-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
+  }
+  
+  body {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
 html,
 body {
   font-family: "Niramit", Arial, sans-serif;
