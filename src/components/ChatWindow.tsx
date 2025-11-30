@@ -52,7 +52,8 @@ export default function ChatWindow({
   const [lastMessageTime, setLastMessageTime] = useState(Date.now());
   const [warningLevel, setWarningLevel] = useState<"none" | "warning" | "critical">("none");
   const [messageCount, setMessageCount] = useState(0);
-  const [cachedMessages, setCachedMessages] = useState<any[]>([]);
+  const [lastValidMessages, setLastValidMessages] = useState<any[]>([]);
+  const lastMatchIdRef = useRef<string>(match.id);
   const [opponentColors, setOpponentColors] = useState<{
     primary: [number, number, number];
     secondary: [number, number, number];
@@ -66,20 +67,28 @@ export default function ChatWindow({
   );
 
   const polledMessages = chatData?.chats?.[match.id]?.messages;
-  const incomingMessages = match.messages || polledMessages;
   
-  // Update cached messages only when we have new valid data, preventing flash when poll is loading
+  // Clear cache when match changes
   useEffect(() => {
-    if (incomingMessages && incomingMessages.length > 0) {
-      setCachedMessages(incomingMessages);
-    } else if (incomingMessages === undefined && cachedMessages.length === 0) {
-      // Only set to empty if we truly have nothing
-      setCachedMessages([]);
+    if (match.id !== lastMatchIdRef.current) {
+      lastMatchIdRef.current = match.id;
+      setLastValidMessages([]);
     }
-    // else: keep existing cachedMessages during loading
-  }, [incomingMessages]);
-
-  const messages = cachedMessages.length > 0 ? cachedMessages : incomingMessages || [];
+  }, [match.id]);
+  
+  // Update cache when we get live data
+  useEffect(() => {
+    const currentMessages = match.messages || polledMessages;
+    if (Array.isArray(currentMessages) && currentMessages.length > 0) {
+      setLastValidMessages(currentMessages);
+    }
+  }, [match.messages, polledMessages]);
+  
+  // Determine which messages to show: live data takes priority, cache is fallback
+  const liveMessages = match.messages || polledMessages;
+  const messages = (Array.isArray(liveMessages) && liveMessages.length > 0) 
+    ? liveMessages 
+    : lastValidMessages;
 
   useEffect(() => {
     if (messages.length !== messageCount) {
