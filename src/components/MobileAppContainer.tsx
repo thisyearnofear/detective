@@ -36,8 +36,7 @@ export default function MobileAppContainer({
   onMatchComplete = () => { },
   currentRound = 1,
   totalRounds = 5,
-  onQuickMatch,
-  onChallengePlayer
+  onQuickMatch
 }: Props) {
   const { isFarcasterFrame } = useViewport();
   const [activeTab, setActiveTab] = useState<Tab>('game');
