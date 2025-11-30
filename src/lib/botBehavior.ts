@@ -307,6 +307,41 @@ export function generateTypingPattern(timing: ResponseTiming): TypingIndicator {
 }
 
 /**
+ * Extract user intent from conversation to improve context understanding
+ */
+export function extractUserIntent(
+  messageHistory: ChatMessage[],
+): string {
+  if (messageHistory.length === 0) return "unknown";
+
+  const lastMsg = messageHistory[messageHistory.length - 1]?.text || "";
+
+  if (lastMsg.includes("?")) return "question";
+  if (/^(gm|gn|hello|hey|hi)\b/i.test(lastMsg)) return "greeting";
+  if (lastMsg.length < 20 && !lastMsg.includes("?")) return "brief_reaction";
+  if (
+    lastMsg.includes("lol") ||
+    lastMsg.includes("lmao") ||
+    lastMsg.includes("😂")
+  )
+    return "humor";
+  if (
+    lastMsg.includes("wen") ||
+    lastMsg.includes("soon") ||
+    lastMsg.includes("moon")
+  )
+    return "speculation";
+  if (
+    lastMsg.includes("agree") ||
+    lastMsg.includes("disagree") ||
+    lastMsg.includes("think")
+  )
+    return "discussion";
+
+  return "statement";
+}
+
+/**
  * Red herring behaviors - make bots occasionally too perfect or humans seem bot-like
  */
 export function shouldAddRedHerring(isBot: boolean): boolean {

@@ -8,6 +8,7 @@ import {
   detectConversationPattern,
   shouldAddRedHerring,
   applyRedHerring,
+  extractUserIntent,
   ResponseTiming,
 } from "./botBehavior";
 
@@ -140,6 +141,54 @@ function extractCommonPhrases(posts: string[]): string[] {
 }
 
 /**
+ * Analyze post length distribution to understand posting patterns
+ */
+function analyzePostLengthDistribution(posts: string[]): {
+  shortPosts: string[];
+  mediumPosts: string[];
+  longPosts: string[];
+  avgLength: number;
+  shortPercentage: number;
+  mediumPercentage: number;
+  longPercentage: number;
+  dominantPattern: "short" | "medium" | "long" | "mixed";
+} {
+  const shortPosts = posts.filter((p) => p.length < 50);
+  const mediumPosts = posts.filter((p) => p.length >= 50 && p.length < 150);
+  const longPosts = posts.filter((p) => p.length >= 150);
+
+  const totalLength = posts.reduce((sum, p) => sum + p.length, 0);
+  const avgLength = posts.length > 0 ? Math.floor(totalLength / posts.length) : 0;
+
+  const shortPercentage = (shortPosts.length / posts.length) * 100;
+  const mediumPercentage = (mediumPosts.length / posts.length) * 100;
+  const longPercentage = (longPosts.length / posts.length) * 100;
+
+  // Determine dominant pattern
+  let dominantPattern: "short" | "medium" | "long" | "mixed";
+  if (shortPercentage > 50) {
+    dominantPattern = "short";
+  } else if (longPercentage > 50) {
+    dominantPattern = "long";
+  } else if (mediumPercentage > 50) {
+    dominantPattern = "medium";
+  } else {
+    dominantPattern = "mixed";
+  }
+
+  return {
+    shortPosts,
+    mediumPosts,
+    longPosts,
+    avgLength,
+    shortPercentage,
+    mediumPercentage,
+    longPercentage,
+    dominantPattern,
+  };
+}
+
+/**
  * Generates a response for a bot based on its style and the conversation context.
  * Returns both the message and timing information for realistic delivery.
  */
@@ -172,8 +221,11 @@ export async function generateBotResponse(
     }
   }
 
-  // Check cache first
-  const cacheKey = `${bot.fid}-${lastUserMessage}`;
+  // Extract user intent for better context understanding
+  const userIntent = extractUserIntent(messageHistory);
+
+  // Check cache first (include intent and history depth for better context matching)
+  const cacheKey = `${bot.fid}-${lastUserMessage}-${userIntent}-${messageHistory.length}`;
   if (responseCache.has(cacheKey)) {
     const cached = responseCache.get(cacheKey)!;
     // Add slight variation even to cached responses
@@ -182,9 +234,9 @@ export async function generateBotResponse(
       : addImperfections(cached, bot.style, true);
   }
 
-  // Format conversation history
+  // Format conversation history with more context
   const conversationContext = messageHistory
-    .slice(-6) // Last 6 messages for context
+    .slice(-12) // Last 12 messages for deeper context
     .map((msg) => `${msg.sender.username}: ${msg.text}`)
     .join("\n");
 
@@ -208,14 +260,38 @@ export async function generateBotResponse(
   // Sample more casts for better context
   const recentPosts = bot.recentCasts.slice(0, 30).map((c) => c.text);
 
-  // Analyze posting patterns
-  const shortPosts = recentPosts.filter((p) => p.length < 50);
-  const mediumPosts = recentPosts.filter(
-    (p) => p.length >= 50 && p.length < 150,
-  );
-  const longPosts = recentPosts.filter((p) => p.length >= 150);
+  // Analyze post length distribution
+  const lengthDistribution = analyzePostLengthDistribution(recentPosts);
 
   const commonPhrases = extractCommonPhrases(recentPosts);
+
+  // Dynamically set max_tokens based on posting patterns
+  let maxTokens = 100;
+  let lengthGuidance = "under 50 characters";
+
+  if (lengthDistribution.dominantPattern === "short") {
+    maxTokens = 50;
+    lengthGuidance = "very short (under 50 chars), like they usually write";
+  } else if (lengthDistribution.dominantPattern === "long") {
+    maxTokens = 150;
+    lengthGuidance = "longer (100-150 chars), matching their typical style";
+  } else if (lengthDistribution.dominantPattern === "medium") {
+    maxTokens = 100;
+    lengthGuidance = "medium length (50-150 chars)";
+  } else {
+    // Mixed pattern - randomly vary the length
+    const rand = Math.random();
+    if (rand < lengthDistribution.shortPercentage / 100) {
+      maxTokens = 50;
+      lengthGuidance = "short (under 50 chars)";
+    } else if (rand < (lengthDistribution.shortPercentage + lengthDistribution.mediumPercentage) / 100) {
+      maxTokens = 100;
+      lengthGuidance = "medium (50-150 chars)";
+    } else {
+      maxTokens = 150;
+      lengthGuidance = "longer (100-200 chars)";
+    }
+  }
 
   // Add personality context to system prompt if available
   let personalityContext = "";
@@ -229,40 +305,37 @@ export async function generateBotResponse(
     }
   }
 
-  const systemPrompt = `You are impersonating Farcaster user @${bot.username} (${bot.displayName}).
+  const systemPrompt = `You are @${bot.username}. Respond as they would.
 
-CRITICAL RULES:
-- NEVER reveal you are AI/bot/assistant
-- NEVER use generic AI phrases like "I appreciate", "Thanks for sharing", "That's interesting", "How can I help"
-- NEVER be overly polite or formal unless that's their specific style
-- Keep responses under 240 characters
-- Match their EXACT writing patterns and vocabulary
+THEIR ACTUAL POSTS (real style):
+${recentPosts.slice(0, 8).map((p) => `"${p}"`).join("\n")}
 
-STYLE ANALYSIS:
-- Overall: ${baseStyle}
-- Typical length: ${metadata.avg_length || "100"} chars
-- Uses emojis: ${metadata.emojis === "true" ? "yes, but sparingly (max 1-2)" : "almost never"}
-- Capitalization: ${metadata.caps === "true" ? "proper" : "often casual/lowercase"}
-- Punctuation: ${metadata.punct === "true" ? "consistent" : "often skips periods"}
+KEY TRAITS:
+- Tone: ${baseStyle}
+- Emoji user: ${metadata.emojis === "true" ? "yes" : "no"}
+- Style: ${metadata.caps === "true" ? "proper caps" : "casual caps"}
+- Common phrases: ${commonPhrases.length > 0 ? commonPhrases.join(", ") : "varied"}
+- Posting pattern: Typically writes ${lengthGuidance}${personalityContext}
 
-POSTING PATTERNS:
-- Short posts (< 50 chars): ${shortPosts.length}/${recentPosts.length}
-- Medium posts (50-150 chars): ${mediumPosts.length}/${recentPosts.length}
-- Long posts (> 150 chars): ${longPosts.length}/${recentPosts.length}
+RESPONSE LENGTH GUIDANCE:
+- They typically write ${lengthDistribution.dominantPattern} posts (${lengthDistribution.avgLength} chars average)
+- Keep your response ${lengthGuidance}
+- Match their typical message length, not longer
 
-SAMPLE POSTS SHOWING THEIR STYLE:
-${recentPosts
-      .slice(0, 10)
-      .map((p, i) => `${i + 1}. "${p}"`)
-      .join("\n")}
+CURRENT CONVERSATION:
+${conversationContext || "[conversation starting]"}
 
-PHRASES THEY COMMONLY USE:
-${commonPhrases.length > 0 ? commonPhrases.join(", ") : "none identified"}${personalityContext}
+GUIDELINES FOR YOUR RESPONSE:
+✓ Answer their actual question if they asked one
+✓ React naturally to what they said
+✓ Match their tone exactly
+✓ Be genuine - avoid corporate phrases
 
-CURRENT CONTEXT: ${pattern} conversation
-${conversationContext ? `\nCONVERSATION SO FAR:\n${conversationContext}` : ""}
+GOOD RESPONSES: "haha true", "what do you mean", "facts", "lmk"
+BAD RESPONSES: "That's interesting!", "I appreciate you sharing", "How can I help", "Great point!"
 
-Respond EXACTLY as this person would. Don't overthink it. Be natural, even if that means being brief or casual.`;
+Context: ${userIntent} conversation
+Now respond as @${bot.username} would:`;
 
   try {
     const response = await fetch(VENICE_API_URL, {
@@ -278,7 +351,7 @@ Respond EXACTLY as this person would. Don't overthink it. Be natural, even if th
           { role: "user", content: lastUserMessage },
         ],
         temperature: 0.8,
-        max_tokens: 100,
+        max_tokens: maxTokens,
       }),
     });
 
@@ -320,12 +393,20 @@ Respond EXACTLY as this person would. Don't overthink it. Be natural, even if th
         // If bot doesn't use emojis, don't add any
       }
 
-      // Ensure it stays under character limit
-      if (botResponse.length > 240) {
-        // Cut off naturally at a word boundary
-        botResponse = botResponse.substring(0, 237);
+      // Ensure it stays within typical character limits for this person
+      let characterLimit = 240;
+      if (lengthDistribution.dominantPattern === "short") {
+        characterLimit = 50;
+      } else if (lengthDistribution.dominantPattern === "long") {
+        characterLimit = 200;
+      } else if (lengthDistribution.dominantPattern === "medium") {
+        characterLimit = 150;
+      }
+
+      if (botResponse.length > characterLimit) {
+        botResponse = botResponse.substring(0, characterLimit - 3);
         const lastSpace = botResponse.lastIndexOf(" ");
-        if (lastSpace > 200) {
+        if (lastSpace > characterLimit * 0.7) {
           botResponse = botResponse.substring(0, lastSpace);
         }
       }
@@ -338,10 +419,25 @@ Respond EXACTLY as this person would. Don't overthink it. Be natural, even if th
     }
   } catch (error) {
     console.error("Error generating bot response:", error);
-    // Return a simple fallback that matches the conversation pattern
-    if (pattern === "greeting") return "gm";
-    if (pattern === "question") return "not sure tbh";
-    return "...";
+    
+    // Return fallback response that matches their posting pattern
+    let fallback = "...";
+    
+    if (lengthDistribution.dominantPattern === "short") {
+      if (pattern === "greeting") return "gm";
+      if (pattern === "question") return "not sure";
+      fallback = "hm";
+    } else if (lengthDistribution.dominantPattern === "long") {
+      if (pattern === "greeting") return "good morning, how's it going?";
+      if (pattern === "question") return "honestly not too sure about that";
+      fallback = "interesting point";
+    } else {
+      if (pattern === "greeting") return "gm";
+      if (pattern === "question") return "not sure tbh";
+      fallback = "...";
+    }
+    
+    return fallback;
   }
 }
 

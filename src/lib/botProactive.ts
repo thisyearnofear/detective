@@ -164,40 +164,57 @@ export function generateAdaptiveFollowup(
                 "classic bot response tbh",
                 "that's what a bot would ask",
             ];
+            // For terse communicators, keep it shorter
+            if (personality.communicationStyle === "terse") {
+                return ["?", "why tho", "sus"][Math.floor(Math.random() * 3)];
+            }
             return responses[Math.floor(Math.random() * responses.length)];
         }
-        // Otherwise, be more casual
+        // Otherwise, be more casual but respect their style
+        if (personality.communicationStyle === "terse") {
+            return "?";
+        }
         return Math.random() < 0.5 ? "interesting question" : "what makes you ask?";
     }
 
     // Evasive: Human is avoiding the question
     if (analysis.isEvasive && personality.asksQuestions) {
-        const responses = ["sus", "hmm", "interesting..."];
+        const tersResponses = ["sus", "hmm", "..."];
+        const verboseResponses = ["that's suspicious", "seems like you're dodging", "interesting..."];
+        const responses = personality.communicationStyle === "terse" ? tersResponses : verboseResponses;
         return responses[Math.floor(Math.random() * responses.length)];
     }
 
     // Defensive: Human is pushing back
     if (analysis.isDefensive) {
-        const responses = ["just curious", "fair question", "why not?"];
+        const tersResponses = ["ok", "fair", "why?"];
+        const verboseResponses = ["just curious about your take", "fair point, fair question", "not trying to push, just curious"];
+        const responses = personality.communicationStyle === "terse" ? tersResponses : verboseResponses;
         return responses[Math.floor(Math.random() * responses.length)];
     }
 
     // Agreeable: Continue naturally
     if (analysis.isAgreeable) {
-        const responses = ["yeah fr", "right?", "exactly", "lol yeah", "true"];
+        const tersResponses = ["fr", "right", "yes", "lol", "facts"];
+        const verboseResponses = ["yeah for real", "right?", "exactly what I'm thinking", "lol yeah", "definitely"];
+        const responses = personality.communicationStyle === "terse" ? tersResponses : verboseResponses;
         const response =
             responses[Math.floor(Math.random() * responses.length)];
 
-        // If they ask questions, add a follow-up
+        // If they ask questions, add a follow-up (more likely for verbose communicators)
+        const followUpChance = personality.communicationStyle === "terse" ? 0.1 : 0.3;
         if (
             personality.asksQuestions &&
             personality.theirQuestions.length > 0 &&
-            Math.random() < 0.3
+            Math.random() < followUpChance
         ) {
             const question =
                 personality.theirQuestions[
                 Math.floor(Math.random() * personality.theirQuestions.length)
                 ];
+            if (personality.communicationStyle === "terse") {
+                return response; // Terse people don't usually chain questions
+            }
             return `${response}. ${question}`;
         }
 
@@ -243,11 +260,24 @@ export function generateProactiveFollowupMessage(
 ): string {
     // Terse communicators send short follow-ups
     if (personality.communicationStyle === "terse") {
-        const options = ["?", "...", "yo", "hello?"];
+        const options = ["?", "...", "yo", "hello?", "lol"];
         return options[Math.floor(Math.random() * options.length)];
     }
 
-    // Questioners ask follow-ups
+    // Verbose communicators send longer follow-ups with questions
+    if (personality.communicationStyle === "verbose") {
+        if (personality.asksQuestions && personality.theirQuestions.length > 0) {
+            const question = personality.theirQuestions[
+                Math.floor(Math.random() * personality.theirQuestions.length)
+            ];
+            const openings = ["by the way, ", "curious though - ", "genuinely wondering - "];
+            return openings[Math.floor(Math.random() * openings.length)] + question;
+        }
+        const options = ["you around?", "thinking about what you said earlier", "interested to hear your thoughts"];
+        return options[Math.floor(Math.random() * options.length)];
+    }
+
+    // Conversational (default) - balanced follow-ups
     if (personality.asksQuestions && personality.theirQuestions.length > 0) {
         return personality.theirQuestions[
             Math.floor(Math.random() * personality.theirQuestions.length)
@@ -255,6 +285,6 @@ export function generateProactiveFollowupMessage(
     }
 
     // Default casual follow-ups
-    const options = ["you there?", "lol", "hmm", "interesting"];
+    const options = ["you there?", "lol", "hmm", "interesting", "what do you think?"];
     return options[Math.floor(Math.random() * options.length)];
 }

@@ -23,7 +23,6 @@ export async function GET(request: NextRequest) {
 
     const gameState = await gameManager.getGameState();
     const rawState = await gameManager.getRawState();
-    const config = await gameManager.getConfig();
 
     console.log(`[/api/match/active] FID: ${playerFid}, State: ${gameState.state}, Players: ${gameState.playerCount}, GameEnds: ${new Date(gameState.gameEnds).toISOString()}`);
 
