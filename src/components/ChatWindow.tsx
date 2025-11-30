@@ -7,7 +7,6 @@ import { useViewport, responsive } from "@/lib/viewport";
 import { 
   useOptimizedEmojiProcessor, 
   useOptimizedScroll, 
-  useAdaptivePolling,
   requestCache,
   useMemoryOptimization 
 } from "@/lib/performance";
