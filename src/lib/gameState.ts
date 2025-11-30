@@ -786,6 +786,14 @@ class GameManager {
   }
 
   private async updateCycleState(): Promise<void> {
+    // Reload state metadata from Redis to ensure consistency across serverless instances
+    const stateMeta = await persistence.loadGameStateMeta();
+    if (stateMeta) {
+      this.state!.state = stateMeta.state;
+      this.state!.registrationEnds = stateMeta.registrationEnds;
+      this.state!.gameEnds = stateMeta.gameEnds;
+    }
+
     const now = Date.now();
 
     // REGISTRATION -> LIVE
@@ -815,16 +823,34 @@ class GameManager {
       }
     }
 
-    // FINISHED state cleanup
+    // FINISHED -> REGISTRATION (auto-cycle)
     if (this.state!.state === "FINISHED") {
       const CLEANUP_GRACE_PERIOD = 5000;
       if (this.state!.finishedAt && now - this.state!.finishedAt > CLEANUP_GRACE_PERIOD) {
+        console.log(`[GameManager] Cleanup complete, starting new cycle`);
+        
+        // Clear game data
         this.state!.players.clear();
         this.state!.bots.clear();
         this.state!.playerSessions.clear();
         this.state!.matches.clear();
         this.state!.leaderboard = [];
+        
+        // Start new cycle
+        this.state!.cycleId = `cycle-${Date.now()}`;
+        this.state!.state = "REGISTRATION";
+        this.state!.registrationEnds = now + REGISTRATION_COUNTDOWN;
+        this.state!.gameEnds = now + GAME_DURATION;
+        this.state!.countdownStarted = false;
+        this.state!.extensionCount = 0;
         this.state!.finishedAt = undefined;
+        
+        await persistence.saveGameStateMeta({
+          cycleId: this.state!.cycleId,
+          state: this.state!.state,
+          registrationEnds: this.state!.registrationEnds,
+          gameEnds: this.state!.gameEnds,
+        });
       }
       return;
     }
