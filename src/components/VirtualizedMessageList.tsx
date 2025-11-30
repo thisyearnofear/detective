@@ -156,8 +156,6 @@ export default function VirtualizedMessageList({
 
   // Cache rendered messages for performance
   const renderedMessages = visibleMessages.map((message, index) => {
-    const cacheKey = `msg_${message.id}_${isFarcasterFrame}`;
-    
     return (
       <div
         key={message.id}
