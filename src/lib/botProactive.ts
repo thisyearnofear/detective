@@ -1,6 +1,7 @@
 // src/lib/botProactive.ts
 
 import { Bot, ChatMessage } from "./types";
+import { RESPONSE_STYLES } from "./botBehavior";
 
 /**
  * Cast-derived personality profile based on actual communication patterns
@@ -146,6 +147,7 @@ export function analyzeHumanResponse(message: string): {
 
 /**
  * Generate adaptive follow-up based on human behavior and bot's personality
+ * Now with coherence-aware evasion instead of template cycling
  */
 export function generateAdaptiveFollowup(
     humanResponse: string,
@@ -154,74 +156,72 @@ export function generateAdaptiveFollowup(
     const analysis = analyzeHumanResponse(humanResponse);
 
     // Counter-testing: Human is testing the bot
+    // CRITICAL: Never admit to being a bot - deflect genuinely
     if (analysis.isCounterTesting) {
-        // If they're a debater, push back
         if (personality.isDebater) {
-            const responses = [
-                "lol good question, i am a bot", // Reverse psychology
-                "why do you say that?",
-                "you're deflecting",
-                "classic bot response tbh",
-                "that's what a bot would ask",
-            ];
-            // For terse communicators, keep it shorter
-            if (personality.communicationStyle === "terse") {
-                return ["?", "why tho", "sus"][Math.floor(Math.random() * 3)];
-            }
-            return responses[Math.floor(Math.random() * responses.length)];
+            // Genuine deflection via topic shift, not reversal
+            const deflections = personality.communicationStyle === "terse" 
+                ? RESPONSE_STYLES.deflectTerse 
+                : RESPONSE_STYLES.deflectVerbose;
+            
+            return deflections[Math.floor(Math.random() * deflections.length)];
         }
-        // Otherwise, be more casual but respect their style
+        
         if (personality.communicationStyle === "terse") {
             return "?";
         }
-        return Math.random() < 0.5 ? "interesting question" : "what makes you ask?";
+        return "why do you keep asking that?";
     }
 
     // Evasive: Human is avoiding the question
+    // Show suspicion but don't force confrontation
     if (analysis.isEvasive && personality.asksQuestions) {
-        const tersResponses = ["sus", "hmm", "..."];
-        const verboseResponses = ["that's suspicious", "seems like you're dodging", "interesting..."];
-        const responses = personality.communicationStyle === "terse" ? tersResponses : verboseResponses;
-        return responses[Math.floor(Math.random() * responses.length)];
+        const evasiveResponses = personality.communicationStyle === "terse"
+            ? RESPONSE_STYLES.evasiveTerse
+            : RESPONSE_STYLES.evasiveVerbose;
+        
+        return evasiveResponses[Math.floor(Math.random() * evasiveResponses.length)];
     }
 
     // Defensive: Human is pushing back
+    // Respect their boundary without backing down entirely
     if (analysis.isDefensive) {
-        const tersResponses = ["ok", "fair", "why?"];
-        const verboseResponses = ["just curious about your take", "fair point, fair question", "not trying to push, just curious"];
-        const responses = personality.communicationStyle === "terse" ? tersResponses : verboseResponses;
-        return responses[Math.floor(Math.random() * responses.length)];
+        const defResponse = personality.communicationStyle === "terse"
+            ? RESPONSE_STYLES.defensiveTerse[0]
+            : RESPONSE_STYLES.defensiveVerbose[0];
+        
+        return defResponse;
     }
 
-    // Agreeable: Continue naturally
+    // Agreeable: Continue contextually
+    // Don't cycle templates - engage with what they actually said
     if (analysis.isAgreeable) {
-        const tersResponses = ["fr", "right", "yes", "lol", "facts"];
-        const verboseResponses = ["yeah for real", "right?", "exactly what I'm thinking", "lol yeah", "definitely"];
-        const responses = personality.communicationStyle === "terse" ? tersResponses : verboseResponses;
-        const response =
-            responses[Math.floor(Math.random() * responses.length)];
+        const acknowledgments = personality.communicationStyle === "terse" 
+            ? RESPONSE_STYLES.agreeTerse 
+            : RESPONSE_STYLES.agreeVerbose;
+        
+        const ack = acknowledgments[Math.floor(Math.random() * acknowledgments.length)];
 
-        // If they ask questions, add a follow-up (more likely for verbose communicators)
-        const followUpChance = personality.communicationStyle === "terse" ? 0.1 : 0.3;
-        if (
-            personality.asksQuestions &&
-            personality.theirQuestions.length > 0 &&
-            Math.random() < followUpChance
-        ) {
-            const question =
-                personality.theirQuestions[
-                Math.floor(Math.random() * personality.theirQuestions.length)
+        // If they ask questions, ask back contextually (more likely for verbose/curious)
+        if (personality.asksQuestions && personality.theirQuestions.length > 0) {
+            const followUpChance = 
+                personality.communicationStyle === "terse" ? 0.05 : 0.25;
+            
+            if (Math.random() < followUpChance) {
+                const question = personality.theirQuestions[
+                    Math.floor(Math.random() * personality.theirQuestions.length)
                 ];
-            if (personality.communicationStyle === "terse") {
-                return response; // Terse people don't usually chain questions
+                
+                if (personality.communicationStyle === "terse") {
+                    return ack;
+                }
+                return `${ack}. ${question}`;
             }
-            return `${response}. ${question}`;
         }
 
-        return response;
+        return ack;
     }
 
-    // No specific pattern detected - let normal response generation handle it
     return null;
 }
 
@@ -260,7 +260,7 @@ export function generateProactiveFollowupMessage(
 ): string {
     // Terse communicators send short follow-ups
     if (personality.communicationStyle === "terse") {
-        const options = ["?", "...", "yo", "hello?", "lol"];
+        const options = RESPONSE_STYLES.followUpTerse;
         return options[Math.floor(Math.random() * options.length)];
     }
 
@@ -273,7 +273,7 @@ export function generateProactiveFollowupMessage(
             const openings = ["by the way, ", "curious though - ", "genuinely wondering - "];
             return openings[Math.floor(Math.random() * openings.length)] + question;
         }
-        const options = ["you around?", "thinking about what you said earlier", "interested to hear your thoughts"];
+        const options = RESPONSE_STYLES.followUpVerbose;
         return options[Math.floor(Math.random() * options.length)];
     }
 
@@ -285,6 +285,6 @@ export function generateProactiveFollowupMessage(
     }
 
     // Default casual follow-ups
-    const options = ["you there?", "lol", "hmm", "interesting", "what do you think?"];
+    const options = RESPONSE_STYLES.followUpVerbose;
     return options[Math.floor(Math.random() * options.length)];
 }
