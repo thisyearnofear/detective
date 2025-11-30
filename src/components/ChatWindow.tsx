@@ -369,7 +369,7 @@ export default function ChatWindow({
             messages={messages}
             currentUserId={fid}
             containerHeight={styles.chatHeight}
-            opponentColors={opponentColors}
+            opponentColors={opponentColors || undefined}
           />
         )}
       </div>
