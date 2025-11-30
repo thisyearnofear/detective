@@ -337,9 +337,9 @@ export default function ChatWindow({
       {/* VIRTUALIZED MESSAGE LIST with pull-to-refresh */}
       <div 
         className="relative"
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
+        onTouchStart={(e) => handleTouchStart(e.nativeEvent as TouchEvent)}
+        onTouchMove={(e) => handleTouchMove(e.nativeEvent as TouchEvent)}
+        onTouchEnd={(e) => handleTouchEnd(e.nativeEvent as TouchEvent)}
       >
         {/* Pull-to-refresh indicator */}
         {pullDistance > 0 && (
