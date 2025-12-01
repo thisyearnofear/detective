@@ -119,19 +119,20 @@ export default function ChatWindow({
     }
   }, [match.id]);
   
-  // Update cache when we get live data
-  useEffect(() => {
-    const currentMessages = match.messages || polledMessages;
-    if (Array.isArray(currentMessages) && currentMessages.length > 0) {
-      setLastValidMessages(currentMessages);
-    }
-  }, [match.messages, polledMessages]);
-  
-  // Determine which messages to show: live data takes priority, cache is fallback
-  const liveMessages = match.messages || polledMessages;
-  const messages = (Array.isArray(liveMessages) && liveMessages.length > 0) 
-    ? liveMessages 
+  // Use polled messages as the single source of truth, fall back to live data only if poll hasn't loaded yet
+  // Prefer polledMessages (from SWR polling) over match.messages to avoid race conditions
+  const messages = polledMessages && Array.isArray(polledMessages) && polledMessages.length > 0
+    ? polledMessages
+    : (match.messages && Array.isArray(match.messages) && match.messages.length > 0)
+    ? match.messages
     : lastValidMessages;
+  
+  // Update cache only when messages actually change
+  useEffect(() => {
+    if (messages && Array.isArray(messages) && messages.length > 0) {
+      setLastValidMessages(messages);
+    }
+  }, [messages?.length, messages?.map((m: any) => m.id).join(",")]);
 
   // OPTIMIZED SCROLL DETECTION - Throttled for performance
   const handleScroll = useCallback(() => {

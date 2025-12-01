@@ -5,7 +5,6 @@ import {
   addImperfections,
   shouldUseEmojis,
   addEmojis,
-  detectConversationPattern,
   shouldAddRedHerring,
   applyRedHerring,
   extractUserIntent,
@@ -96,26 +95,85 @@ export async function inferWritingStyle(casts: string[]): Promise<string> {
 }
 
 /**
- * Generate a fallback response when coherence validation fails
+ * Extract actual short/medium/long responses from cast history
+ * Returns the user's own words, not generic phrases
+ */
+function extractActualResponses(
+  casts: Array<{ text: string }>,
+  lengthCategory: "short" | "medium" | "long"
+): string[] {
+  const responses: string[] = [];
+
+  casts.forEach((cast) => {
+    const text = cast.text.trim();
+    if (!text) return;
+
+    const charCount = text.length;
+    let matches = false;
+
+    if (lengthCategory === "short" && charCount < 50) {
+      matches = true;
+    } else if (lengthCategory === "medium" && charCount >= 50 && charCount < 150) {
+      matches = true;
+    } else if (lengthCategory === "long" && charCount >= 150) {
+      matches = true;
+    }
+
+    if (matches && !text.includes("http") && !text.includes("@")) {
+      // Skip URLs and mentions-heavy posts
+      responses.push(text);
+    }
+  });
+
+  return responses;
+}
+
+/**
+ * Generate a fallback response using ONLY the user's actual cast history
+ * No generic phrases - only real words they've said
  */
 function generateFallbackResponse(
-  pattern: string,
   lengthDistribution: {
     dominantPattern: "short" | "medium" | "long" | "mixed";
     avgLength: number;
   },
+  recentCasts: Array<{ text: string }>,
 ): string {
-  if (pattern === "greeting") {
-    return lengthDistribution.dominantPattern === "short" ? "gm" : "gm, how's it going?";
+  // Determine which length pool to draw from
+  const lengthCategory = lengthDistribution.dominantPattern === "mixed"
+    ? (Math.random() < 0.5 ? "short" : "medium")
+    : lengthDistribution.dominantPattern;
+
+  // Extract actual responses from their cast history
+  const actualResponses = extractActualResponses(recentCasts, lengthCategory);
+
+  // If we have actual responses from their history, use one
+  if (actualResponses.length > 0) {
+    return actualResponses[Math.floor(Math.random() * actualResponses.length)];
   }
-  if (pattern === "question") {
-    return lengthDistribution.dominantPattern === "short" ? "not sure" : "honestly not too sure about that";
+
+  // Fallback to other length categories if we don't have matches
+  const otherLengths: ("short" | "medium" | "long")[] = ["short", "medium", "long"].filter(
+    (len) => len !== lengthCategory
+  ) as ("short" | "medium" | "long")[];
+
+  for (const fallbackLength of otherLengths) {
+    const fallbackResponses = extractActualResponses(recentCasts, fallbackLength);
+    if (fallbackResponses.length > 0) {
+      return fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+    }
   }
-  if (pattern === "humor") {
-    return lengthDistribution.dominantPattern === "short" ? "lol" : "lol that's funny";
+
+  // Last resort: return their shortest cast
+  if (recentCasts.length > 0) {
+    const shortest = recentCasts.reduce((prev, curr) =>
+      curr.text.length < prev.text.length ? curr : prev
+    );
+    return shortest.text;
   }
-  
-  return lengthDistribution.dominantPattern === "short" ? "..." : "hm";
+
+  // Ultimate fallback if no casts available
+  return "...";
 }
 
 /**
@@ -295,8 +353,9 @@ export async function generateBotResponse(
     {} as Record<string, string>,
   );
 
-  // Detect conversation pattern
-  const pattern = detectConversationPattern(messageHistory);
+  // Note: conversation pattern detection could be used for adaptive responses
+  // For now, we rely purely on cast history for fallback responses
+  // const pattern = detectConversationPattern(messageHistory);
 
   // Sample more casts for better context
   const recentPosts = bot.recentCasts.slice(0, 30).map((c) => c.text);
@@ -426,12 +485,14 @@ Now respond as @${bot.username} would - keep it SHORT and use their actual voice
         temperature: 0.8,
         max_tokens: maxTokens,
       }),
+      signal: AbortSignal.timeout(8000), // 8 second timeout
     });
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error("Venice API error:", response.status, errorText);
-      return "...";
+      // Generate contextual fallback using only their actual words
+      return generateFallbackResponse(lengthDistribution, bot.recentCasts);
     }
 
     const data = await response.json();
@@ -445,7 +506,7 @@ Now respond as @${bot.username} would - keep it SHORT and use their actual voice
         
         if (!coherenceCheck.isCoherent) {
           console.log(`[coherenceCheck] Response rejected: ${coherenceCheck.reason}`);
-          botResponse = generateFallbackResponse(pattern, lengthDistribution);
+          botResponse = generateFallbackResponse(lengthDistribution, bot.recentCasts);
         }
       }
 
@@ -510,24 +571,8 @@ Now respond as @${bot.username} would - keep it SHORT and use their actual voice
   } catch (error) {
     console.error("Error generating bot response:", error);
     
-    // Return fallback response that matches their posting pattern
-    let fallback = "...";
-    
-    if (lengthDistribution.dominantPattern === "short") {
-      if (pattern === "greeting") return "gm";
-      if (pattern === "question") return "not sure";
-      fallback = "hm";
-    } else if (lengthDistribution.dominantPattern === "long") {
-      if (pattern === "greeting") return "good morning, how's it going?";
-      if (pattern === "question") return "honestly not too sure about that";
-      fallback = "interesting point";
-    } else {
-      if (pattern === "greeting") return "gm";
-      if (pattern === "question") return "not sure tbh";
-      fallback = "...";
-    }
-    
-    return fallback;
+    // Return fallback response using only their actual cast history
+    return generateFallbackResponse(lengthDistribution, bot.recentCasts);
   }
 }
 

@@ -29,8 +29,18 @@ interface Props {
   };
 }
 
-const ITEM_HEIGHT = 60; // Average message height
-const OVERSCAN = 5; // Render extra items outside viewport
+// Dynamic item heights - messages vary in length
+const BASE_ITEM_HEIGHT = 60;
+const OVERSCAN = 3; // Render extra items outside viewport
+const PADDING_PER_ITEM = 8; // p-2 = 8px
+
+// Helper to estimate message height based on text length
+function estimateMessageHeight(text: string): number {
+  const charCount = text.length;
+  // Rough estimate: ~40 chars per line at typical width
+  const estimatedLines = Math.ceil(charCount / 40) || 1;
+  return Math.max(BASE_ITEM_HEIGHT, estimatedLines * 24 + PADDING_PER_ITEM);
+}
 
 // MEMOIZED MESSAGE COMPONENT
 const MessageBubble = memo(({ 
@@ -93,15 +103,33 @@ export default function VirtualizedMessageList({
     }
   });
 
-  // Calculate visible range
-  const startIndex = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - OVERSCAN);
-  const endIndex = Math.min(
-    messages.length - 1,
-    Math.ceil((scrollTop + containerHeightPx) / ITEM_HEIGHT) + OVERSCAN
-  );
+  // Calculate dynamic heights for all messages
+  const messageHeights = messages.map(msg => estimateMessageHeight(msg.text));
+  const cumulativeHeights = messageHeights.reduce((acc, height, i) => {
+    acc[i] = (acc[i - 1] || 0) + height;
+    return acc;
+  }, {} as Record<number, number>);
+
+  // Find visible range based on scroll position
+  let startIndex = 0;
+  let endIndex = messages.length - 1;
+  
+  for (let i = 0; i < messages.length; i++) {
+    if (cumulativeHeights[i] >= scrollTop - BASE_ITEM_HEIGHT * OVERSCAN) {
+      startIndex = Math.max(0, i - OVERSCAN);
+      break;
+    }
+  }
+  
+  for (let i = startIndex; i < messages.length; i++) {
+    if (cumulativeHeights[i] >= scrollTop + containerHeightPx) {
+      endIndex = Math.min(messages.length - 1, i + OVERSCAN);
+      break;
+    }
+  }
 
   const visibleMessages = messages.slice(startIndex, endIndex + 1);
-  const totalHeight = messages.length * ITEM_HEIGHT;
+  const totalHeight = cumulativeHeights[messages.length - 1] || 0;
 
   // Update container height on mount and resize
   useEffect(() => {
@@ -146,7 +174,7 @@ export default function VirtualizedMessageList({
   useEffect(() => {
     if (containerRef.current && messages.length > 0) {
       const isNearBottom = 
-        scrollTop + containerHeightPx >= totalHeight - ITEM_HEIGHT * 2;
+        scrollTop + containerHeightPx >= totalHeight - BASE_ITEM_HEIGHT * 2;
       
       if (isNearBottom) {
         containerRef.current.scrollTop = containerRef.current.scrollHeight;
@@ -154,17 +182,21 @@ export default function VirtualizedMessageList({
     }
   }, [messages.length, scrollTop, containerHeightPx, totalHeight]);
 
-  // Cache rendered messages for performance
+  // Cache rendered messages for performance with dynamic heights
   const renderedMessages = visibleMessages.map((message, index) => {
+    const messageIndex = startIndex + index;
+    const topPosition = cumulativeHeights[messageIndex - 1] || 0;
+    const messageHeight = messageHeights[messageIndex];
+    
     return (
       <div
         key={message.id}
         style={{
           position: 'absolute',
-          top: (startIndex + index) * ITEM_HEIGHT,
+          top: topPosition,
           left: 0,
           right: 0,
-          height: ITEM_HEIGHT,
+          height: messageHeight,
         }}
       >
         <MessageBubble
