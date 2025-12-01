@@ -30,7 +30,9 @@ const AUTOCORRECT_MISTAKES = [
   { intended: "wont", autocorrected: "won't" },
 ];
 
-// Unified response templates for consistent bot behavior
+// DEPRECATED: Response templates have been replaced with cast-history-based responses
+// Kept for backward compatibility with botProactive.ts fallbacks only
+// These should be phased out in favor of extracting actual responses from cast history
 const RESPONSE_TEMPLATES = {
   deflectVerbose: [
     "that's a weird thing to fixate on",
@@ -257,35 +259,6 @@ export function addEmojis(
     }
     return result;
   }
-}
-
-/**
- * Pattern detection for common Farcaster behaviors
- */
-export function detectConversationPattern(
-  messageHistory: ChatMessage[],
-): string {
-  const lastMessage =
-    messageHistory[messageHistory.length - 1]?.text.toLowerCase() || "";
-
-  // Common patterns and appropriate response styles
-  if (lastMessage.includes("gm") || lastMessage.includes("gn"))
-    return "greeting";
-  if (lastMessage.includes("wdyt") || lastMessage.includes("thoughts?"))
-    return "opinion";
-  if (lastMessage.includes("?")) return "question";
-  if (lastMessage.includes("lol") || lastMessage.includes("lmao"))
-    return "humor";
-  if (lastMessage.includes("agree") || lastMessage.includes("disagree"))
-    return "discussion";
-  if (lastMessage.includes("wen") || lastMessage.includes("soon"))
-    return "speculation";
-  if (lastMessage.includes("wagmi") || lastMessage.includes("lfg"))
-    return "hype";
-  if (lastMessage.includes("fren") || lastMessage.includes("ser"))
-    return "crypto-native";
-
-  return "general";
 }
 
 /**

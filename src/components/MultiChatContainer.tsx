@@ -107,15 +107,15 @@ export default function MultiChatContainer({ fid }: Props) {
       matchData?.matches &&
       matchData.matches.length === 0 &&
       matchData.currentRound > matchData.totalRounds &&
-      // Safeguard: Only finish if we have some round results
-      roundResults.length > 0 &&
-      // Safeguard: Ensure we've played at least one round worth of matches
-      roundResults.length >= 2
+      // Safeguard: Only finish if we have completed all rounds worth of results
+      roundResults.length === matchData.totalRounds &&
+      // Extra safeguard: ensure at least one result
+      roundResults.length > 0
     ) {
       console.log(`[MultiChatContainer] Game finished. Round ${matchData.currentRound}/${matchData.totalRounds}, Results: ${roundResults.length}`);
       setGameFinished(true);
     }
-  }, [matchData, gameFinished, roundResults.length]);
+  }, [matchData?.currentRound, matchData?.totalRounds, matchData?.matches?.length, gameFinished, roundResults.length]);
 
   // Track round transitions for loading state
   useEffect(() => {
@@ -168,8 +168,9 @@ export default function MultiChatContainer({ fid }: Props) {
   }, []);
 
   // Initialize votes from match data and track new matches
+  // Only depend on matches array length and IDs, not the whole matchData object
   useEffect(() => {
-    if (matchData?.matches) {
+    if (matchData?.matches && Array.isArray(matchData.matches)) {
       const newVotes: VoteState = {};
       const newMatches = new Set<string>();
 
@@ -191,27 +192,29 @@ export default function MultiChatContainer({ fid }: Props) {
         }, 5000);
       }
     }
-  }, [matchData]);
+  }, [matchData?.matches?.length, matchData?.matches?.map((m: any) => m.id).join(","), votes]);
 
   // Sync roundResults from server voteHistory
+  // Only update if history length or content actually changes
   useEffect(() => {
-    if (matchData?.voteHistory) {
+    if (matchData?.voteHistory && Array.isArray(matchData.voteHistory)) {
       const history = matchData.voteHistory as any[];
-      // Map voteHistory to RoundResult
-      const newResults: RoundResult[] = history.map((h) => ({
-        roundNumber: h.roundNumber || 1,
-        correct: h.correct,
-        opponentUsername: h.opponentUsername || "Unknown",
-        opponentType: h.opponentType || "BOT",
-        opponentFid: 0, // Not critical for summary
-      }));
+      
+      // Only update if count changed (efficient check before deep compare)
+      if (history.length !== roundResults.length) {
+        // Map voteHistory to RoundResult
+        const newResults: RoundResult[] = history.map((h) => ({
+          roundNumber: h.roundNumber || 1,
+          correct: h.correct,
+          opponentUsername: h.opponentUsername || "Unknown",
+          opponentType: h.opponentType || "BOT",
+          opponentFid: 0, // Not critical for summary
+        }));
 
-      // Simple deep compare to avoid infinite loops
-      if (JSON.stringify(newResults) !== JSON.stringify(roundResults)) {
         setRoundResults(newResults);
       }
     }
-  }, [matchData?.voteHistory, roundResults]);
+  }, [matchData?.voteHistory?.length, matchData?.voteHistory?.map((v: any) => v.roundNumber).join(",")]);
 
   // Show reveal screen when round ends (all matches locked, no new matches available)
   useEffect(() => {
