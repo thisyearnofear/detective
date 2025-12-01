@@ -20,7 +20,7 @@ export interface Bot extends UserProfile {
   originalAuthor: UserProfile; // The user the bot is impersonating
   recentCasts: any[]; // Raw cast data for context
   style: string; // Inferred writing style
-  personality?: any; // Behavioral patterns - imported from botProactive.ts to avoid circular dependency
+  personality?: any; // Complete behavioral + linguistic patterns from botProactive.ts
 }
 
 // Represents a real player in the game

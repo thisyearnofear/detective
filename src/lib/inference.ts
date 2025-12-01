@@ -346,17 +346,48 @@ export async function generateBotResponse(
     }
   }
 
-  const systemPrompt = `You are @${bot.username}. Respond as they would.
+  // Add personality-based casting patterns context
+  let castingContext = "";
+  if (bot.personality) {
+    const personality = bot.personality;
+    const contextLines = [];
+    
+    if (personality.frequentPhrases?.length > 0) {
+      contextLines.push(`- Favorite phrases: ${personality.frequentPhrases.slice(0, 5).join(", ")}`);
+    }
+    
+    if (personality.opinionMarkers?.length > 0) {
+      contextLines.push(`- Uses opinion words: ${personality.opinionMarkers.slice(0, 5).join(", ")}`);
+    }
+    
+    if (personality.theirGreetings?.length > 0) {
+      contextLines.push(`- Greets with: ${personality.theirGreetings.join(", ")}`);
+    }
+    
+    if (personality.emotionalTone && personality.emotionalTone !== "neutral") {
+      contextLines.push(`- Emotional tone: ${personality.emotionalTone} (${Math.round(personality.toneConfidence * 100)}% confident)`);
+    }
+    
+    if (personality.usesCasuallang) {
+      contextLines.push(`- Uses casual language and slang`);
+    }
+    
+    if (contextLines.length > 0) {
+      castingContext = "\n\nCAST-DERIVED COMMUNICATION PATTERNS:\n" + contextLines.join("\n");
+    }
+  }
 
-THEIR ACTUAL POSTS (real style):
-${recentPosts.slice(0, 8).map((p) => `"${p}"`).join("\n")}
+  const systemPrompt = `You are @${bot.username}. Respond EXACTLY as they actually do based on their real posts.
+
+THEIR ACTUAL POSTS (study these - this is their REAL voice):
+${recentPosts.slice(0, 10).map((p) => `"${p}"`).join("\n")}
 
 KEY TRAITS:
 - Tone: ${baseStyle}
 - Emoji user: ${metadata.emojis === "true" ? "yes" : "no"}
 - Style: ${metadata.caps === "true" ? "proper caps" : "casual caps"}
 - Common phrases: ${commonPhrases.length > 0 ? commonPhrases.join(", ") : "varied"}
-- Posting pattern: Typically writes ${lengthGuidance}${personalityContext}
+- Posting pattern: Typically writes ${lengthGuidance}${personalityContext}${castingContext}
 
 RESPONSE LENGTH GUIDANCE:
 - They typically write ${lengthDistribution.dominantPattern} posts (${lengthDistribution.avgLength} chars average)
@@ -366,17 +397,18 @@ RESPONSE LENGTH GUIDANCE:
 CURRENT CONVERSATION:
 ${conversationContext || "[conversation starting]"}
 
-GUIDELINES FOR YOUR RESPONSE:
-✓ Answer their actual question if they asked one
-✓ React naturally to what they said
-✓ Match their tone exactly
-✓ Be genuine - avoid corporate phrases
+CRITICAL GUIDELINES FOR YOUR RESPONSE:
+✓ Use THEIR phrases and speech patterns from above
+✓ Match THEIR exact tone and style
+✓ Keep it SHORT and natural - no corporate language
+✓ Sound like a real person, not an AI
+✓ If they're casual, be casual. If they're witty, be witty.
 
-GOOD RESPONSES: "haha true", "what do you mean", "facts", "lmk"
-BAD RESPONSES: "That's interesting!", "I appreciate you sharing", "How can I help", "Great point!"
+GOOD RESPONSES (examples of authentic, brief reactions): "haha true", "what do you mean", "facts", "lmk", "??", "no cap"
+BAD RESPONSES (never sound like this): "That's interesting!", "I appreciate you sharing", "How can I help", "Great point!", "Fascinating!"
 
 Context: ${userIntent} conversation
-Now respond as @${bot.username} would:`;
+Now respond as @${bot.username} would - keep it SHORT and use their actual voice:`;
 
   try {
     const response = await fetch(VENICE_API_URL, {
