@@ -5,28 +5,223 @@ import { RESPONSE_STYLES } from "./botBehavior";
 
 /**
  * Cast-derived personality profile based on actual communication patterns
- * NOT based on status/followers - based on how they actually communicate
+ * SINGLE SOURCE OF TRUTH - includes both behavioral and linguistic patterns
  */
 export interface PersonalityProfile {
-    initiatesConversations: boolean; // Do they start threads/post greetings?
-    asksQuestions: boolean; // High question frequency in casts
-    isDebater: boolean; // Uses disagreement/opinion phrases
+    initiatesConversations: boolean;
+    asksQuestions: boolean;
+    isDebater: boolean;
     communicationStyle: "terse" | "conversational" | "verbose";
-    proactiveRate: number; // 0.0 to 1.0 - derived from their actual behavior
-    theirGreetings: string[]; // Their actual greeting patterns
-    theirQuestions: string[]; // Their actual question patterns
+    proactiveRate: number;
+    theirGreetings: string[];
+    theirQuestions: string[];
+    frequentPhrases: string[];
+    responseStarters: string[];
+    responseClosers: string[];
+    statementPatterns: string[];
+    humorPatterns: string[];
+    opinionMarkers: string[];
+    emotionalTone: "positive" | "neutral" | "sarcastic" | "critical" | "mixed";
+    toneConfidence: number;
+    topicKeywords: string[];
+    usesContractions: boolean;
+    usesCasuallang: boolean;
+    reactionEmojis: string[];
+    byePatterns: string[];
+    averageResponseLength: number;
+}
+
+function extractFrequentPhrases(casts: string[]): string[] {
+    const phraseFreq: Record<string, number> = {};
+
+    casts.forEach((cast) => {
+        const words = cast.toLowerCase().split(/\s+/);
+        for (let i = 0; i < words.length - 2; i++) {
+            for (let len = 3; len <= 5 && i + len <= words.length; len++) {
+                const phrase = words.slice(i, i + len).join(" ");
+                if (phrase.length > 10 && !phrase.includes("http")) {
+                    phraseFreq[phrase] = (phraseFreq[phrase] || 0) + 1;
+                }
+            }
+        }
+    });
+
+    return Object.entries(phraseFreq)
+        .filter(([_, count]) => count >= 2)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 15)
+        .map(([phrase]) => phrase.trim());
+}
+
+function extractResponseStarters(casts: string[]): string[] {
+    const starters = new Set<string>();
+    casts.forEach((cast) => {
+        const firstSentence = cast.split(/[.!?]/)[0];
+        if (!firstSentence || firstSentence.length < 3) return;
+        const words = firstSentence.toLowerCase().trim().split(/\s+/);
+        if (words.length > 0) {
+            const starter = words.slice(0, Math.min(3, words.length)).join(" ");
+            if (starter.length > 2) starters.add(starter);
+        }
+    });
+    return Array.from(starters).slice(0, 20);
+}
+
+function extractResponseClosers(casts: string[]): string[] {
+    const closers = new Set<string>();
+    casts.forEach((cast) => {
+        const sentences = cast.split(/[.!?]+/);
+        const lastSentence = sentences[sentences.length - 2];
+        if (!lastSentence || lastSentence.length < 2) return;
+        const words = lastSentence.trim().toLowerCase().split(/\s+/);
+        const closer = words.slice(Math.max(0, words.length - 3)).join(" ");
+        if (closer.length > 2) closers.add(closer);
+    });
+    return Array.from(closers).slice(0, 15);
+}
+
+function extractStatementPatterns(casts: string[]): string[] {
+    return casts
+        .filter((c) => !c.includes("?"))
+        .map((c) => {
+            const match = c.match(/[^.!?]+[.!?]/);
+            return match ? match[0].trim() : null;
+        })
+        .filter((s): s is string => s !== null && s.length > 5 && s.length < 200)
+        .slice(0, 15);
+}
+
+function extractHumorPatterns(casts: string[]): string[] {
+    return casts.filter((c) =>
+        /\b(lol|haha|😂|lmao|💀)\b/i.test(c)
+    ).slice(0, 10);
+}
+
+function extractOpinionMarkers(casts: string[]): string[] {
+    const markers = new Set<string>();
+    const opinionWords =
+        /\b(think|believe|imo|tbh|honestly|actually|clearly|obviously|disagree|agree|wrong|right|facts|cap|no cap|fr)\b/gi;
+    casts.forEach((cast) => {
+        const matches = cast.match(opinionWords);
+        if (matches) {
+            matches.forEach((m) => markers.add(m.toLowerCase()));
+        }
+    });
+    return Array.from(markers).slice(0, 15);
+}
+
+function analyzeEmotionalTone(casts: string[]): {
+    tone: "positive" | "neutral" | "sarcastic" | "critical" | "mixed";
+    confidence: number;
+} {
+    const positiveWords = /\b(love|amazing|great|awesome|best|cool|bullish|gm)\b/gi;
+    const negativeWords = /\b(hate|terrible|awful|worst|bad|sucks|trash|bearish|gn)\b/gi;
+    const sarcasticPatterns = /\b(sure|right|yeah right|obviously|clearly)\b/gi;
+
+    let positiveCount = 0,
+        negativeCount = 0,
+        sarcasticCount = 0;
+    casts.forEach((cast) => {
+        positiveCount += (cast.match(positiveWords) || []).length;
+        negativeCount += (cast.match(negativeWords) || []).length;
+        sarcasticCount += (cast.match(sarcasticPatterns) || []).length;
+    });
+
+    const total = positiveCount + negativeCount + sarcasticCount;
+    if (total === 0) return { tone: "neutral", confidence: 0 };
+
+    if (sarcasticCount > Math.max(positiveCount, negativeCount)) {
+        return { tone: "sarcastic", confidence: sarcasticCount / total };
+    }
+    if (negativeCount > positiveCount) {
+        return { tone: "critical", confidence: negativeCount / total };
+    }
+    if (positiveCount > negativeCount) {
+        return { tone: "positive", confidence: positiveCount / total };
+    }
+    return { tone: "mixed", confidence: 0.5 };
+}
+
+function extractTopicKeywords(casts: string[]): string[] {
+    const keywords: Record<string, number> = {};
+    const stopWords = new Set([
+        "the", "a", "an", "and", "or", "but", "is", "are", "was", "were", "be", "have",
+        "has", "had", "do", "does", "did", "will", "would", "could", "should", "i", "you",
+        "he", "she", "it", "we", "they", "this", "that", "of", "in", "on", "at", "to", "for"
+    ]);
+
+    casts.forEach((cast) => {
+        const words = cast.toLowerCase().replace(/[^a-z0-9\s]/g, "").split(/\s+/);
+        words.forEach((word) => {
+            if (word.length > 4 && !stopWords.has(word)) {
+                keywords[word] = (keywords[word] || 0) + 1;
+            }
+        });
+    });
+
+    return Object.entries(keywords)
+        .filter(([_, count]) => count >= 2)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 20)
+        .map(([keyword]) => keyword);
+}
+
+function extractReactionEmojis(casts: string[]): string[] {
+    const emojiSet = new Set<string>();
+    const emojiRegex = /[\u{1F300}-\u{1F9FF}]/gu;
+    casts.forEach((cast) => {
+        const matches = cast.match(emojiRegex);
+        if (matches) {
+            matches.forEach((emoji) => emojiSet.add(emoji));
+        }
+    });
+    return Array.from(emojiSet).slice(0, 15);
+}
+
+function extractByePatterns(casts: string[]): string[] {
+    const goodbyes = new Set<string>();
+    const goodbyePattern =
+        /\b(bye|goodbye|see ya|later|ttyl|gotta go|catch you|peace|out|cya|cu l8r|talk later)\b/gi;
+    casts.forEach((cast) => {
+        const matches = cast.match(goodbyePattern);
+        if (matches) {
+            matches.forEach((m) => goodbyes.add(m.toLowerCase()));
+        }
+    });
+    return Array.from(goodbyes);
+}
+
+function detectLanguageUse(casts: string[]): {
+    usesContractions: boolean;
+    usesCasuallang: boolean;
+} {
+    const contractionPattern =
+        /\b(don't|doesn't|didn't|won't|wouldn't|can't|couldn't|isn't|aren't|i'm|you're|he's|she's|it's|that's|there's)\b/i;
+    const casualLangPattern =
+        /\b(lol|tbh|ngl|imo|imho|fyi|btw|smh|omg|wtf|yeah|yea|nah|nope|gonna|gotta|wanna|kinda|sorta|ur|u|r|y|ez|ty|np|hmu|lmk|rn|bc|cuz|fr|no cap|cap|bet|sus|lit|fire|tea|salty|mad|lowkey|highkey)\b/i;
+
+    let contractionCount = 0,
+        casualCount = 0;
+    casts.forEach((cast) => {
+        if (contractionPattern.test(cast)) contractionCount++;
+        if (casualLangPattern.test(cast)) casualCount++;
+    });
+
+    return {
+        usesContractions: contractionCount / casts.length > 0.3,
+        usesCasuallang: casualCount / casts.length > 0.2,
+    };
 }
 
 /**
  * Analyze actual cast patterns to infer communication behavior
- * This is the SINGLE SOURCE OF TRUTH for personality
+ * SINGLE SOURCE OF TRUTH for personality - includes linguistic + behavioral patterns
  */
 export function inferPersonality(bot: Bot): PersonalityProfile {
     const casts = bot.recentCasts.map((c) => c.text);
     const castCount = casts.length;
 
     if (castCount === 0) {
-        // Fallback for users with no casts
         return {
             initiatesConversations: false,
             asksQuestions: false,
@@ -35,40 +230,47 @@ export function inferPersonality(bot: Bot): PersonalityProfile {
             proactiveRate: 0.1,
             theirGreetings: ["hi"],
             theirQuestions: [],
+            frequentPhrases: [],
+            responseStarters: [],
+            responseClosers: [],
+            statementPatterns: [],
+            humorPatterns: [],
+            opinionMarkers: [],
+            emotionalTone: "neutral",
+            toneConfidence: 0,
+            topicKeywords: [],
+            usesContractions: false,
+            usesCasuallang: false,
+            reactionEmojis: [],
+            byePatterns: [],
+            averageResponseLength: 100,
         };
     }
 
-    // 1. Do they initiate conversations?
     const greetingPatterns = /^(gm|gn|hey|hi|yo|wsg|sup|good morning|good night)/i;
     const greetingCasts = casts.filter((c) => greetingPatterns.test(c));
-    const initiatesConversations = greetingCasts.length / castCount > 0.15; // 15%+ of casts are greetings
+    const initiatesConversations = greetingCasts.length / castCount > 0.15;
 
-    // Extract their actual greetings for reuse
     const theirGreetings = greetingCasts
-        .map((c) => c.split(/[.!?\n]/)[0].trim()) // First sentence
+        .map((c) => c.split(/[.!?\n]/)[0].trim())
         .filter((g) => g.length > 0 && g.length < 50)
-        .slice(0, 10); // Keep top 10
+        .slice(0, 10);
 
-    // 2. Do they ask questions?
     const questionCasts = casts.filter((c) => c.includes("?"));
-    const asksQuestions = questionCasts.length / castCount > 0.25; // 25%+ are questions
+    const asksQuestions = questionCasts.length / castCount > 0.25;
 
-    // Extract their actual questions for reuse
     const theirQuestions = questionCasts
         .map((c) => {
-            // Extract just the question part
             const questions = c.split(/[.!]/);
             return questions.find((q: string) => q.includes("?"));
         })
         .filter((q): q is string => q !== undefined && q.length > 0 && q.length < 100)
-        .slice(0, 10); // Keep top 10
+        .slice(0, 10);
 
-    // 3. Are they a debater/opinionated?
     const debatePatterns = /\b(disagree|wrong|actually|imo|tbh|honestly|clearly|obviously)\b/i;
     const debateCasts = casts.filter((c) => debatePatterns.test(c));
-    const isDebater = debateCasts.length > 5; // Absolute count, not ratio
+    const isDebater = debateCasts.length > 5;
 
-    // 4. Communication style based on average length
     const totalLength = casts.reduce((sum, c) => sum + c.length, 0);
     const avgLength = totalLength / castCount;
     let communicationStyle: "terse" | "conversational" | "verbose";
@@ -80,16 +282,17 @@ export function inferPersonality(bot: Bot): PersonalityProfile {
         communicationStyle = "verbose";
     }
 
-    // 5. Calculate proactive rate based on THEIR behavior
-    // If they often start conversations, they're more likely to initiate
-    let proactiveRate = 0.1; // Base 10%
+    let proactiveRate = 0.1;
     if (initiatesConversations) {
-        proactiveRate = 0.3 + Math.random() * 0.2; // 30-50%
+        proactiveRate = 0.3 + Math.random() * 0.2;
     }
     if (asksQuestions) {
-        proactiveRate += 0.1; // Bonus for curious people
+        proactiveRate += 0.1;
     }
-    proactiveRate = Math.min(proactiveRate, 0.6); // Cap at 60%
+    proactiveRate = Math.min(proactiveRate, 0.6);
+
+    const { tone, confidence } = analyzeEmotionalTone(casts);
+    const { usesContractions, usesCasuallang } = detectLanguageUse(casts);
 
     return {
         initiatesConversations,
@@ -99,6 +302,20 @@ export function inferPersonality(bot: Bot): PersonalityProfile {
         proactiveRate,
         theirGreetings: theirGreetings.length > 0 ? theirGreetings : ["gm", "hey"],
         theirQuestions: theirQuestions.length > 0 ? theirQuestions : [],
+        frequentPhrases: extractFrequentPhrases(casts),
+        responseStarters: extractResponseStarters(casts),
+        responseClosers: extractResponseClosers(casts),
+        statementPatterns: extractStatementPatterns(casts),
+        humorPatterns: extractHumorPatterns(casts),
+        opinionMarkers: extractOpinionMarkers(casts),
+        emotionalTone: tone,
+        toneConfidence: confidence,
+        topicKeywords: extractTopicKeywords(casts),
+        usesContractions,
+        usesCasuallang,
+        reactionEmojis: extractReactionEmojis(casts),
+        byePatterns: extractByePatterns(casts),
+        averageResponseLength: Math.round(avgLength),
     };
 }
 
@@ -147,7 +364,7 @@ export function analyzeHumanResponse(message: string): {
 
 /**
  * Generate adaptive follow-up based on human behavior and bot's personality
- * Now with coherence-aware evasion instead of template cycling
+ * Uses extracted casting patterns from personality profile
  */
 export function generateAdaptiveFollowup(
     humanResponse: string,
@@ -156,10 +373,16 @@ export function generateAdaptiveFollowup(
     const analysis = analyzeHumanResponse(humanResponse);
 
     // Counter-testing: Human is testing the bot
-    // CRITICAL: Never admit to being a bot - deflect genuinely
+    // CRITICAL: Never admit to being a bot - deflect with opinion markers if available
     if (analysis.isCounterTesting) {
+        if (personality.isDebater && personality.opinionMarkers.length > 0) {
+            const marker = personality.opinionMarkers[
+                Math.floor(Math.random() * personality.opinionMarkers.length)
+            ];
+            return marker;
+        }
+        
         if (personality.isDebater) {
-            // Genuine deflection via topic shift, not reversal
             const deflections = personality.communicationStyle === "terse" 
                 ? RESPONSE_STYLES.deflectTerse 
                 : RESPONSE_STYLES.deflectVerbose;
@@ -174,8 +397,14 @@ export function generateAdaptiveFollowup(
     }
 
     // Evasive: Human is avoiding the question
-    // Show suspicion but don't force confrontation
+    // Use response starters or templates
     if (analysis.isEvasive && personality.asksQuestions) {
+        if (personality.responseStarters.length > 0) {
+            return personality.responseStarters[
+                Math.floor(Math.random() * personality.responseStarters.length)
+            ];
+        }
+        
         const evasiveResponses = personality.communicationStyle === "terse"
             ? RESPONSE_STYLES.evasiveTerse
             : RESPONSE_STYLES.evasiveVerbose;
@@ -184,8 +413,14 @@ export function generateAdaptiveFollowup(
     }
 
     // Defensive: Human is pushing back
-    // Respect their boundary without backing down entirely
+    // Use response closers or fallback
     if (analysis.isDefensive) {
+        if (personality.responseClosers.length > 0) {
+            return personality.responseClosers[
+                Math.floor(Math.random() * personality.responseClosers.length)
+            ];
+        }
+        
         const defResponse = personality.communicationStyle === "terse"
             ? RESPONSE_STYLES.defensiveTerse[0]
             : RESPONSE_STYLES.defensiveVerbose[0];
@@ -193,16 +428,40 @@ export function generateAdaptiveFollowup(
         return defResponse;
     }
 
-    // Agreeable: Continue contextually
-    // Don't cycle templates - engage with what they actually said
+    // Agreeable: Continue contextually with their actual patterns
     if (analysis.isAgreeable) {
+        if (personality.responseStarters.length > 0) {
+            const starter = personality.responseStarters[
+                Math.floor(Math.random() * personality.responseStarters.length)
+            ];
+            
+            // If they ask questions, include one from their pattern
+            if (personality.asksQuestions && personality.theirQuestions.length > 0) {
+                const followUpChance = 
+                    personality.communicationStyle === "terse" ? 0.05 : 0.25;
+                
+                if (Math.random() < followUpChance) {
+                    const question = personality.theirQuestions[
+                        Math.floor(Math.random() * personality.theirQuestions.length)
+                    ];
+                    
+                    if (personality.communicationStyle === "terse") {
+                        return starter;
+                    }
+                    return `${starter}. ${question}`.substring(0, 150);
+                }
+            }
+            
+            return starter;
+        }
+        
         const acknowledgments = personality.communicationStyle === "terse" 
             ? RESPONSE_STYLES.agreeTerse 
             : RESPONSE_STYLES.agreeVerbose;
         
         const ack = acknowledgments[Math.floor(Math.random() * acknowledgments.length)];
 
-        // If they ask questions, ask back contextually (more likely for verbose/curious)
+        // If they ask questions, ask back contextually
         if (personality.asksQuestions && personality.theirQuestions.length > 0) {
             const followUpChance = 
                 personality.communicationStyle === "terse" ? 0.05 : 0.25;

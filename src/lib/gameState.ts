@@ -200,20 +200,18 @@ class GameManager {
       lastActiveTime: Date.now(),
     };
 
-    // Create bot
-    const bot: Bot = {
+    // Create bot with complete personality profile (includes linguistic + behavioral patterns)
+    const botData: Bot = {
       ...userProfile,
       type: "BOT",
       originalAuthor: userProfile,
       recentCasts,
       style,
-      personality: inferPersonality({
-        ...userProfile,
-        type: "BOT",
-        originalAuthor: userProfile,
-        recentCasts,
-        style,
-      } as Bot),
+    };
+
+    const bot: Bot = {
+      ...botData,
+      personality: inferPersonality(botData),
     };
 
     this.state!.players.set(userProfile.fid, player);
