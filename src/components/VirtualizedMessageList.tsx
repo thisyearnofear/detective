@@ -43,11 +43,11 @@ function estimateMessageHeight(text: string): number {
 }
 
 // MEMOIZED MESSAGE COMPONENT
-const MessageBubble = memo(({ 
-  message, 
-  isCurrentUser, 
-  opponentColors, 
-  isFarcasterFrame 
+const MessageBubble = memo(({
+  message,
+  isCurrentUser,
+  opponentColors,
+  isFarcasterFrame
 }: {
   message: Message;
   isCurrentUser: boolean;
@@ -57,17 +57,15 @@ const MessageBubble = memo(({
   return (
     <div className={`flex flex-col ${isCurrentUser ? "items-end" : "items-start"} mb-2`}>
       <div
-        className={`${
-          isFarcasterFrame ? "max-w-[85%]" : "max-w-xs md:max-w-md"
-        } rounded-lg ${
-          isFarcasterFrame ? "px-2 py-1" : "px-3 py-2"
-        } ${isCurrentUser ? "bg-blue-600 text-white" : "bg-slate-700 text-gray-200"}`}
+        className={`${isFarcasterFrame ? "max-w-[85%]" : "max-w-xs md:max-w-md"
+          } rounded-lg ${isFarcasterFrame ? "px-2 py-1" : "px-3 py-2"
+          } ${isCurrentUser ? "bg-blue-600 text-white" : "bg-slate-700 text-gray-200"}`}
         style={
           !isCurrentUser && opponentColors
             ? {
-                backgroundColor: `rgba(${opponentColors.primary[0]}, ${opponentColors.primary[1]}, ${opponentColors.primary[2]}, 0.15)`,
-                borderLeft: `3px solid rgb(${opponentColors.primary[0]}, ${opponentColors.primary[1]}, ${opponentColors.primary[2]})`,
-              }
+              backgroundColor: `rgba(${opponentColors.primary[0]}, ${opponentColors.primary[1]}, ${opponentColors.primary[2]}, 0.15)`,
+              borderLeft: `3px solid rgb(${opponentColors.primary[0]}, ${opponentColors.primary[1]}, ${opponentColors.primary[2]})`,
+            }
             : {}
         }
       >
@@ -84,17 +82,17 @@ const MessageBubble = memo(({
 
 MessageBubble.displayName = 'MessageBubble';
 
-export default function VirtualizedMessageList({
+const VirtualizedMessageList = memo(({
   messages,
   currentUserId,
   containerHeight,
   opponentColors,
-}: Props) {
+}: Props) => {
   const { isFarcasterFrame } = useViewport();
   const containerRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [containerHeightPx, setContainerHeightPx] = useState(300);
-  
+
   // Virtual keyboard handling
   const isKeyboardOpen = useVirtualKeyboard((isOpen) => {
     if (isOpen && containerRef.current) {
@@ -113,14 +111,14 @@ export default function VirtualizedMessageList({
   // Find visible range based on scroll position
   let startIndex = 0;
   let endIndex = messages.length - 1;
-  
+
   for (let i = 0; i < messages.length; i++) {
     if (cumulativeHeights[i] >= scrollTop - BASE_ITEM_HEIGHT * OVERSCAN) {
       startIndex = Math.max(0, i - OVERSCAN);
       break;
     }
   }
-  
+
   for (let i = startIndex; i < messages.length; i++) {
     if (cumulativeHeights[i] >= scrollTop + containerHeightPx) {
       endIndex = Math.min(messages.length - 1, i + OVERSCAN);
@@ -173,9 +171,9 @@ export default function VirtualizedMessageList({
   // Auto-scroll to bottom for new messages
   useEffect(() => {
     if (containerRef.current && messages.length > 0) {
-      const isNearBottom = 
+      const isNearBottom =
         scrollTop + containerHeightPx >= totalHeight - BASE_ITEM_HEIGHT * 2;
-      
+
       if (isNearBottom) {
         containerRef.current.scrollTop = containerRef.current.scrollHeight;
       }
@@ -187,7 +185,7 @@ export default function VirtualizedMessageList({
     const messageIndex = startIndex + index;
     const topPosition = cumulativeHeights[messageIndex - 1] || 0;
     const messageHeight = messageHeights[messageIndex];
-    
+
     return (
       <div
         key={message.id}
@@ -233,4 +231,24 @@ export default function VirtualizedMessageList({
       )}
     </div>
   );
-}
+}, (prevProps, nextProps) => {
+  // Custom comparison to prevent re-renders if messages content hasn't changed
+  if (prevProps.messages.length !== nextProps.messages.length) return false;
+  if (prevProps.containerHeight !== nextProps.containerHeight) return false;
+  if (prevProps.currentUserId !== nextProps.currentUserId) return false;
+
+  // Deep compare messages if lengths are same (optimization)
+  // Just check IDs of last message and first message as heuristic?
+  // Or check all IDs?
+  // For chat, checking last message ID is usually enough to detect new messages.
+  // But if messages are edited or loaded from history?
+
+  // Let's check all IDs joined string
+  const prevIds = prevProps.messages.map(m => m.id).join(',');
+  const nextIds = nextProps.messages.map(m => m.id).join(',');
+
+  return prevIds === nextIds &&
+    prevProps.opponentColors === nextProps.opponentColors;
+});
+
+export default VirtualizedMessageList;
