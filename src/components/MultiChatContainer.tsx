@@ -61,6 +61,9 @@ export default function MultiChatContainer({ fid }: Props) {
   const transitionWarningRef = useRef<NodeJS.Timeout | null>(null);
   const [isPreparingRound, setIsPreparingRound] = useState(false);
 
+  // Track last valid round to prevent flashing if API returns partial data
+  const lastValidRoundRef = useRef<number>(1);
+
   // Time synchronization with server
   const [timeOffset, setTimeOffset] = useState(0);
 
@@ -93,6 +96,11 @@ export default function MultiChatContainer({ fid }: Props) {
         if (Math.abs(newOffset - timeOffset) > 100) {
           setTimeOffset(newOffset);
         }
+      }
+
+      // Update last valid round to prevent flashing
+      if (matchData.currentRound) {
+        lastValidRoundRef.current = matchData.currentRound;
       }
     } else if (error) {
       setConsecutiveErrors(prev => prev + 1);
@@ -199,7 +207,7 @@ export default function MultiChatContainer({ fid }: Props) {
   useEffect(() => {
     if (matchData?.voteHistory && Array.isArray(matchData.voteHistory)) {
       const history = matchData.voteHistory as any[];
-      
+
       // Only update if count changed (efficient check before deep compare)
       if (history.length !== roundResults.length) {
         // Map voteHistory to RoundResult
@@ -235,10 +243,10 @@ export default function MultiChatContainer({ fid }: Props) {
       setVotes((prev): VoteState => {
         const currentVote = prev[matchId] || "REAL";
         const newVote = currentVote === "REAL" ? "BOT" : "REAL";
-        
+
         // Optimistic update
         const updated: VoteState = { ...prev, [matchId]: newVote };
-        
+
         // Fire and forget - send to server but don't wait
         fetch("/api/match/vote", {
           method: "POST",
@@ -247,7 +255,7 @@ export default function MultiChatContainer({ fid }: Props) {
         }).catch((error) => {
           console.error("Error updating vote:", error);
         });
-        
+
         return updated;
       });
     },
@@ -423,10 +431,8 @@ export default function MultiChatContainer({ fid }: Props) {
     );
   }
 
-  const {
-    currentRound = 1,
-    totalRounds = 5,
-  } = matchData;
+  const currentRound = matchData.currentRound || lastValidRoundRef.current || 1;
+  const totalRounds = matchData.totalRounds || 5;
 
   if ((matchData as any).gameState && (matchData as any).gameState !== "LIVE") {
     return (
@@ -580,13 +586,13 @@ export default function MultiChatContainer({ fid }: Props) {
             <span className="text-lg">💡</span>
             Quick Tips
           </h3>
-          <div className="space-y-2 text-xs text-slate-300 leading-relaxed">
-            <div>• Each chat lasts 1 minute - make your decision quickly!</div>
-            <div>• Toggle your vote anytime during the chat</div>
-            <div>• Your vote locks when the timer ends</div>
-            <div>• Manage both conversations to maximize your score</div>
-            <div>• Use the 🦄 button for quick emoji access (or type :unicorn:)</div>
-            <div>• You'll face 4 different opponents</div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-300 leading-relaxed">
+            <div>• 1 min rounds - decide fast!</div>
+            <div>• Toggle vote anytime</div>
+            <div>• Vote locks at timer end</div>
+            <div>• Manage both chats</div>
+            <div>• Use 🦄 or :unicorn:</div>
+            <div>• 4 opponents total</div>
           </div>
         </div>
       </div>
