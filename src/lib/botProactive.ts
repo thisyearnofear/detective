@@ -355,7 +355,7 @@ export function analyzeHumanResponse(message: string): {
     return {
         isEvasive: /i don't know|maybe|not sure|idk|dunno/.test(lower),
         isDefensive: /why do you ask|what about you|you first|why\?/.test(lower),
-        isCounterTesting: /are you|bot or human|prove|real or|human or bot/.test(
+        isCounterTesting: /are you (a )?bot|bot or human|prove (you are )?human|real or (bot|ai)|human or (bot|ai)/.test(
             lower,
         ),
         isAgreeable: /yeah|yes|true|agree|same|lol|haha/.test(lower),
