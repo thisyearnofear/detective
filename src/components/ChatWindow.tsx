@@ -4,11 +4,11 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import useSWR from "swr";
 import { EMOJI_SHORTCODES } from "@/lib/constants";
 import { useViewport, responsive } from "@/lib/viewport";
-import { 
-  useOptimizedEmojiProcessor, 
-  useOptimizedScroll, 
+import {
+  useOptimizedEmojiProcessor,
+  useOptimizedScroll,
   requestCache,
-  useMemoryOptimization 
+  useMemoryOptimization
 } from "@/lib/performance";
 import { useHaptics, usePullToRefresh } from "@/lib/mobile";
 import { globalCache } from "@/lib/cache";
@@ -58,7 +58,7 @@ export default function ChatWindow({
   const { safeSetState } = useMemoryOptimization();
   const processEmojis = useOptimizedEmojiProcessor();
   const haptic = useHaptics();
-  
+
   // OPTIMIZED STATE - Reduced re-renders
   const [input, setInput] = useState("");
   const [isTimeUp, setIsTimeUp] = useState(false);
@@ -75,17 +75,17 @@ export default function ChatWindow({
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
-  
+
   // PERFORMANCE OPTIMIZATIONS
   const scrollTimeoutRef = useRef<NodeJS.Timeout>();
-  
+
   // PULL-TO-REFRESH for message updates
-  const { 
-    pullDistance, 
-    isRefreshing, 
-    handleTouchStart, 
-    handleTouchMove, 
-    handleTouchEnd 
+  const {
+    pullDistance,
+    isRefreshing,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd
   } = usePullToRefresh(async () => {
     haptic('medium');
     globalCache.invalidate(`chat_${match.id}`);
@@ -100,17 +100,18 @@ export default function ChatWindow({
   const { data: chatData, error, mutate } = useSWR(
     `/api/chat/batch-poll?matchIds=${match.id}`,
     optimizedFetcher,
-    { 
+    {
       refreshInterval: isFarcasterFrame ? 3000 : 2000, // Slower on mobile to save battery
-      refreshWhenHidden: false, 
+      refreshWhenHidden: false,
       dedupingInterval: 1500,
       revalidateOnFocus: false, // Prevent excessive refetching
       revalidateOnReconnect: true,
+      keepPreviousData: true,
     }
   );
 
   const polledMessages = chatData?.chats?.[match.id]?.messages;
-  
+
   // Clear cache when match changes
   useEffect(() => {
     if (match.id !== lastMatchIdRef.current) {
@@ -118,15 +119,15 @@ export default function ChatWindow({
       setLastValidMessages([]);
     }
   }, [match.id]);
-  
+
   // Use polled messages as the single source of truth, fall back to live data only if poll hasn't loaded yet
   // Prefer polledMessages (from SWR polling) over match.messages to avoid race conditions
   const messages = polledMessages && Array.isArray(polledMessages) && polledMessages.length > 0
     ? polledMessages
     : (match.messages && Array.isArray(match.messages) && match.messages.length > 0)
-    ? match.messages
-    : lastValidMessages;
-  
+      ? match.messages
+      : lastValidMessages;
+
   // Update cache only when messages actually change
   useEffect(() => {
     if (messages && Array.isArray(messages) && messages.length > 0) {
@@ -141,10 +142,10 @@ export default function ChatWindow({
 
     const { scrollTop, scrollHeight, clientHeight } = chatContainer;
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-    
+
     // If user is within 50px of bottom, enable autoscroll
     setShouldAutoScroll(distanceFromBottom < 50);
-    
+
     // Debounced user scrolling flag
     setIsUserScrolling(true);
     if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
@@ -153,22 +154,22 @@ export default function ChatWindow({
     }, 1000);
   }, [safeSetState]);
 
-  useOptimizedScroll(handleScroll, { 
+  useOptimizedScroll(handleScroll, {
     element: chatContainerRef,
     throttle: 16, // 60fps
-    passive: true 
+    passive: true
   });
 
   // OPTIMIZED AUTOSCROLL - RAF-based for smoother performance
   useEffect(() => {
     if (messages.length !== messageCount) {
       setMessageCount(messages.length);
-      
+
       // Only auto-scroll if user isn't actively scrolling and is near bottom
       if (shouldAutoScroll && !isUserScrolling) {
         requestAnimationFrame(() => {
           if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ 
+            messagesEndRef.current.scrollIntoView({
               behavior: isFarcasterFrame ? "auto" : "smooth" // Instant on mobile for better performance
             });
           }
@@ -194,13 +195,13 @@ export default function ChatWindow({
   // OPTIMIZED MESSAGE SENDING with haptic feedback
   const handleSend = useCallback(async () => {
     if (!input.trim()) return;
-    
+
     haptic('light'); // Haptic feedback on send
     const text = input;
     setInput("");
     setLastMessageTime(Date.now());
     setWarningLevel("none");
-    
+
     // Force autoscroll when user sends a message
     setShouldAutoScroll(true);
     setIsUserScrolling(false);
@@ -215,7 +216,7 @@ export default function ChatWindow({
         }).then(res => res.json()),
         0 // No caching for sends
       );
-      
+
       // Invalidate chat cache to get fresh data
       globalCache.invalidate(`chat_${match.id}`);
       mutate();
@@ -245,14 +246,13 @@ export default function ChatWindow({
 
   const getSyncedTime = () => Date.now() + timeOffset;
   const matchDuration = Math.round((match.endTime - getSyncedTime()) / 1000);
-  
+
   // CONSOLIDATED: Single source for all responsive styling
   const styles = {
-    container: `bg-slate-800 rounded-lg transition-all duration-300 relative ${
-      isFarcasterFrame ? responsive.padding.small : 
-      variant === "compact" ? responsive.padding.medium : 
-      responsive.padding.large
-    }`,
+    container: `bg-slate-800 rounded-lg transition-all duration-300 relative ${isFarcasterFrame ? responsive.padding.small :
+      variant === "compact" ? responsive.padding.medium :
+        responsive.padding.large
+      }`,
     chatHeight: isFarcasterFrame ? "h-32" : variant === "compact" ? "h-48" : "h-80",
     spacing: isFarcasterFrame ? "mb-2" : variant === "compact" ? "mb-3" : "mb-4",
     messageSpacing: isFarcasterFrame ? "p-2 space-y-2" : variant === "compact" ? "p-3 space-y-2" : "p-4 space-y-3",
@@ -260,29 +260,26 @@ export default function ChatWindow({
 
   return (
     <div
-      className={`${styles.container} ${
-        warningLevel !== "none" ? "ring-2" : ""
-      } ${warningLevel === "warning" ? "ring-yellow-500 ring-opacity-50" : ""} ${
-        warningLevel === "critical" ? "ring-red-500 ring-opacity-75" : ""
-      }`}
+      className={`${styles.container} ${warningLevel !== "none" ? "ring-2" : ""
+        } ${warningLevel === "warning" ? "ring-yellow-500 ring-opacity-50" : ""} ${warningLevel === "critical" ? "ring-red-500 ring-opacity-75" : ""
+        }`}
       style={
         warningLevel !== "none"
           ? {
-              boxShadow:
-                warningLevel === "warning"
-                  ? "inset 0 0 20px rgba(234, 179, 8, 0.2), 0 0 15px rgba(234, 179, 8, 0.15)"
-                  : "inset 0 0 20px rgba(239, 68, 68, 0.25), 0 0 20px rgba(239, 68, 68, 0.2)",
-            }
+            boxShadow:
+              warningLevel === "warning"
+                ? "inset 0 0 20px rgba(234, 179, 8, 0.2), 0 0 15px rgba(234, 179, 8, 0.15)"
+                : "inset 0 0 20px rgba(239, 68, 68, 0.25), 0 0 20px rgba(239, 68, 68, 0.2)",
+          }
           : {}
       }
     >
       {warningLevel !== "none" && !isTimeUp && (
         <div
-          className={`absolute top-0 left-0 right-0 p-3 text-center text-sm rounded-t-lg font-semibold transition-all ${
-            warningLevel === "warning"
-              ? "bg-gradient-to-r from-yellow-500/30 to-amber-500/20 text-yellow-200 animate-inactivity-warning"
-              : "bg-gradient-to-r from-red-500/40 to-orange-500/30 text-red-100 animate-inactivity-critical"
-          }`}
+          className={`absolute top-0 left-0 right-0 p-3 text-center text-sm rounded-t-lg font-semibold transition-all ${warningLevel === "warning"
+            ? "bg-gradient-to-r from-yellow-500/30 to-amber-500/20 text-yellow-200 animate-inactivity-warning"
+            : "bg-gradient-to-r from-red-500/40 to-orange-500/30 text-red-100 animate-inactivity-critical"
+            }`}
         >
           <div className="flex items-center justify-center gap-2">
             {warningLevel === "warning" && (
@@ -336,7 +333,7 @@ export default function ChatWindow({
       )}
 
       {/* VIRTUALIZED MESSAGE LIST with pull-to-refresh */}
-      <div 
+      <div
         className="relative"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -344,9 +341,9 @@ export default function ChatWindow({
       >
         {/* Pull-to-refresh indicator */}
         {pullDistance > 0 && (
-          <div 
+          <div
             className="absolute top-0 left-0 right-0 flex items-center justify-center z-10 bg-slate-800/90 rounded-t-lg transition-all"
-            style={{ 
+            style={{
               height: Math.min(pullDistance, 60),
               transform: `translateY(-${Math.min(pullDistance, 60)}px)`
             }}
@@ -361,13 +358,13 @@ export default function ChatWindow({
           </div>
         )}
 
-        {error ? (
+        {error && (!messages || messages.length === 0) ? (
           <div className={`${styles.chatHeight} flex items-center justify-center bg-slate-900/50 rounded-lg`}>
             <div className="text-center text-red-400">Failed to load messages.</div>
           </div>
         ) : (
           <VirtualizedMessageList
-            messages={messages}
+            messages={messages || []}
             currentUserId={fid}
             containerHeight={styles.chatHeight}
             opponentColors={opponentColors || undefined}
@@ -387,10 +384,9 @@ export default function ChatWindow({
       ) : (
         <div className={isFarcasterFrame ? responsive.spacing.small : responsive.spacing.medium}>
           <input
-            className={`grow bg-slate-700 rounded-lg ${
-              isFarcasterFrame ? "px-2 py-1.5" : "px-4 py-2"
-            } text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500`}
-            style={{ 
+            className={`grow bg-slate-700 rounded-lg ${isFarcasterFrame ? "px-2 py-1.5" : "px-4 py-2"
+              } text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+            style={{
               fontSize: '16px', // CRITICAL: Prevents mobile zoom
               WebkitAppearance: 'none',
               borderRadius: '0.5rem'
@@ -402,9 +398,8 @@ export default function ChatWindow({
           />
           {!isFarcasterFrame && <EmojiPicker onEmojiSelect={handleEmojiSelect} isCompact={variant !== "full"} />}
           <button
-            className={`bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white font-bold ${
-              isFarcasterFrame ? "py-1.5 px-3" : "py-2 px-4"
-            } ${isFarcasterFrame ? responsive.text.small : responsive.text.medium} rounded-lg transition-colors`}
+            className={`bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white font-bold ${isFarcasterFrame ? "py-1.5 px-3" : "py-2 px-4"
+              } ${isFarcasterFrame ? responsive.text.small : responsive.text.medium} rounded-lg transition-colors`}
             onClick={handleSend}
             disabled={!input.trim()}
           >
