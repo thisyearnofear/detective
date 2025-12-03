@@ -573,6 +573,9 @@ export default function MultiChatContainer({ fid }: Props) {
                 showVoteToggle={true}
                 isNewMatch={newMatchIds.has(match.id)}
                 timeOffset={timeOffset}
+                onRefresh={async () => {
+                  await mutate();
+                }}
               />
             </div>
           );

@@ -1,14 +1,12 @@
 // src/lib/inference.ts
 import { Bot, ChatMessage } from "./types";
 import {
-  calculateResponseTiming,
   addImperfections,
   shouldUseEmojis,
   addEmojis,
   shouldAddRedHerring,
   applyRedHerring,
   extractUserIntent,
-  ResponseTiming,
   ConversationState,
   initializeConversationState,
   validateCoherence,
@@ -410,27 +408,27 @@ export async function generateBotResponse(
   if (bot.personality) {
     const personality = bot.personality;
     const contextLines = [];
-    
+
     if (personality.frequentPhrases?.length > 0) {
       contextLines.push(`- Favorite phrases: ${personality.frequentPhrases.slice(0, 5).join(", ")}`);
     }
-    
+
     if (personality.opinionMarkers?.length > 0) {
       contextLines.push(`- Uses opinion words: ${personality.opinionMarkers.slice(0, 5).join(", ")}`);
     }
-    
+
     if (personality.theirGreetings?.length > 0) {
       contextLines.push(`- Greets with: ${personality.theirGreetings.join(", ")}`);
     }
-    
+
     if (personality.emotionalTone && personality.emotionalTone !== "neutral") {
       contextLines.push(`- Emotional tone: ${personality.emotionalTone} (${Math.round(personality.toneConfidence * 100)}% confident)`);
     }
-    
+
     if (personality.usesCasuallang) {
       contextLines.push(`- Uses casual language and slang`);
     }
-    
+
     if (contextLines.length > 0) {
       castingContext = "\n\nCAST-DERIVED COMMUNICATION PATTERNS:\n" + contextLines.join("\n");
     }
@@ -503,7 +501,7 @@ Now respond as @${bot.username} would - keep it SHORT and use their actual voice
       if (matchId) {
         const state = getOrInitializeConversationState(matchId);
         const coherenceCheck = validateCoherence(botResponse, messageHistory, state);
-        
+
         if (!coherenceCheck.isCoherent) {
           console.log(`[coherenceCheck] Response rejected: ${coherenceCheck.reason}`);
           botResponse = generateFallbackResponse(lengthDistribution, bot.recentCasts);
@@ -570,27 +568,11 @@ Now respond as @${bot.username} would - keep it SHORT and use their actual voice
     }
   } catch (error) {
     console.error("Error generating bot response:", error);
-    
+
     // Return fallback response using only their actual cast history
     return generateFallbackResponse(lengthDistribution, bot.recentCasts);
   }
 }
 
-/**
- * Get response timing for a bot message
- */
-export function getBotResponseTiming(
-  bot: Bot,
-  messageHistory: ChatMessage[],
-  responseLength: number,
-): ResponseTiming {
-  return calculateResponseTiming(
-    responseLength,
-    messageHistory.length === 0,
-    messageHistory,
-    bot.style,
-  );
-}
-
-// Export type for use in other modules
-export type { ResponseTiming } from "./botBehavior";
+// ResponseTiming type is defined in botBehavior.ts but no longer exported here
+// since we moved to inline bot responses with fixed delays

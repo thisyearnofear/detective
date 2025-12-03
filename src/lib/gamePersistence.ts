@@ -200,7 +200,6 @@ export async function saveSession(session: PlayerGameSession): Promise<void> {
       completedMatchIds: Array.from(session.completedMatchIds),
       facedOpponents: Array.from(session.facedOpponents.entries()),
       currentRound: session.currentRound,
-      nextRoundStartTime: session.nextRoundStartTime,
       completedMatchesPerRound: Array.from(session.completedMatchesPerRound.entries()),
     };
     await redis.hset(REDIS_KEYS.sessions, session.fid.toString(), JSON.stringify(serializable));
@@ -212,10 +211,6 @@ export async function saveSession(session: PlayerGameSession): Promise<void> {
 
 /**
  * Load all sessions from Redis (reset for new game cycle)
- * 
- * NOTE: We intentionally DO NOT restore nextRoundStartTime from previous game.
- * Each new game cycle needs fresh session state. Restoring old timing data
- * causes matches to end prematurely in subsequent games.
  */
 export async function loadAllSessions(): Promise<Map<number, PlayerGameSession>> {
   try {
@@ -232,7 +227,6 @@ export async function loadAllSessions(): Promise<Map<number, PlayerGameSession>>
             completedMatchIds: new Set(sessionData.completedMatchIds || []),
             facedOpponents: new Map(sessionData.facedOpponents || []),
             currentRound: 0, // Reset for new game cycle
-            nextRoundStartTime: undefined, // RESET - don't carry over timing from previous game
             completedMatchesPerRound: new Map(sessionData.completedMatchesPerRound || []),
           };
           sessions.set(parseInt(fid, 10), session);
