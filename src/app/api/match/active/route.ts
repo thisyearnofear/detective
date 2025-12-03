@@ -6,6 +6,9 @@ import { NextRequest } from "next/server";
 /**
  * API route to get all active matches for a player.
  * Returns up to 2 simultaneous matches that are currently active.
+ * 
+ * SINGLE SOURCE OF TRUTH: This is the only endpoint that returns match state.
+ * Bot responses are delivered inline via /api/chat/send, not here.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -36,9 +39,6 @@ export async function GET(request: NextRequest) {
 
     // Get all active matches for the player
     const matches = await gameManager.getActiveMatches(playerFid);
-
-    // NOTE: Bot response delivery is now handled exclusively by /api/chat/batch-poll
-    // Removed duplicate delivery logic from here to prevent double messages
 
     // Sanitize matches before sending to client
     const sanitizedMatches = matches.map((match) => ({
@@ -84,8 +84,6 @@ export async function GET(request: NextRequest) {
       slots,
       currentRound: rawState.playerSessions.get(playerFid)?.currentRound || 1,
       totalRounds,
-      nextRoundStartTime:
-        rawState.playerSessions.get(playerFid)?.nextRoundStartTime,
       playerRank,
       gameState: gameState.state,
       // Include cycleId for shared channel optimization

@@ -103,7 +103,6 @@ export interface PlayerGameSession {
   completedMatchIds: Set<string>; // All completed match IDs
   facedOpponents: Map<number, number>; // opponent fid -> times faced
   currentRound: number;
-  nextRoundStartTime?: number;
   completedMatchesPerRound: Map<number, number>; // round number -> count of completed matches
 }
 

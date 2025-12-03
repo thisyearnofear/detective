@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import useSWR from "swr";
 import { EMOJI_SHORTCODES } from "@/lib/constants";
 import { useViewport, responsive } from "@/lib/viewport";
 import {
@@ -11,7 +10,6 @@ import {
   useMemoryOptimization
 } from "@/lib/performance";
 import { useHaptics, usePullToRefresh } from "@/lib/mobile";
-import { globalCache } from "@/lib/cache";
 import EmojiPicker from "./EmojiPicker";
 import VoteToggle from "./VoteToggle";
 import ProgressRingTimer from "./ProgressRingTimer";
@@ -41,6 +39,7 @@ type Props = {
   showVoteToggle?: boolean;
   timeOffset?: number;
   variant?: "full" | "compact" | "minimal"; // Replaces isCompact + isMobileStacked
+  onRefresh?: () => Promise<void>; // Callback to refresh match data
 };
 
 export default function ChatWindow({
@@ -53,6 +52,7 @@ export default function ChatWindow({
   isNewMatch = false,
   timeOffset = 0,
   variant = "full",
+  onRefresh,
 }: Props) {
   const { isFarcasterFrame } = useViewport();
   const { safeSetState } = useMemoryOptimization();
@@ -65,8 +65,6 @@ export default function ChatWindow({
   const [lastMessageTime, setLastMessageTime] = useState(Date.now());
   const [warningLevel, setWarningLevel] = useState<"none" | "warning" | "critical">("none");
   const [messageCount, setMessageCount] = useState(0);
-  const [lastValidMessages, setLastValidMessages] = useState<any[]>([]);
-  const lastMatchIdRef = useRef<string>(match.id);
   const [opponentColors, setOpponentColors] = useState<{
     primary: [number, number, number];
     secondary: [number, number, number];
@@ -79,7 +77,7 @@ export default function ChatWindow({
   // PERFORMANCE OPTIMIZATIONS
   const scrollTimeoutRef = useRef<NodeJS.Timeout>();
 
-  // PULL-TO-REFRESH for message updates
+  // PULL-TO-REFRESH for message updates (calls parent's refresh callback)
   const {
     pullDistance,
     isRefreshing,
@@ -88,52 +86,13 @@ export default function ChatWindow({
     handleTouchEnd
   } = usePullToRefresh(async () => {
     haptic('medium');
-    globalCache.invalidate(`chat_${match.id}`);
-    await mutate();
+    if (onRefresh) {
+      await onRefresh();
+    }
   }, { enabled: isFarcasterFrame });
 
-  // OPTIMIZED POLLING - Adaptive intervals based on visibility
-  const optimizedFetcher = useCallback(async (url: string) => {
-    return requestCache.fetch(url, () => fetch(url).then(res => res.json()), 1500);
-  }, []);
-
-  const { data: chatData, error, mutate } = useSWR(
-    `/api/chat/batch-poll?matchIds=${match.id}`,
-    optimizedFetcher,
-    {
-      refreshInterval: isFarcasterFrame ? 3000 : 2000, // Slower on mobile to save battery
-      refreshWhenHidden: false,
-      dedupingInterval: 1500,
-      revalidateOnFocus: false, // Prevent excessive refetching
-      revalidateOnReconnect: true,
-      keepPreviousData: true,
-    }
-  );
-
-  const polledMessages = chatData?.chats?.[match.id]?.messages;
-
-  // Clear cache when match changes
-  useEffect(() => {
-    if (match.id !== lastMatchIdRef.current) {
-      lastMatchIdRef.current = match.id;
-      setLastValidMessages([]);
-    }
-  }, [match.id]);
-
-  // Use polled messages as the single source of truth, fall back to live data only if poll hasn't loaded yet
-  // Prefer polledMessages (from SWR polling) over match.messages to avoid race conditions
-  const messages = polledMessages && Array.isArray(polledMessages) && polledMessages.length > 0
-    ? polledMessages
-    : (match.messages && Array.isArray(match.messages) && match.messages.length > 0)
-      ? match.messages
-      : lastValidMessages;
-
-  // Update cache only when messages actually change
-  useEffect(() => {
-    if (messages && Array.isArray(messages) && messages.length > 0) {
-      setLastValidMessages(messages);
-    }
-  }, [messages?.length, messages?.map((m: any) => m.id).join(",")]);
+  // Messages now come from props (single source of truth from parent)
+  const messages = match.messages || [];
 
   // OPTIMIZED SCROLL DETECTION - Throttled for performance
   const handleScroll = useCallback(() => {
@@ -217,16 +176,17 @@ export default function ChatWindow({
         0 // No caching for sends
       );
 
-      // Invalidate chat cache to get fresh data
-      globalCache.invalidate(`chat_${match.id}`);
-      mutate();
-    } catch (error) {
+      // Trigger parent refresh to get updated messages
+      if (onRefresh) {
+        await onRefresh();
+      }
+    } catch (err) {
       haptic('error'); // Error haptic
-      console.error("Failed to send message:", error);
+      console.error("Failed to send message:", err);
       // Restore input on error
       setInput(text);
     }
-  }, [input, match.id, fid, haptic, mutate]);
+  }, [input, match.id, fid, haptic, onRefresh]);
 
   const handleTimeUp = useCallback(() => {
     setIsTimeUp(true);
@@ -358,9 +318,9 @@ export default function ChatWindow({
           </div>
         )}
 
-        {error && (!messages || messages.length === 0) ? (
+        {(!messages || messages.length === 0) ? (
           <div className={`${styles.chatHeight} flex items-center justify-center bg-slate-900/50 rounded-lg`}>
-            <div className="text-center text-red-400">Failed to load messages.</div>
+            <div className="text-center text-gray-500">No messages yet...</div>
           </div>
         ) : (
           <VirtualizedMessageList

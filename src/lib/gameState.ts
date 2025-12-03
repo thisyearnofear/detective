@@ -267,6 +267,8 @@ class GameManager {
 
   /**
    * Get active matches for a player, creating new ones as needed.
+   * DETERMINISTIC: Rounds advance immediately when all matches are voted.
+   * No grace periods, no time-based transitions.
    */
   async getActiveMatches(fid: number): Promise<Match[]> {
     await this.ensureInitialized();
@@ -287,46 +289,43 @@ class GameManager {
       return [];
     }
 
-    // Check existing matches - add grace period to prevent premature endings
+    // Check existing matches - auto-lock expired ones, remove completed ones
     let activeMatchCount = 0;
-    const MATCH_END_GRACE_PERIOD = 2000; // 2 second grace period to prevent premature endings
 
     for (const [slotNum, matchId] of session.activeMatches) {
       const match = this.state!.matches.get(matchId);
       if (!match) {
+        // Match doesn't exist, remove from session
         session.activeMatches.delete(slotNum);
-      } else if ((match.endTime + MATCH_END_GRACE_PERIOD) <= now && !match.voteLocked) {
-        // Auto-lock expired match (with grace period)
-        this.lockMatchVote(matchId);
-      } else if ((match.endTime + MATCH_END_GRACE_PERIOD) <= now && match.voteLocked) {
-        // Already locked (with grace period)
+      } else if (match.endTime <= now && !match.voteLocked) {
+        // Time expired and not locked yet - auto-lock
+        await this.lockMatchVote(matchId);
+        // After locking, remove from active matches
+        session.activeMatches.delete(slotNum);
+      } else if (match.voteLocked) {
+        // Vote is locked (completed) - remove from active matches
         session.activeMatches.delete(slotNum);
       } else {
-        // Still active (including grace period)
+        // Still active and not expired
         matches.push(match);
         activeMatchCount++;
       }
     }
 
-    // Round progression logic
-    const ROUND_TRANSITION_GRACE_PERIOD = 3000; // 3 seconds after matches end
-
-    // Check if round is complete: no active matches AND player has played this round
-    // Use completedMatchesPerRound counter (doesn't rely on match objects being in memory)
+    // DETERMINISTIC ROUND PROGRESSION: Advance when all matches are complete
     const matchesPlayedThisRound = session.completedMatchesPerRound.get(session.currentRound) || 0;
-
     const isRoundComplete = activeMatchCount === 0 && session.activeMatches.size === 0 && matchesPlayedThisRound > 0;
-    const isTimeForNextRound = !session.nextRoundStartTime || (now >= session.nextRoundStartTime);
 
     // Debug logging for round transitions
     if (activeMatchCount === 0 && session.activeMatches.size === 0) {
-      console.log(`[GameManager] FID ${fid} Round ${session.currentRound}: isRoundComplete=${isRoundComplete}, isTimeForNextRound=${isTimeForNextRound}, matchesPlayedThisRound=${matchesPlayedThisRound}, nextRoundStartTime=${session.nextRoundStartTime}, now=${now}`);
+      console.log(`[GameManager] FID ${fid} Round ${session.currentRound}: isRoundComplete=${isRoundComplete}, matchesPlayedThisRound=${matchesPlayedThisRound}`);
     }
 
-    if (!session.nextRoundStartTime && activeMatchCount === 0) {
-      // Start round 1
+    if (!session.currentRound || session.currentRound === 0) {
+      // Initialize round 1
+      console.log(`[GameManager] Initializing round 1 for FID ${fid}`);
       session.currentRound = 1;
-      session.nextRoundStartTime = now + MATCH_DURATION;
+      session.activeMatches.clear();
 
       const selectedThisRound = new Set<number>();
 
@@ -338,14 +337,13 @@ class GameManager {
           matches.push(match);
         }
       }
-    } else if (isRoundComplete && session.currentRound < maxRounds && isTimeForNextRound) {
-      // Advance to next round
-      console.log(`[GameManager] Advancing FID ${fid} from round ${session.currentRound} to ${session.currentRound + 1}`);
+    } else if (isRoundComplete && session.currentRound < maxRounds) {
+      // Advance to next round IMMEDIATELY (no grace period)
+      console.log(`[GameManager] ✓ Round ${session.currentRound} complete for FID ${fid}, advancing to round ${session.currentRound + 1}`);
       session.currentRound++;
-      session.nextRoundStartTime = now + MATCH_DURATION;
       session.activeMatches.clear();
 
-      // Track selected opponents within this round to prevent duplicates in same round
+      // Create new matches synchronously
       const selectedThisRound = new Set<number>();
 
       for (let slotNum = 1; slotNum <= SIMULTANEOUS_MATCHES; slotNum++) {
@@ -358,16 +356,9 @@ class GameManager {
           console.warn(`[GameManager] Failed to create match for FID ${fid} round ${session.currentRound} slot ${slotNum}`);
         }
       }
-
-      // Signal to client that new round matches are ready
-    } else if (isRoundComplete && session.currentRound < maxRounds && !isTimeForNextRound) {
-      // Grace period - wait before starting next round
-      if (!session.nextRoundStartTime) {
-        session.nextRoundStartTime = now + ROUND_TRANSITION_GRACE_PERIOD;
-        console.log(`[GameManager] Round ${session.currentRound} complete for FID ${fid}, starting ${ROUND_TRANSITION_GRACE_PERIOD}ms grace period`);
-      }
-    } else if (isRoundComplete && session.currentRound === maxRounds && isTimeForNextRound) {
+    } else if (isRoundComplete && session.currentRound === maxRounds) {
       // Last round complete
+      console.log(`[GameManager] ✓ All rounds complete for FID ${fid}`);
       session.currentRound++;
       session.activeMatches.clear();
     }
@@ -659,7 +650,6 @@ class GameManager {
         completedMatchIds: new Set(),
         facedOpponents: new Map(),
         currentRound: 0,
-        nextRoundStartTime: undefined,
         completedMatchesPerRound: new Map(),
       });
     }
@@ -826,14 +816,14 @@ class GameManager {
       const CLEANUP_GRACE_PERIOD = 5000;
       if (this.state!.finishedAt && now - this.state!.finishedAt > CLEANUP_GRACE_PERIOD) {
         console.log(`[GameManager] Cleanup complete, starting new cycle`);
-        
+
         // Clear game data
         this.state!.players.clear();
         this.state!.bots.clear();
         this.state!.playerSessions.clear();
         this.state!.matches.clear();
         this.state!.leaderboard = [];
-        
+
         // Start new cycle
         this.state!.cycleId = `cycle-${Date.now()}`;
         this.state!.state = "REGISTRATION";
@@ -842,7 +832,7 @@ class GameManager {
         this.state!.countdownStarted = false;
         this.state!.extensionCount = 0;
         this.state!.finishedAt = undefined;
-        
+
         await persistence.saveGameStateMeta({
           cycleId: this.state!.cycleId,
           state: this.state!.state,

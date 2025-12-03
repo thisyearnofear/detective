@@ -1,15 +1,15 @@
 // src/app/api/chat/send/route.ts
 import { NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
-import { generateBotResponse, getBotResponseTiming } from "@/lib/inference";
-import { scheduleBotResponse } from "@/lib/botScheduler";
+import { generateBotResponse } from "@/lib/inference";
 import { Bot } from "@/lib/types";
 
 /**
  * API route to send a message in a match.
  * Expects a POST request with `matchId`, `senderFid`, and `text`.
  *
- * Bot responses are scheduled with timestamps and delivered during polling.
+ * INLINE BOT RESPONSES: Bot responses are generated and delivered immediately
+ * with a natural delay (300-800ms), eliminating scheduler complexity.
  */
 export async function POST(request: Request) {
   try {
@@ -37,30 +37,31 @@ export async function POST(request: Request) {
       );
     }
 
-    // If the opponent is a bot, schedule a response
+    // If the opponent is a bot, generate and deliver response INLINE
     if (match.opponent.type === "BOT") {
       const bot = match.opponent as Bot;
 
-      // Generate and schedule response asynchronously (don't block the response)
-      (async () => {
-        try {
-          console.log(`[chat/send] User FID ${senderFid} sent message to match ${matchId}, opponent is bot FID ${bot.fid}`);
-          
-          const botResponse = await generateBotResponse(bot, match.messages);
-          console.log(`[chat/send] Generated bot response: "${botResponse.substring(0, 50)}${botResponse.length > 50 ? '...' : ''}"`);
+      console.log(`[chat/send] User FID ${senderFid} sent message to match ${matchId}, opponent is bot FID ${bot.fid}`);
 
-          // Calculate realistic timing
-          const timing = getBotResponseTiming(bot, match.messages, botResponse.length);
-          const totalDelay = timing.initialDelay + timing.typingDuration;
-          console.log(`[chat/send] Calculated timing - initialDelay: ${timing.initialDelay}ms, typingDuration: ${timing.typingDuration}ms, totalDelay: ${totalDelay}ms`);
+      try {
+        // Generate bot response
+        const botResponse = await generateBotResponse(bot, match.messages, matchId);
+        console.log(`[chat/send] Generated bot response: "${botResponse.substring(0, 50)}${botResponse.length > 50 ? '...' : ''}"`);
 
-          // Schedule the response in Redis with automatic retry on failure
-          await scheduleBotResponse(matchId, bot.fid, botResponse, totalDelay);
-          console.log(`[chat/send] ✓ Bot response scheduled successfully`);
-        } catch (err) {
-          console.error(`[chat/send] ✗ FAILED to schedule bot response for match ${matchId}:`, err);
-        }
-      })();
+        // Add natural delay (300-800ms) to feel more human
+        // This replaces the complex Redis scheduling system
+        const naturalDelay = 300 + Math.random() * 500; // 300-800ms
+        console.log(`[chat/send] Delaying bot response by ${Math.round(naturalDelay)}ms for natural feel`);
+
+        await new Promise(resolve => setTimeout(resolve, naturalDelay));
+
+        // Deliver the bot response immediately
+        await gameManager.addMessageToMatch(matchId, botResponse, bot.fid);
+        console.log(`[chat/send] ✓ Bot response delivered successfully`);
+      } catch (err) {
+        console.error(`[chat/send] ✗ FAILED to generate/deliver bot response for match ${matchId}:`, err);
+        // Don't fail the user's message if the bot response fails
+      }
     }
 
     return NextResponse.json({ success: true, message });
