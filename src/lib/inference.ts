@@ -284,9 +284,63 @@ function analyzePostLengthDistribution(posts: string[]): {
 }
 
 /**
+ * Analyze conversation context to make responses more dynamic
+ */
+function analyzeConversationContext(messageHistory: ChatMessage[], botFid: number): {
+  hasUserAskedQuestion: boolean;
+  botRecentResponses: string[];
+  hasRepeatedPhrase: boolean;
+  repeatedPhrase: string | null;
+  messagesSinceBotSpoke: number;
+  conversationDominatedByUser: boolean;
+} {
+  const userMessages = messageHistory.filter(msg => msg.sender.fid !== botFid);
+  const botMessages = messageHistory.filter(msg => msg.sender.fid === botFid);
+
+  // Check if user asked a question recently
+  const lastUserMessage = userMessages[userMessages.length - 1]?.text || "";
+  const hasUserAskedQuestion = lastUserMessage.includes("?") ||
+    lastUserMessage.toLowerCase().startsWith("why") ||
+    lastUserMessage.toLowerCase().startsWith("what") ||
+    lastUserMessage.toLowerCase().startsWith("how") ||
+    lastUserMessage.toLowerCase().startsWith("when") ||
+    lastUserMessage.toLowerCase().startsWith("where") ||
+    lastUserMessage.toLowerCase().startsWith("who");
+
+  // Get bot's last 3 responses
+  const botRecentResponses = botMessages.slice(-3).map(msg => msg.text.toLowerCase().trim());
+
+  // Check for repetition
+  const uniqueRecent = new Set(botRecentResponses);
+  const hasRepeatedPhrase = uniqueRecent.size < botRecentResponses.length;
+  const repeatedPhrase = hasRepeatedPhrase ?
+    botRecentResponses.find((r, i) => botRecentResponses.indexOf(r) !== i) || null :
+    null;
+
+  // Count messages since bot last spoke
+  let messagesSinceBotSpoke = 0;
+  for (let i = messageHistory.length - 1; i >= 0; i--) {
+    if (messageHistory[i].sender.fid === botFid) break;
+    messagesSinceBotSpoke++;
+  }
+
+  // Check if conversation is dominated by user
+  const conversationDominatedByUser = userMessages.length > botMessages.length + 2;
+
+  return {
+    hasUserAskedQuestion,
+    botRecentResponses,
+    hasRepeatedPhrase,
+    repeatedPhrase,
+    messagesSinceBotSpoke,
+    conversationDominatedByUser,
+  };
+}
+
+/**
  * Generates a response for a bot based on its style and the conversation context.
  * Returns both the message and timing information for realistic delivery.
- * Now with coherence validation.
+ * Now with coherence validation and conversation flow awareness.
  */
 export async function generateBotResponse(
   bot: Bot,
@@ -434,6 +488,34 @@ export async function generateBotResponse(
     }
   }
 
+  // Analyze conversation flow for dynamic responses
+  const convContext = analyzeConversationContext(messageHistory, bot.fid);
+
+  // Build adaptive instructions based on conversation state
+  let adaptiveInstructions = "";
+
+  if (convContext.hasUserAskedQuestion) {
+    adaptiveInstructions += "\n🔥 USER ASKED A QUESTION - Answer it directly and naturally in your style.";
+  }
+
+  if (convContext.hasRepeatedPhrase && convContext.repeatedPhrase) {
+    adaptiveInstructions += `\n⚠️ AVOID REPETITION - You just said "${convContext.repeatedPhrase}" twice. Say something different this time.`;
+  }
+
+  if (convContext.messagesSinceBotSpoke > 1) {
+    adaptiveInstructions += "\n💬 BE ENGAGING - User sent multiple messages. Show interest or ask a brief question.";
+  }
+
+  if (convContext.conversationDominatedByUser) {
+    adaptiveInstructions += "\n🎯 ASK SOMETHING - User is doing all the talking. Ask them a short question to balance the conversation.";
+  }
+
+  // If no special context, occasionally ask questions anyway (30% chance)
+  const shouldAskQuestion = Math.random() < 0.3 && messageHistory.length > 2;
+  if (shouldAskQuestion && !convContext.hasUserAskedQuestion) {
+    adaptiveInstructions += "\n❓ SHOW CURIOSITY - Ask them a brief, casual question about what they said.";
+  }
+
   const systemPrompt = `You are @${bot.username}. Respond EXACTLY as they actually do based on their real posts.
 
 THEIR ACTUAL POSTS (study these - this is their REAL voice):
@@ -453,6 +535,7 @@ RESPONSE LENGTH GUIDANCE:
 
 CURRENT CONVERSATION:
 ${conversationContext || "[conversation starting]"}
+${adaptiveInstructions}
 
 CRITICAL GUIDELINES FOR YOUR RESPONSE:
 ✓ Use THEIR phrases and speech patterns from above
@@ -460,8 +543,12 @@ CRITICAL GUIDELINES FOR YOUR RESPONSE:
 ✓ Keep it SHORT and natural - no corporate language
 ✓ Sound like a real person, not an AI
 ✓ If they're casual, be casual. If they're witty, be witty.
+✓ Sometimes ask questions - real people are curious!
 
-GOOD RESPONSES (examples of authentic, brief reactions): "haha true", "what do you mean", "facts", "lmk", "??", "no cap"
+RESPONSE TYPES (vary these based on context):
+- Direct answers: "yeah", "nah", "facts", "fr"
+- Questions: "wdym?", "why?", "you?", "fr?", "how so?"
+- Reactions: "haha", "lol", "oof", "nice", "damn"
 BAD RESPONSES (never sound like this): "That's interesting!", "I appreciate you sharing", "How can I help", "Great point!", "Fascinating!"
 
 Context: ${userIntent} conversation
@@ -483,95 +570,128 @@ Now respond as @${bot.username} would - keep it SHORT and use their actual voice
         temperature: 0.8,
         max_tokens: maxTokens,
       }),
-      signal: AbortSignal.timeout(8000), // 8 second timeout
+      signal: AbortSignal.timeout(5000), // 5 second timeout
     });
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error("Venice API error:", response.status, errorText);
-      // Generate contextual fallback using only their actual words
       return generateFallbackResponse(lengthDistribution, bot.recentCasts);
     }
 
     const data = await response.json();
     let botResponse = data.choices[0]?.message?.content?.trim();
 
-    if (botResponse) {
-      // Validate coherence if we have conversation state
-      if (matchId) {
-        const state = getOrInitializeConversationState(matchId);
-        const coherenceCheck = validateCoherence(botResponse, messageHistory, state);
-
-        if (!coherenceCheck.isCoherent) {
-          console.log(`[coherenceCheck] Response rejected: ${coherenceCheck.reason}`);
-          botResponse = generateFallbackResponse(lengthDistribution, bot.recentCasts);
-        }
-      }
-
-      // Determine if we should add a red herring (make bot suspiciously perfect)
-      if (shouldAddRedHerring(true)) {
-        botResponse = applyRedHerring(botResponse, true, bot.style);
-      } else {
-        // Add human imperfections based on style
-        const isMobile = metadata.avg_length
-          ? parseInt(metadata.avg_length) < 100
-          : false;
-        botResponse = addImperfections(botResponse, baseStyle, isMobile);
-
-        // Add emojis only if the bot's style indicates they use emojis
-        // metadata.emojis === "true" means the bot uses emojis in their posts
-        const botUsesEmojis = metadata.emojis === "true";
-        if (botUsesEmojis) {
-          if (
-            shouldUseEmojis(
-              baseStyle,
-              messageHistory,
-              messageHistory.length === 0,
-            )
-          ) {
-            // true = use multiple emojis (non-conservative), false = use just 1 emoji (conservative)
-            botResponse = addEmojis(botResponse, false);
-          }
-        }
-        // If bot doesn't use emojis, don't add any
-      }
-
-      // Ensure it stays within typical character limits for this person
-      let characterLimit = 240;
-      if (lengthDistribution.dominantPattern === "short") {
-        characterLimit = 50;
-      } else if (lengthDistribution.dominantPattern === "long") {
-        characterLimit = 200;
-      } else if (lengthDistribution.dominantPattern === "medium") {
-        characterLimit = 150;
-      }
-
-      if (botResponse.length > characterLimit) {
-        botResponse = botResponse.substring(0, characterLimit - 3);
-        const lastSpace = botResponse.lastIndexOf(" ");
-        if (lastSpace > characterLimit * 0.7) {
-          botResponse = botResponse.substring(0, lastSpace);
-        }
-      }
-
-      // Record the bot's claim for coherence tracking
-      if (matchId) {
-        const state = getOrInitializeConversationState(matchId);
-        recordBotClaim(state, botResponse, messageHistory.length);
-      }
-
-      // Cache the response
-      responseCache.set(cacheKey, botResponse);
-      return botResponse;
-    } else {
-      return "...";
+    if (!botResponse) {
+      throw new Error("Empty response from AI");
     }
-  } catch (error) {
-    console.error("Error generating bot response:", error);
 
-    // Return fallback response using only their actual cast history
+    // Validate coherence if we have conversation state
+    if (matchId) {
+      const state = getOrInitializeConversationState(matchId);
+      const coherenceCheck = validateCoherence(botResponse, messageHistory, state);
+
+      if (!coherenceCheck.isCoherent) {
+        console.log(`[coherenceCheck] Response rejected: ${coherenceCheck.reason}`);
+        // Try to regenerate or fallback
+        return generateFallbackResponse(lengthDistribution, bot.recentCasts);
+      }
+    }
+
+    // Process the response (add imperfections, emojis, etc.)
+    const processedResponse = processBotResponse(
+      botResponse,
+      bot,
+      metadata,
+      baseStyle,
+      lengthDistribution,
+      messageHistory,
+      matchId
+    );
+
+    // Cache the response
+    responseCache.set(cacheKey, processedResponse);
+
+    return processedResponse;
+
+  } catch (error: any) {
+    if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+      console.warn(`[generateBotResponse] AI request timed out after 5s for bot ${bot.username}`);
+    } else {
+      console.error("[generateBotResponse] Error generating response:", error);
+    }
+    // Always return a safe fallback on error
     return generateFallbackResponse(lengthDistribution, bot.recentCasts);
   }
+}
+
+/**
+ * Helper to process the raw bot response with imperfections
+ */
+function processBotResponse(
+  text: string,
+  bot: Bot,
+  metadata: any,
+  baseStyle: string,
+  lengthDistribution: any,
+  messageHistory: ChatMessage[],
+  matchId?: string
+): string {
+  let botResponse = text;
+
+  // Determine if we should add a red herring (make bot suspiciously perfect)
+  if (shouldAddRedHerring(true)) {
+    botResponse = applyRedHerring(botResponse, true, bot.style);
+  } else {
+    // Add human imperfections based on style
+    const isMobile = metadata.avg_length
+      ? parseInt(metadata.avg_length) < 100
+      : false;
+    botResponse = addImperfections(botResponse, baseStyle, isMobile);
+
+    // Add emojis only if the bot's style indicates they use emojis
+    // metadata.emojis === "true" means the bot uses emojis in their posts
+    const botUsesEmojis = metadata.emojis === "true";
+    if (botUsesEmojis) {
+      if (
+        shouldUseEmojis(
+          baseStyle,
+          messageHistory,
+          messageHistory.length === 0,
+        )
+      ) {
+        // true = use multiple emojis (non-conservative), false = use just 1 emoji (conservative)
+        botResponse = addEmojis(botResponse, false);
+      }
+    }
+    // If bot doesn't use emojis, don't add any
+  }
+
+  // Ensure it stays within typical character limits for this person
+  let characterLimit = 240;
+  if (lengthDistribution.dominantPattern === "short") {
+    characterLimit = 50;
+  } else if (lengthDistribution.dominantPattern === "long") {
+    characterLimit = 200;
+  } else if (lengthDistribution.dominantPattern === "medium") {
+    characterLimit = 150;
+  }
+
+  if (botResponse.length > characterLimit) {
+    botResponse = botResponse.substring(0, characterLimit - 3);
+    const lastSpace = botResponse.lastIndexOf(" ");
+    if (lastSpace > characterLimit * 0.7) {
+      botResponse = botResponse.substring(0, lastSpace);
+    }
+  }
+
+  // Record the bot's claim for coherence tracking
+  if (matchId) {
+    const state = getOrInitializeConversationState(matchId);
+    recordBotClaim(state, botResponse, messageHistory.length);
+  }
+
+  return botResponse;
 }
 
 // ResponseTiming type is defined in botBehavior.ts but no longer exported here

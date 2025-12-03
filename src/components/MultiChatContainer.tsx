@@ -131,6 +131,13 @@ export default function MultiChatContainer({ fid }: Props) {
       // Round changed
       if (matchData.currentRound > lastRound) {
         setIsPreparingRound(false);
+
+        // Trigger reveal screen if we have results from the previous round
+        if (batchReveals.length > 0) {
+          setShowRevealScreen(true);
+          // Auto-hide after 5 seconds to let user play next round
+          setTimeout(() => setShowRevealScreen(false), 5000);
+        }
       }
 
       if (lastRound > 0 && matchData.matches?.length === 0) {
@@ -165,7 +172,7 @@ export default function MultiChatContainer({ fid }: Props) {
       if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
       if (transitionWarningRef.current) clearTimeout(transitionWarningRef.current);
     }
-  }, [matchData?.currentRound, matchData?.matches?.length, lastRound, isTransitioning]);
+  }, [matchData?.currentRound, matchData?.matches?.length, lastRound, isTransitioning, batchReveals.length]);
 
   // Cleanup timeouts on unmount
   useEffect(() => {
@@ -467,43 +474,39 @@ export default function MultiChatContainer({ fid }: Props) {
     );
   }
 
+  // Show reveal screen overlay if active (renders via portal on top of matches)
+  const revealOverlay = showRevealScreen && batchReveals.length > 0 ? (
+    <RoundTransition
+      isVisible={true}
+      phase="reveal"
+      reveals={batchReveals}
+      stats={{
+        accuracy: roundResults.length > 0 ? (roundResults.filter((r) => r.correct).length / roundResults.length) * 100 : 0,
+        correct: roundResults.filter((r) => r.correct).length,
+        total: roundResults.length,
+        playerRank: matchData?.playerRank,
+        totalPlayers: matchData?.playerPool?.totalPlayers,
+      }}
+      nextRoundNumber={currentRound}
+    />
+  ) : null;
+
   if (matches.length === 0 || isPreparingRound) {
-    // Show reveal screen if we have reveals to display
-    if (showRevealScreen && batchReveals.length > 0 && !isPreparingRound) {
-      const accuracy =
-        roundResults.length > 0
-          ? (roundResults.filter((r) => r.correct).length / roundResults.length) * 100
-          : 0;
-
-      return (
-        <RoundTransition
-          isVisible={true}
-          phase="reveal"
-          reveals={batchReveals}
-          stats={{
-            accuracy,
-            correct: roundResults.filter((r) => r.correct).length,
-            total: roundResults.length,
-            playerRank: matchData?.playerRank,
-            totalPlayers: matchData?.playerPool?.totalPlayers,
-          }}
-          nextRoundNumber={currentRound + 1}
-        />
-      );
-    }
-
     // Show loading state if transitioning between rounds
     const loaderMessage = transitionTimeoutMessage === "delayed"
       ? "Taking longer than expected... Stand by"
       : "Preparing next round...";
 
     return (
-      <RoundStartLoader
-        roundNumber={currentRound}
-        totalRounds={totalRounds}
-        message={loaderMessage}
-        inline={true}
-      />
+      <>
+        {revealOverlay}
+        <RoundStartLoader
+          roundNumber={currentRound}
+          totalRounds={totalRounds}
+          message={loaderMessage}
+          inline={true}
+        />
+      </>
     );
   }
 
@@ -512,10 +515,11 @@ export default function MultiChatContainer({ fid }: Props) {
 
   return (
     <div className="space-y-4">
+      {revealOverlay}
       {/* Round indicator - more compact on mobile */}
       <div className="text-center mb-2 lg:mb-4">
         <span className="bg-slate-700 px-3 py-1 rounded-full text-xs lg:text-sm text-blue-300">
-          Round {currentRound} of {totalRounds}
+          Round {Math.min(currentRound, totalRounds)} of {totalRounds}
         </span>
         {/* Hide player pool info on mobile to save space */}
         {matchData.playerPool && (
