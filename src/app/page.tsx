@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { sdk } from "@farcaster/miniapp-sdk";
+import AuthInput from "@/components/AuthInput";
 import SpinningDetective from "@/components/SpinningDetective";
 import AnimatedGridBackdrop from "@/components/AnimatedGridBackdrop";
 import StarfieldBackground from "@/components/StarfieldBackground";
@@ -15,7 +16,6 @@ import { fetcher } from "@/lib/fetcher";
 // Main component for the application's home page
 export default function Home() {
   const [sdkUser, setSdkUser] = useState<any>(null);
-  const [authMode, setAuthMode] = useState<"sdk" | "web" | null>(null);
   const [isSdkLoading, setIsSdkLoading] = useState(true);
   const [introComplete, setIntroComplete] = useState(false);
 
@@ -40,7 +40,6 @@ export default function Home() {
 
   const handleLogout = () => {
     setSdkUser(null);
-    setAuthMode(null);
   };
 
   useEffect(() => {
@@ -53,7 +52,6 @@ export default function Home() {
           // Use our enhanced Farcaster authentication
           const farcasterUser = await authenticateWithFarcaster();
           setSdkUser(farcasterUser);
-          setAuthMode("sdk");
           // Tell Farcaster SDK to hide splash screen
           await sdk.actions.ready();
           
@@ -62,23 +60,26 @@ export default function Home() {
           const context = await sdk.context;
           if (context) {
             setSdkUser((context as any).user);
-            setAuthMode("sdk");
             await sdk.actions.ready();
-          } else {
-            // SDK context unavailable, fallback to web mode
-            setAuthMode("web");
           }
         }
       } catch (err) {
         console.log("Farcaster SDK not available, using web mode:", err);
-        // Gracefully fallback to web authentication
-        setAuthMode("web");
       } finally {
         setIsSdkLoading(false);
       }
     };
     initAuth();
   }, []);
+
+  const handleWebAuth = (userProfile: {
+    fid: number;
+    username: string;
+    displayName: string;
+    pfpUrl: string;
+  }) => {
+    setSdkUser(userProfile);
+  };
 
   // Unified game state view - consolidates all game phase logic
   const renderGameState = () => {
@@ -159,34 +160,26 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Farcaster Required Gate */}
-              {authMode === "web" ? (
-                <div className="w-full bg-purple-900/20 border-2 border-purple-500/30 rounded-2xl p-8 text-center space-y-4">
-                  <div className="text-5xl mb-2">🎭</div>
-                  <h3 className="text-xl font-bold text-white">Farcaster Required</h3>
-                  <p className="text-sm text-gray-300 leading-relaxed">
-                    Detective is a Farcaster-exclusive game. Get your account to start playing!
-                  </p>
-                  <a
-                    href="https://farcaster.xyz/~/code/YKR2G8"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn-primary inline-flex items-center gap-2 mt-4"
-                  >
-                    <span>Get Farcaster</span>
-                    <span className="text-xs">→</span>
-                  </a>
-                  <p className="text-xs text-gray-400 mt-4">
-                    Already have Farcaster? Open this game from the Farcaster app.
-                  </p>
-                </div>
+              {/* Game Status Card - Shows live game state */}
+              {gameState ? (
+                <GameStatusCard
+                  gameState={{
+                    state: gameState.state,
+                    playerCount: gameState.playerCount,
+                    registrationEnds: gameState.registrationEnds,
+                    gameEnds: gameState.gameEnds,
+                  }}
+                />
               ) : (
-                // Loading Farcaster auth
-                <div className="w-full bg-white/5 border border-white/10 rounded-xl p-8 text-center">
-                  <SpinningDetective size="md" className="mb-4" />
-                  <p className="text-sm text-gray-300">Connecting to Farcaster...</p>
+                <div className="w-full bg-white/5 border border-white/10 rounded-xl p-6 animate-pulse">
+                  <div className="h-20 bg-white/10 rounded" />
                 </div>
               )}
+
+              {/* Authentication */}
+              <div className="w-full">
+                <AuthInput onAuthSuccess={handleWebAuth} />
+              </div>
 
               {/* Collapsible Sections */}
               <div className="w-full text-center space-y-0 pt-8">
