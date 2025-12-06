@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAccount, useDisconnect } from 'wagmi';
+import { useAccount, useDisconnect, useConnect } from 'wagmi';
 import SpinningDetective from './SpinningDetective';
-import WalletConnectModal from './WalletConnectModal';
 import FarcasterSetupModal from './FarcasterSetupModal';
 
 type Props = {
@@ -20,12 +19,12 @@ type AuthStep = 'connect' | 'verifying' | 'setup-farcaster';
 
 export default function AuthInput({ onAuthSuccess }: Props) {
     const [authStep, setAuthStep] = useState<AuthStep>('connect');
-    const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
     const [isFarcasterModalOpen, setIsFarcasterModalOpen] = useState(false);
     const [error, setError] = useState<string | null>(null);
     
     const { address, isConnected } = useAccount();
     const { disconnect } = useDisconnect();
+    const { connectors, connect } = useConnect();
 
     // Handle wallet connection and Farcaster verification
     useEffect(() => {
@@ -80,13 +79,12 @@ export default function AuthInput({ onAuthSuccess }: Props) {
     };
 
     const handleConnectClick = () => {
-        setIsWalletModalOpen(true);
+        // Use the first available connector (usually injected)
+        const connector = connectors[0];
+        if (connector) {
+            connect({ connector });
+        }
         setError(null);
-    };
-
-    const handleWalletConnected = () => {
-        setIsWalletModalOpen(false);
-        // The useEffect will handle the next step
     };
 
     const handleFarcasterModalClose = () => {
@@ -170,12 +168,6 @@ export default function AuthInput({ onAuthSuccess }: Props) {
                     </p>
                 </div>
             </div>
-
-            <WalletConnectModal
-                isOpen={isWalletModalOpen}
-                onClose={() => setIsWalletModalOpen(false)}
-                onWalletConnected={handleWalletConnected}
-            />
 
             <FarcasterSetupModal
                 isOpen={isFarcasterModalOpen}
