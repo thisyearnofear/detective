@@ -13,11 +13,12 @@ type Props = {
         pfpUrl: string;
         token: string;
     }) => void;
+    onExploreWithoutAuth?: () => void;
 };
 
 type AuthStep = 'connect' | 'verifying' | 'setup-farcaster';
 
-export default function AuthInput({ onAuthSuccess }: Props) {
+export default function AuthInput({ onAuthSuccess, onExploreWithoutAuth }: Props) {
     const [authStep, setAuthStep] = useState<AuthStep>('connect');
     const [isFarcasterModalOpen, setIsFarcasterModalOpen] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -93,6 +94,13 @@ export default function AuthInput({ onAuthSuccess }: Props) {
         setIsFarcasterModalOpen(false);
         setAuthStep('connect');
         disconnect(); // Disconnect wallet to start fresh
+    };
+
+    const handleExploreWithoutAuth = () => {
+        setIsFarcasterModalOpen(false);
+        setAuthStep('connect');
+        disconnect(); // Disconnect wallet to start fresh
+        onExploreWithoutAuth?.();
     };
 
     const handleRetryVerification = () => {
@@ -191,6 +199,7 @@ export default function AuthInput({ onAuthSuccess }: Props) {
             <FarcasterSetupModal
                 isOpen={isFarcasterModalOpen}
                 onClose={handleFarcasterModalClose}
+                onExploreWithoutAuth={handleExploreWithoutAuth}
                 walletAddress={address || ''}
             />
         </>

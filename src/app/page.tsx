@@ -18,6 +18,7 @@ export default function Home() {
   const [sdkUser, setSdkUser] = useState<any>(null);
   const [isSdkLoading, setIsSdkLoading] = useState(true);
   const [introComplete, setIntroComplete] = useState(false);
+  const [isExploringWithoutAuth, setIsExploringWithoutAuth] = useState(false);
 
   useEffect(() => {
     // Auto-advance intro after 2 seconds
@@ -79,6 +80,11 @@ export default function Home() {
     pfpUrl: string;
   }) => {
     setSdkUser(userProfile);
+    setIsExploringWithoutAuth(false); // Reset explore mode when user authenticates
+  };
+
+  const handleExploreWithoutAuth = () => {
+    setIsExploringWithoutAuth(true);
   };
 
   // Unified game state view - consolidates all game phase logic
@@ -146,7 +152,7 @@ export default function Home() {
 
         {/* Main Content - Fades in after hero disappears */}
         <div className={`w-full flex flex-col items-center transition-all duration-1000 ${introComplete ? 'opacity-100' : 'opacity-0'}`}>
-          {!sdkUser ? (
+          {!sdkUser && !isExploringWithoutAuth ? (
             // Not authenticated - Show Farcaster gate
             <div className="w-full max-w-md flex flex-col items-center space-y-8">
               {/* Clean Header */}
@@ -178,7 +184,10 @@ export default function Home() {
 
               {/* Authentication */}
               <div className="w-full">
-                <AuthInput onAuthSuccess={handleWebAuth} />
+                <AuthInput 
+                  onAuthSuccess={handleWebAuth} 
+                  onExploreWithoutAuth={handleExploreWithoutAuth}
+                />
               </div>
 
               {/* Collapsible Sections */}
@@ -242,6 +251,78 @@ export default function Home() {
                   <span className="text-xs opacity-60">→</span>
                 </a>
               </div>
+            </div>
+          ) : !sdkUser && isExploringWithoutAuth ? (
+            // Exploring without auth - Show game info but no ability to play
+            <div className="w-full max-w-md flex flex-col items-center space-y-8">
+              {/* Header with back to auth option */}
+              <div className="w-full flex flex-col items-center space-y-5 text-center">
+                <div className="flex items-center justify-center w-20 h-20 bg-gradient-to-br from-white/10 to-white/5 border-2 border-white/20 rounded-3xl backdrop-blur-md shadow-2xl">
+                  <span className="text-4xl">👀</span>
+                </div>
+                <div className="space-y-3">
+                  <h2 className="text-2xl font-black text-white tracking-tight">Exploring Detective</h2>
+                  <p className="text-base text-gray-300 font-medium">Check out the game while it's running!</p>
+                </div>
+              </div>
+
+              {/* Game Status Card - Shows live game state */}
+              {gameState && (
+                <div className="w-full bg-white/5 border border-white/10 rounded-xl p-6">
+                  <div className="text-center space-y-3">
+                    <div className="text-lg font-bold text-white">Current Game</div>
+                    <div className="text-sm text-gray-300">
+                      Status: <span className="text-yellow-400 font-semibold">{gameState.state}</span>
+                    </div>
+                    <div className="text-sm text-gray-300">
+                      Players: <span className="text-blue-400 font-semibold">{gameState.playerCount}/8</span>
+                    </div>
+                    <div className="mt-4 p-3 bg-yellow-500/15 border border-yellow-500/30 rounded-lg">
+                      <p className="text-xs text-yellow-200">
+                        🔒 Connect your Farcaster account to join the game
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Back to auth button */}
+              <button
+                onClick={() => setIsExploringWithoutAuth(false)}
+                className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 border-2 border-purple-500/50 hover:border-purple-400/70 rounded-xl px-6 py-4 text-white font-bold transition-all duration-300"
+              >
+                🔗 Connect to Play
+              </button>
+
+              {/* Leaderboard Link */}
+              <div className="w-full text-center pt-4">
+                <a
+                  href="/leaderboard"
+                  className="chip grow inline-flex items-center gap-2"
+                >
+                  <span className="text-xl">🏆</span>
+                  <span className="font-bold">View Leaderboard</span>
+                  <span className="text-xs opacity-60">→</span>
+                </a>
+              </div>
+
+              {/* How to Play */}
+              <CollapsibleSection title="How To Play">
+                <div className="space-y-4">
+                  {[
+                    { icon: "1️⃣", text: "Register when a game opens" },
+                    { icon: "2️⃣", text: "Chat with 2 opponents simultaneously" },
+                    { icon: "3️⃣", text: "Vote: Real human or AI bot?" }
+                  ].map((rule, i) => (
+                    <div key={i} className="flex items-center gap-3 text-left">
+                      <span className="text-xl">{rule.icon}</span>
+                      <p className="text-sm font-semibold text-white/90 leading-relaxed">
+                        {rule.text}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </CollapsibleSection>
             </div>
           ) : (
             // Authenticated - Single-page lobby experience
