@@ -25,6 +25,7 @@ export default function AuthInput({ onAuthSuccess }: Props) {
     const { address, isConnected } = useAccount();
     const { disconnect } = useDisconnect();
     const { connectors, connect } = useConnect();
+    const [showWalletOptions, setShowWalletOptions] = useState(false);
 
     // Handle wallet connection and Farcaster verification
     useEffect(() => {
@@ -79,12 +80,13 @@ export default function AuthInput({ onAuthSuccess }: Props) {
     };
 
     const handleConnectClick = () => {
-        // Use the first available connector (usually injected)
-        const connector = connectors[0];
-        if (connector) {
-            connect({ connector });
-        }
+        setShowWalletOptions(!showWalletOptions);
         setError(null);
+    };
+
+    const handleWalletSelect = (connector: any) => {
+        connect({ connector });
+        setShowWalletOptions(false);
     };
 
     const handleFarcasterModalClose = () => {
@@ -149,6 +151,23 @@ export default function AuthInput({ onAuthSuccess }: Props) {
                             <span className="text-xl">🔗</span>
                             {isConnected ? 'Wallet Connected' : 'Connect Wallet'}
                         </button>
+
+                        {showWalletOptions && !isConnected && (
+                            <div className="space-y-2 animate-fade-in">
+                                {connectors.map((connector) => (
+                                    <button
+                                        key={connector.id}
+                                        onClick={() => handleWalletSelect(connector)}
+                                        className="w-full bg-white/8 hover:bg-white/12 border-2 border-white/15 hover:border-white/25 rounded-xl px-5 py-3 text-white font-semibold transition-all duration-300 backdrop-blur-sm text-left flex items-center gap-3"
+                                    >
+                                        <div className="w-6 h-6 bg-white/10 rounded-full flex items-center justify-center text-xs">
+                                            🔗
+                                        </div>
+                                        {connector.name}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                         
                         {isConnected && address && authStep === 'connect' && (
                             <div className="bg-green-500/15 border-2 border-green-500/30 rounded-xl p-3 text-green-200 text-sm text-center">
