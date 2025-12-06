@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { sdk } from "@farcaster/miniapp-sdk";
-import AuthInput from "@/components/AuthInput";
+import FarcasterAuthKit from "@/components/FarcasterAuthKit";
 import SpinningDetective from "@/components/SpinningDetective";
 import AnimatedGridBackdrop from "@/components/AnimatedGridBackdrop";
 import StarfieldBackground from "@/components/StarfieldBackground";
@@ -184,7 +184,7 @@ export default function Home() {
 
               {/* Authentication */}
               <div className="w-full">
-                <AuthInput 
+                <FarcasterAuthKit 
                   onAuthSuccess={handleWebAuth} 
                   onExploreWithoutAuth={handleExploreWithoutAuth}
                 />

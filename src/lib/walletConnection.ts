@@ -1,25 +1,37 @@
 // src/lib/walletConnection.ts
 import { createConfig, http, injected } from 'wagmi';
-import { mainnet, optimism, base } from 'wagmi/chains';
+import { mainnet, optimism, base, sepolia } from 'wagmi/chains';
+import { walletConnect } from '@wagmi/connectors';
 import { isFarcasterMiniApp } from './farcasterAuth';
 
-// Wallet connection configuration
+// WalletConnect Project ID (for mobile wallet connections)
+// Set this in environment variables for production
+const WALLETCONNECT_PROJECT_ID = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '';
+
+// Wallet connection configuration - supports MetaMask, WalletConnect, and more
 export const walletConfig = createConfig({
-  chains: [mainnet, optimism, base], // Farcaster is on OP/Base
+  chains: [mainnet, optimism, base, sepolia],
   connectors: [
-    injected(),
-    // Note: walletConnect can be added when configured with NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
+    injected(), // MetaMask and other injected wallets
+    ...(WALLETCONNECT_PROJECT_ID 
+      ? [walletConnect({ projectId: WALLETCONNECT_PROJECT_ID })]
+      : []
+    ),
   ],
   transports: {
     [mainnet.id]: http(),
     [optimism.id]: http(),
     [base.id]: http(),
+    [sepolia.id]: http(),
   },
 });
 
 /**
  * Fetch Farcaster profile and auth token by connected wallet address
  * Returns both profile data and JWT token for authenticated API requests
+ * 
+ * Note: This is the legacy method. Prefer the Sign In with Farcaster flow
+ * in FarcasterAuthKit component which uses cryptographic verification.
  */
 export async function fetchFarcasterProfile(address: string): Promise<{
   fid: number;

@@ -459,9 +459,80 @@ Identified 6 optimization opportunities (all LOW-MEDIUM priority):
 
 ---
 
+## Farcaster Authentication Flow Fix
+
+### Problem Fixed
+The original auth implementation used a fake QR code, didn't verify wallet ownership, and manually rendered wallet connector buttons inline. It required users to manually link wallets in Warpcast settings.
+
+### Solution: Sign In with Farcaster + RainbowKit
+Implemented the proper **Sign In with Farcaster** standard with professional wallet UX via RainbowKit:
+
+**Flow:**
+1. User clicks "Connect Wallet" → **RainbowKit modal** appears (MetaMask, WalletConnect, etc)
+2. User selects & confirms wallet connection
+3. We initiate Farcaster signin channel with their connected wallet
+4. User scans QR in Warpcast (or clicks desktop link) → Approves in their app
+5. We poll for completion → Receive signed profile data + verified FID
+6. Create JWT session token → User authenticated
+
+**Key improvements:**
+- Real, scannable QR codes from Farcaster Connect (not fake pixels)
+- Professional wallet modal (RainbowKit) instead of inline buttons
+- 20+ wallet support via WalletConnect (Trust Wallet, Argent, etc)
+- Cryptographic signature verification (user signed with wallet)
+- Automatic wallet linking (no manual Warpcast settings)
+- Mobile-optimized UX with built-in account switcher
+- 2-minute polling with proper error handling
+
+### Files Created
+- `src/components/FarcasterAuthKit.tsx` - Auth component with RainbowKit + Farcaster flow
+- `src/app/api/auth/farcaster/initiate/route.ts` - Creates signin channel with Farcaster Connect
+- `src/app/api/auth/farcaster/status/route.ts` - Polls channel until signin completes
+
+### Files Modified
+- `src/app/page.tsx` - Changed import from AuthInput to FarcasterAuthKit
+- `src/components/providers/WagmiProvider.tsx` - **ENHANCED** with RainbowKitProvider wrapper + CSS
+- `src/lib/walletConnection.ts` - **ENHANCED** with WalletConnect connector support
+- `.env.example` - Added NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID documentation
+- `package.json` - Added `@rainbow-me/rainbowkit` dependency
+
+### Files Deleted (AGGRESSIVE CONSOLIDATION)
+- ✅ `src/components/AuthInput.tsx` - Replaced by FarcasterAuthKit + RainbowKit
+- ✅ `src/components/FarcasterSetupModal.tsx` - Fake QR modal (no longer needed)
+- ✅ `src/app/api/profiles/by-address/route.ts` - Address lookup only (kept for legacy fallback, can deprecate)
+
+### Auth Flow Improvements (Polling Optimization)
+Despite Ably's historical issues, we optimized polling to eliminate outdated practices:
+
+**1. Fixed Memory Leak - Proper Interval Cleanup**
+- `setInterval` now properly cleaned up on component unmount
+- Uses `useRef` to track interval handle
+- Cleanup function in `useEffect` prevents dangling intervals
+- Prevents accumulating intervals if user triggers multiple signin attempts
+
+**2. Local QR Code Generation**
+- Replaced external `https://qr.farcaster.xyz/?url=...` with `qrcode.react`
+- No external dependencies for critical UX
+- Works offline, faster rendering
+- Added to `package.json` as dependency
+
+**3. Real-Time Visual Feedback**
+- **Countdown Timer**: Shows 2:00 → 0:00 remaining (color changes: green → yellow → red)
+- **Connection Status Indicator**: Visual pulse showing "Checking..." vs "Waiting..."
+- **Live Status Display**: Shows exact state (checking/waiting/error) with animated dots
+- **Rescan Button**: Users can rescan QR without full restart (preserves wallet connection)
+
+**4. Better Error Recovery**
+- "Rescan QR" option instead of complete flow reset
+- Try different wallet without disconnecting and reconnecting
+- Clear error messages with recovery options
+- Graceful timeout handling at 2-minute mark
+
+---
+
 ## Summary of Changes Made
 
-### New Files Created (6):
+### New Files Created (9):
 ```
 ✅ src/app/api/game/phase/route.ts
 ✅ src/components/ModalStack.tsx
@@ -469,6 +540,9 @@ Identified 6 optimization opportunities (all LOW-MEDIUM priority):
 ✅ src/components/LoadingOverlay.tsx
 ✅ src/hooks/useCountdown.ts
 ✅ src/lib/fetcher.ts (centralized SWR fetcher library)
+✅ src/components/FarcasterAuthKit.tsx (proper Sign In with Farcaster flow)
+✅ src/app/api/auth/farcaster/initiate/route.ts (create signin channel)
+✅ src/app/api/auth/farcaster/status/route.ts (poll signin completion)
 ```
 
 ### Documentation Created (1):
