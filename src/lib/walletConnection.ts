@@ -1,8 +1,6 @@
 // src/lib/walletConnection.ts
 import { createConfig, http, injected } from 'wagmi';
 import { mainnet, optimism, base } from 'wagmi/chains';
-// Note: walletConnect import will be fixed when wagmi is properly configured
-// import { walletConnect } from '@wagmi/connectors';
 import { isFarcasterMiniApp } from './farcasterAuth';
 
 // Wallet connection configuration
@@ -10,10 +8,7 @@ export const walletConfig = createConfig({
   chains: [mainnet, optimism, base], // Farcaster is on OP/Base
   connectors: [
     injected(),
-    // walletConnect will be added when properly configured
-    // walletConnect({
-    //   projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '',
-    // }),
+    // Note: walletConnect can be added when configured with NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
   ],
   transports: {
     [mainnet.id]: http(),
@@ -22,15 +17,19 @@ export const walletConfig = createConfig({
   },
 });
 
-// Farcaster profile fetching
+/**
+ * Fetch Farcaster profile and auth token by connected wallet address
+ * Returns both profile data and JWT token for authenticated API requests
+ */
 export async function fetchFarcasterProfile(address: string): Promise<{
   fid: number;
   username: string;
   displayName: string;
   pfpUrl: string;
+  token: string;
+  expiresIn: number;
 } | null> {
   try {
-    // Use Neynar API to fetch profile by connected address
     const response = await fetch('/api/profiles/by-address', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -38,15 +37,18 @@ export async function fetchFarcasterProfile(address: string): Promise<{
     });
 
     if (!response.ok) {
-      throw new Error('Profile not found');
+      const error = await response.json();
+      throw new Error(error.error || 'Profile lookup failed');
     }
 
     const data = await response.json();
     return {
-      fid: data.fid,
-      username: data.username,
-      displayName: data.display_name,
-      pfpUrl: data.pfp_url,
+      fid: data.profile.fid,
+      username: data.profile.username,
+      displayName: data.profile.displayName,
+      pfpUrl: data.profile.pfpUrl,
+      token: data.token,
+      expiresIn: data.expiresIn,
     };
   } catch (error) {
     console.error('Failed to fetch Farcaster profile:', error);

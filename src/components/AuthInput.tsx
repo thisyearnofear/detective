@@ -10,6 +10,7 @@ type Props = {
         username: string;
         displayName: string;
         pfpUrl: string;
+        token: string;
     }) => void;
 };
 
@@ -31,15 +32,26 @@ export default function AuthInput({ onAuthSuccess }: Props) {
         setError(null);
 
         try {
-            const response = await fetch(`/api/profiles/by-address?address=${walletAddress}`);
+            const response = await fetch('/api/profiles/by-address', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ address: walletAddress }),
+            });
+
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.error || 'No Farcaster profile found for this wallet');
+                throw new Error(data.error || 'Failed to verify wallet and profile');
             }
 
-            if (data.success && data.profile) {
-                onAuthSuccess(data.profile);
+            if (data.success && data.profile && data.token) {
+                // Store token in localStorage for subsequent API requests
+                localStorage.setItem('auth-token', data.token);
+                
+                onAuthSuccess({
+                    ...data.profile,
+                    token: data.token,
+                });
             } else {
                 throw new Error('No Farcaster profile associated with this wallet');
             }
