@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import useSWR from 'swr';
 import Leaderboard from '../Leaderboard';
+import { fetcher } from '@/lib/fetcher';
 
 type Props = {
   fid?: number;
@@ -16,8 +17,6 @@ type Props = {
   };
   onLogout: () => void;
 };
-
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 /**
  * GameFinishedView - Displays when game is FINISHED

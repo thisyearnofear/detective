@@ -11,8 +11,7 @@ import GameStateView from "@/components/game/GameStateView";
 import GameStatusCard from "@/components/game/GameStatusCard";
 import CollapsibleSection from "@/components/CollapsibleSection";
 import { isFarcasterMiniApp, authenticateWithFarcaster } from "@/lib/farcasterAuth";
-
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+import { fetcher } from "@/lib/fetcher";
 
 // Main component for the application's home page
 export default function Home() {

@@ -2,14 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { UserProfile } from "@/lib/types";
 
 type RevealData = {
-  opponent: {
-    fid: number;
-    username: string;
-    displayName: string;
-    pfpUrl: string;
-  };
+  opponent: UserProfile;
   actualType: "REAL" | "BOT";
 };
 

@@ -5,8 +5,7 @@ import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import AnimatedGridBackdrop from '@/components/AnimatedGridBackdrop';
 import StarfieldBackground from '@/components/StarfieldBackground';
-
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+import { fetcher } from '@/lib/fetcher';
 
 // Custom confirmation modal component
 function ConfirmModal({

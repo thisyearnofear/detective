@@ -2,15 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import { UserProfile } from "@/lib/types";
 import { extractColorsFromImage } from "@/lib/colorExtraction";
 
 interface OpponentCardProps {
-  opponent: {
-    fid: number;
-    username: string;
-    displayName: string;
-    pfpUrl: string;
-  };
+  opponent: UserProfile;
   isNewMatch?: boolean;
   compact?: boolean;
   onColorsExtracted?: (primaryRgb: [number, number, number], secondaryRgb: [number, number, number]) => void;

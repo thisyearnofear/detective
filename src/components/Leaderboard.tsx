@@ -2,15 +2,151 @@
 
 import useSWR from 'swr';
 import { LeaderboardEntry } from '@/lib/types';
-import Image from 'next/image';
 import { useState } from 'react';
+import { fetcher } from '@/lib/fetcher';
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+// Shared UI Helpers - DRY principle
+const helpers = {
+  getRankColor: (rank: number) => {
+    if (rank === 1) return 'text-yellow-400';
+    if (rank === 2) return 'text-gray-300';
+    if (rank === 3) return 'text-yellow-600';
+    return 'text-gray-500';
+  },
+  getRankMedal: (index: number) => {
+    switch (index) {
+      case 0: return '🏆';
+      case 1: return '🥈';
+      case 2: return '🥉';
+      default: return null;
+    }
+  },
+  getTrendIcon: (trend: string) => {
+    switch (trend) {
+      case 'up': return '📈';
+      case 'down': return '📉';
+      default: return '➡️';
+    }
+  },
+  getTrendColor: (trend: string) => {
+    switch (trend) {
+      case 'up': return 'text-green-400';
+      case 'down': return 'text-red-400';
+      default: return 'text-gray-400';
+    }
+  },
+  getStrengthEmoji: (area: string) => {
+    switch (area) {
+      case 'speed': return '⚡';
+      case 'accuracy': return '🎯';
+      case 'consistency': return '🔄';
+      default: return '💪';
+    }
+  },
+  getChainBadge: (chain: 'arbitrum' | 'monad') => {
+    const configs = {
+      arbitrum: {
+        name: 'Arbitrum',
+        color: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+        icon: '🔷',
+        description: 'Early Access NFT'
+      },
+      monad: {
+        name: 'Monad',
+        color: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
+        icon: '🟣',
+        description: 'Token & Rewards'
+      }
+    };
+    return configs[chain];
+  },
+  getLeaderboardTitle: (type: 'current-game' | 'season' | 'all-time' | 'nft-holders' | 'token-holders') => {
+    const titles = {
+      'current-game': 'Current Game',
+      'season': 'Season Rankings',
+      'all-time': 'All-Time Legends',
+      'nft-holders': 'NFT Holder Ranks',
+      'token-holders': 'Token Holder Ranks'
+    };
+    return titles[type];
+  }
+};
 
 type LeaderboardMode = 'current' | 'career' | 'insights' | 'multi-chain';
 type Chain = 'arbitrum' | 'monad';
 type LeaderboardType = 'current-game' | 'season' | 'all-time' | 'nft-holders' | 'token-holders';
 type TimeFrame = '24h' | '7d' | '30d' | 'all';
+
+// Shared Table Component - CONSOLIDATION
+const LeaderboardTable = ({ entries, showStatus = false }: { 
+  entries: LeaderboardEntry[] | undefined; 
+  showStatus?: boolean;
+}) => {
+  if (!entries || entries.length === 0) {
+    return <div className="p-6 text-center text-gray-400">No players found.</div>;
+  }
+
+  return (
+    <div className="p-6">
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-slate-700">
+              <th className="text-left py-3 text-sm font-medium text-gray-400">Rank</th>
+              <th className="text-left py-3 text-sm font-medium text-gray-400">Player</th>
+              <th className="text-left py-3 text-sm font-medium text-gray-400">Accuracy</th>
+              {showStatus && <th className="text-left py-3 text-sm font-medium text-gray-400">Status</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {entries.map((entry, index) => (
+              <tr key={entry.player.fid} className="border-b border-slate-800/50 hover:bg-slate-800/20 transition-colors">
+                <td className="py-4">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-lg font-bold ${helpers.getRankColor(index + 1)}`}>
+                      #{index + 1}
+                    </span>
+                    {helpers.getRankMedal(index) && (
+                      <span className="text-sm">{helpers.getRankMedal(index)}</span>
+                    )}
+                  </div>
+                </td>
+                
+                <td className="py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
+                      <span className="text-white text-sm font-bold">
+                        {entry.player.username.slice(0, 2).toUpperCase()}
+                      </span>
+                    </div>
+                    <div>
+                      <div className="font-medium text-white">@{entry.player.username}</div>
+                      <div className="text-xs text-gray-400">{entry.player.displayName}</div>
+                    </div>
+                  </div>
+                </td>
+                
+                <td className="py-4">
+                  <span className="text-lg font-bold text-white">{entry.accuracy.toFixed(1)}%</span>
+                </td>
+                
+                {showStatus && (
+                  <td className="py-4">
+                    <div className="flex gap-1">
+                      <span className="text-xs bg-blue-500/20 text-blue-300 px-2 py-1 rounded border border-blue-500/30">
+                        NFT
+                      </span>
+                    </div>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
 
 interface CareerStats {
   totalGames: number;
@@ -29,66 +165,7 @@ interface CareerStats {
   }>;
 }
 
-const getRankColor = (rank: number) => {
-  if (rank === 1) return 'text-yellow-400';
-  if (rank === 2) return 'text-gray-300';
-  if (rank === 3) return 'text-yellow-600';
-  return 'text-gray-500';
-};
 
-const getChainBadge = (chain: Chain) => {
-  const configs = {
-    arbitrum: {
-      name: 'Arbitrum',
-      color: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
-      icon: '🔷',
-      description: 'Early Access NFT'
-    },
-    monad: {
-      name: 'Monad',
-      color: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
-      icon: '🟣',
-      description: 'Token & Rewards'
-    }
-  };
-  return configs[chain];
-};
-
-const getTrendIcon = (trend: string) => {
-  switch (trend) {
-    case 'up': return '📈';
-    case 'down': return '📉';
-    default: return '➡️';
-  }
-};
-
-const getTrendColor = (trend: string) => {
-  switch (trend) {
-    case 'up': return 'text-green-400';
-    case 'down': return 'text-red-400';
-    default: return 'text-gray-400';
-  }
-};
-
-const getStrengthEmoji = (area: string) => {
-  switch (area) {
-    case 'speed': return '⚡';
-    case 'accuracy': return '🎯';
-    case 'consistency': return '🔄';
-    default: return '💪';
-  }
-};
-
-const getLeaderboardTitle = (type: LeaderboardType) => {
-  const titles = {
-    'current-game': 'Current Game',
-    'season': 'Season Rankings',
-    'all-time': 'All-Time Legends',
-    'nft-holders': 'NFT Holder Ranks',
-    'token-holders': 'Token Holder Ranks'
-  };
-  return titles[type];
-};
 
 interface GameResultsProps {
   isGameEnd?: boolean;
@@ -297,8 +374,8 @@ export default function Leaderboard({
           <div className="bg-slate-800/50 rounded-lg p-4">
             <div className="flex items-center justify-between mb-3">
               <span className="text-gray-400 text-sm">Current Ranking</span>
-              <span className={`text-sm ${getTrendColor(insights.recentTrend)}`}>
-                {getTrendIcon(insights.recentTrend)}
+              <span className={`text-sm ${helpers.getTrendColor(insights.recentTrend)}`}>
+                {helpers.getTrendIcon(insights.recentTrend)}
               </span>
             </div>
             <div className="flex items-baseline gap-2">
@@ -312,21 +389,21 @@ export default function Leaderboard({
 
           {/* Strengths & Weaknesses */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3">
-              <div className="text-green-400 text-xs uppercase tracking-wide mb-1">Strength</div>
-              <div className="flex items-center gap-2">
-                <span className="text-lg">{getStrengthEmoji(insights.strengthArea)}</span>
-                <span className="font-medium text-white capitalize">{insights.strengthArea}</span>
-              </div>
+          <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3">
+            <div className="text-green-400 text-xs uppercase tracking-wide mb-1">Strength</div>
+            <div className="flex items-center gap-2">
+              <span className="text-lg">{helpers.getStrengthEmoji(insights.strengthArea)}</span>
+              <span className="font-medium text-white capitalize">{insights.strengthArea}</span>
             </div>
-            
-            <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3">
-              <div className="text-orange-400 text-xs uppercase tracking-wide mb-1">Focus Area</div>
-              <div className="flex items-center gap-2">
-                <span className="text-lg">{getStrengthEmoji(insights.weaknessArea)}</span>
-                <span className="font-medium text-white capitalize">{insights.weaknessArea}</span>
-              </div>
+          </div>
+          
+          <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3">
+            <div className="text-orange-400 text-xs uppercase tracking-wide mb-1">Focus Area</div>
+            <div className="flex items-center gap-2">
+              <span className="text-lg">{helpers.getStrengthEmoji(insights.weaknessArea)}</span>
+              <span className="font-medium text-white capitalize">{insights.weaknessArea}</span>
             </div>
+          </div>
           </div>
 
           {/* Next Milestone */}
@@ -452,7 +529,7 @@ export default function Leaderboard({
           <div className="grid md:grid-cols-2 gap-4 mb-6">
             {multiChainData?.chainStats && Object.entries(multiChainData.chainStats).map(([chainKey, stats]) => {
               const chain = chainKey as Chain;
-              const config = getChainBadge(chain);
+              const config = helpers.getChainBadge(chain);
               
               return (
                 <div 
@@ -540,87 +617,14 @@ export default function Leaderboard({
 
           <div className="text-center">
             <h3 className="font-bold text-white">
-              {getLeaderboardTitle(leaderboardType)} - {getChainBadge(selectedChain).name}
+              {helpers.getLeaderboardTitle(leaderboardType)} - {helpers.getChainBadge(selectedChain).name}
             </h3>
           </div>
         </div>
 
         {/* Leaderboard Table */}
         <div className="bg-slate-900/50 border border-white/10 rounded-xl backdrop-blur-sm overflow-hidden">
-          {multiChainData?.[selectedChain] && multiChainData[selectedChain].length > 0 ? (
-            <div className="p-6">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-slate-700">
-                      <th className="text-left py-3 text-sm font-medium text-gray-400">Rank</th>
-                      <th className="text-left py-3 text-sm font-medium text-gray-400">Player</th>
-                      <th className="text-left py-3 text-sm font-medium text-gray-400">Accuracy</th>
-                      <th className="text-left py-3 text-sm font-medium text-gray-400">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {multiChainData[selectedChain].map((entry, index) => (
-                      <tr key={entry.player.fid} className="border-b border-slate-800/50 hover:bg-slate-800/20 transition-colors">
-                        <td className="py-4">
-                          <div className="flex items-center gap-2">
-                            <span className={`text-lg font-bold ${
-                              index === 0 ? 'text-yellow-400' :
-                              index === 1 ? 'text-gray-300' :
-                              index === 2 ? 'text-yellow-600' :
-                              'text-gray-500'
-                            }`}>
-                              #{index + 1}
-                            </span>
-                            {index < 3 && (
-                              <span className="text-sm">
-                                {index === 0 ? '🏆' : index === 1 ? '🥈' : '🥉'}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        
-                        <td className="py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-                              <span className="text-white text-sm font-bold">
-                                {entry.player.username.slice(0, 2).toUpperCase()}
-                              </span>
-                            </div>
-                            <div>
-                              <div className="font-medium text-white">@{entry.player.username}</div>
-                              <div className="text-xs text-gray-400">{entry.player.displayName}</div>
-                            </div>
-                          </div>
-                        </td>
-                        
-                        <td className="py-4">
-                          <span className="text-lg font-bold text-white">{entry.accuracy.toFixed(1)}%</span>
-                        </td>
-                        
-                        <td className="py-4">
-                          <div className="flex gap-1">
-                            <span className="text-xs bg-blue-500/20 text-blue-300 px-2 py-1 rounded border border-blue-500/30">
-                              NFT
-                            </span>
-                            {selectedChain === 'monad' && (
-                              <span className="text-xs bg-purple-500/20 text-purple-300 px-2 py-1 rounded border border-purple-500/30">
-                                TOKEN
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ) : (
-            <div className="p-6 text-center">
-              <p className="text-gray-400">No players found for the selected criteria.</p>
-            </div>
-          )}
+          <LeaderboardTable entries={multiChainData?.[selectedChain]} showStatus={true} />
         </div>
 
         {/* Cross-Chain Insights */}
@@ -884,41 +888,8 @@ export default function Leaderboard({
       </div>
 
       <h2 className="text-2xl font-bold mb-4 text-center">Leaderboard</h2>
-      <div className="flow-root">
-        <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
-          <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-            <table className="min-w-full divide-y divide-slate-700">
-              <thead>
-                <tr>
-                  <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-white sm:pl-0">Rank</th>
-                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-white">Player</th>
-                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-white">Accuracy</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800">
-                {leaderboard.map((entry, index) => (
-                  <tr key={entry.player.fid}>
-                    <td className={`whitespace-nowrap py-4 pl-4 pr-3 text-lg font-bold sm:pl-0 ${getRankColor(index + 1)}`}>
-                      #{index + 1}
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-4 text-sm">
-                      <div className="flex items-center">
-                        <div className="h-10 w-10 flex-shrink-0">
-                          <Image className="h-10 w-10 rounded-full" src={entry.player.pfpUrl} alt="" width={40} height={40} />
-                        </div>
-                        <div className="ml-4">
-                          <div className="font-medium text-white">{entry.player.displayName}</div>
-                          <div className="text-gray-500">@{entry.player.username}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-4 text-lg font-semibold text-white">{entry.accuracy.toFixed(1)}%</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+      <div className="bg-slate-900/50 border border-white/10 rounded-xl backdrop-blur-sm overflow-hidden">
+        <LeaderboardTable entries={leaderboard} showStatus={false} />
       </div>
     </div>
   );

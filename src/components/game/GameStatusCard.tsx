@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { GameCycleState } from '@/lib/types';
 
 type Props = {
@@ -22,11 +22,6 @@ type Props = {
  */
 export default function GameStatusCard({ gameState }: Props) {
   const [timeLeft, setTimeLeft] = useState(0);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   // Update timer based on game state
   useEffect(() => {
@@ -50,8 +45,6 @@ export default function GameStatusCard({ gameState }: Props) {
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
   }, [gameState.state, gameState.registrationEnds, gameState.gameEnds]);
-
-  if (!mounted) return null;
 
   const formatTime = (ms: number) => {
     const minutes = Math.floor(ms / 60000);
