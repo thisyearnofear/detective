@@ -59,7 +59,7 @@ Detective is an AI-powered social deduction game on Farcaster. Players engage in
 | ------------------ | ---------------------------------- | -------------------------------------------------- |
 | **Frontend**       | Next.js 15 + TypeScript + React 19 | Mini App SDK built for modern React                |
 | **Backend**        | Next.js API Routes (serverless)    | Unified codebase, Vercel deployment                |
-| **Auth**           | @farcaster/miniapp-sdk             | Native Farcaster authentication                    |
+| **Auth**           | Farcaster SDK + Wagmi + JWT        | SDK for miniapp, wallet verification for web       |
 | **Game State**     | In-memory (Map/Record)             | 50 players = negligible memory footprint           |
 | **Real-time Chat** | HTTP polling (3s interval)         | Simple, proven                                     |
 | **AI/Bot**         | Venice AI (Llama 3.3 70B)          | Privacy-first, OpenAI-compatible                   |
@@ -127,7 +127,10 @@ Detective is an AI-powered social deduction game on Farcaster. Players engage in
 
 #### Farcaster Integration
 - Implement Mini App manifest
-- User authentication flow (Farcaster SDK)
+- User authentication flow:
+  - **Farcaster miniapp**: SDK auto-authentication
+  - **Web/mobile**: Wallet connection (wagmi) → verify Farcaster profile via Neynar
+  - JWT tokens (7-day expiry) for session management
 - Retrieve user profile (FID, username, pfp)
 - List available game cycles (hardcoded initially)
 
