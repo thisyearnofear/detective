@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { EMOJI_SHORTCODES } from "@/lib/constants";
 import { useViewport, responsive } from "@/lib/viewport";
+import { useCountdown } from "@/hooks/useCountdown";
 import {
   useOptimizedEmojiProcessor,
   useOptimizedScroll,
@@ -69,6 +70,13 @@ export default function ChatWindow({
     primary: [number, number, number];
     secondary: [number, number, number];
   } | null>(null);
+
+  // Countdown timer for vote lock warning
+  const { secondsRemaining } = useCountdown({
+    endTime: match.endTime + (timeOffset || 0), // Sync with server
+    onComplete: () => setIsTimeUp(true),
+    pollInterval: 100,
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
@@ -288,6 +296,7 @@ export default function ChatWindow({
             isLocked={match.voteLocked}
             showAnimation={isNewMatch}
             isCompact={isFarcasterFrame || variant !== "full"}
+            secondsRemaining={secondsRemaining}
           />
         </div>
       )}

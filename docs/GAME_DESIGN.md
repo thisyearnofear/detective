@@ -418,4 +418,66 @@ MultiChatContainer
 - **Spacing**: Gap of 3 pixels, padding 3 (consistent grid)
 - **Interactivity**: Hover effects (white/10) (consistent)
 
+## UX Improvements from Recent Development
+
+Based on recent development work, several UX improvements have been implemented to enhance the user experience:
+
+### Enhanced Phase Transitions
+**Problem**: GameLobby had 4 phases (lobby → bot_generation → player_reveal → countdown → live) but the logic for triggering transitions was fragile with hardcoded timeouts.
+
+**Solution**:
+- Now uses server-driven phase transitions with `/api/game/phase` endpoint
+- Users never see "Preparing next round..." for 15+ seconds
+- Phase transitions happen exactly when server says so, not on client timer
+- Handles network failures gracefully with clear error messaging
+
+### Improved Modal System
+**Problem**: Reveal screen pops up while voting, causing confusion about priority and overlapping modals.
+
+**Solution**:
+- Created ModalStack context provider for centralized modal management
+- All overlays (reveal, error, loading) now have consistent z-index management
+- No more overlapping modals fighting for attention
+- Proper auto-close behavior with configurable timers
+
+### Better Loading States
+**Problem**: RegistrationLoader + RoundStartLoader were nearly identical (90% code duplication) creating maintenance issues.
+
+**Solution**:
+- Created single LoadingOverlay component with 5 variants
+- Supports: registration, round-start, preparing, reveal, generic
+- Consistent loading experience with configurable progress indicators
+- Eliminates code duplication and improves maintainability
+
+### Enhanced Vote Toggle UX
+**Problem**: Users didn't know WHEN vote locks, no visual feedback about time pressure.
+
+**Solution**:
+- Added three-tier warning system to VoteToggle:
+  - **Normal (> 10s)**: Hint text: "↑ Click to change your vote"
+  - **Warning (3-10s)**: Yellow alert: "⚠️ 10 seconds to lock"
+  - **Critical (< 3s)**: Red pulsing: "🔒 LOCKING IN 3s"
+  - **Locked (= 0)**: Disabled state: "🔒 Vote locked"
+- Vote toggle disables when time expires
+- Visual feedback at critical time intervals
+
+### Timer Consistency
+**Problem**: Multiple countdown timers scattered across components, each with slightly different logic.
+
+**Solution**:
+- Created custom `useCountdown` hook with consistent interface
+- Single source of truth for ALL countdown timers
+- Smooth 100ms polling for responsive UI
+- Server-synced via timeOffset
+- All timers now behave consistently
+
+### Clear Auth Flow
+**Problem**: Users saw multiple auth options but couldn't tell which worked, with confusing TODO comments.
+
+**Solution**:
+- Removed all TODO comments from authentication flow
+- Single clear auth path: Farcaster SDK with web mode fallback
+- Users see one button, one clear flow
+- Clear indication whether in SDK or web mode
+
 This consolidated design approach ensures Detective provides an immersive, polished experience while maintaining the core mystery and social deduction elements that make the game compelling.
