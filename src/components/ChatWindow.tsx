@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { EMOJI_SHORTCODES } from "@/lib/constants";
 import { useViewport, responsive } from "@/lib/viewport";
 import { useCountdown } from "@/hooks/useCountdown";
+import { UserProfile } from "@/lib/types";
 import {
   useOptimizedEmojiProcessor,
   useOptimizedScroll,
@@ -22,12 +23,7 @@ type Props = {
   fid: number;
   match: {
     id: string;
-    opponent: {
-      fid: number;
-      username: string;
-      displayName: string;
-      pfpUrl: string;
-    };
+    opponent: UserProfile;
     endTime: number;
     slotNumber?: number;
     messages?: any[];

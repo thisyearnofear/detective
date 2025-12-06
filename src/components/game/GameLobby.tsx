@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import useSWR from 'swr';
 import { Player, UserProfile } from '@/lib/types';
 import { useCountdown } from '@/hooks/useCountdown';
+import { fetcher } from '@/lib/fetcher';
 import BotGeneration from './phases/BotGeneration';
 import PlayerReveal from './phases/PlayerReveal';
 import GameCountdown from './phases/GameCountdown';
@@ -18,8 +19,6 @@ type Props = {
   gameState: any;
 };
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
-
 export default function GameLobby({ currentPlayer, isRegistrationOpen = true, gameState }: Props) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,49 +27,38 @@ export default function GameLobby({ currentPlayer, isRegistrationOpen = true, ga
   const [timeLeft, setTimeLeft] = useState(0);
   const [phaseMessage, setPhaseMessage] = useState('');
 
-  // Fetch registered players list
-  const { data: playersData } = useSWR(
-    '/api/game/players',
+  // Consolidated polling: single endpoint for game state, phase, and players
+  // Reduces 2 requests/2s to 1 request/2s
+  const { data: statusData } = useSWR(
+    gameState?.cycleId ? `/api/game/status?cycleId=${gameState.cycleId}&fid=${currentPlayer.fid}` : null,
     fetcher,
     {
-      refreshInterval: 2000,
-      revalidateOnFocus: false,
-    }
-  );
-
-  // Poll server for phase transitions (server-driven, not client-side setTimeout)
-  const { data: phaseData, error: phaseError } = useSWR(
-    gameState?.cycleId ? `/api/game/phase?cycleId=${gameState.cycleId}&fid=${currentPlayer.fid}` : null,
-    fetcher,
-    {
-      refreshInterval: 2000, // Poll every 2s for phase changes (UI countdown keeps it smooth via useCountdown)
+      refreshInterval: 2000, // Poll every 2s for phase changes + player updates
       revalidateOnFocus: false,
       shouldRetryOnError: true,
       errorRetryInterval: 1000,
     }
   );
 
-  const registeredPlayers = (playersData?.players || []) as Player[];
+  const registeredPlayers = (statusData?.players || []) as Player[];
   const maxPlayers = 8;
 
-  // Sync phase from server response (not from client logic)
+  // Sync phase from consolidated server response (not from client logic)
   useEffect(() => {
-    if (phaseData?.phase) {
-      // Map server phase to component phase
-      const serverPhase = phaseData.phase as string;
+    if (statusData?.phase) {
+      const serverPhase = statusData.phase as string;
       
       if (gamePhase === 'REGISTRATION' && serverPhase === 'BOT_GENERATION') {
-        // Server says transition to bot generation
         setGamePhase('BOT_GENERATION');
-        setPhaseMessage(phaseData.reason);
+        setPhaseMessage(statusData.reason);
       }
       
-      setPhaseMessage(phaseData.reason || '');
+      setPhaseMessage(statusData.reason || '');
     }
-  }, [phaseData?.phase, gamePhase]);
+  }, [statusData?.phase, gamePhase]);
 
   // Use countdown hook for timer (syncs with server)
-  const countdownEndTime = phaseData?.phaseEndTime || gameState?.registrationEnds || 0;
+  const countdownEndTime = statusData?.phaseEndTime || gameState?.registrationEnds || 0;
   const { timeRemaining } = useCountdown({
     endTime: countdownEndTime,
     pollInterval: 100, // Smooth updates
@@ -151,8 +139,8 @@ export default function GameLobby({ currentPlayer, isRegistrationOpen = true, ga
     return null;
   }
 
-  // Show error if phase endpoint failed
-  if (phaseError && gamePhase === 'REGISTRATION') {
+  // Show error if status endpoint failed
+  if (error && gamePhase === 'REGISTRATION') {
     return (
       <ErrorCard
         title="Game Connection Lost"

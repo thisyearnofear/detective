@@ -6,20 +6,8 @@ import ChatWindow from "./ChatWindow";
 import Leaderboard from "./Leaderboard";
 import LoadingOverlay from "./LoadingOverlay";
 import { useModal } from "@/hooks/useModal";
-
-const fetcher = async (url: string) => {
-  const res = await fetch(url);
-  if (!res.ok) {
-    // Handle 403 specially - game not live, return the state info
-    if (res.status === 403) {
-      const data = await res.json().catch(() => ({ currentState: "UNKNOWN" }));
-      return { gameNotLive: true, currentState: data.currentState };
-    }
-    const text = await res.text().catch(() => "");
-    throw new Error(`HTTP ${res.status}${text ? `: ${text}` : ""}`);
-  }
-  return res.json();
-};
+import { fetcherWithGameNotLive } from "@/lib/fetcher";
+import { UserProfile } from "@/lib/types";
 
 type Props = {
   fid: number;
@@ -42,12 +30,7 @@ export default function MultiChatContainer({ fid }: Props) {
   const [gameFinished, setGameFinished] = useState(false);
   const [roundResults, setRoundResults] = useState<RoundResult[]>([]);
   const [batchReveals, setBatchReveals] = useState<Array<{
-    opponent: {
-      fid: number;
-      username: string;
-      displayName: string;
-      pfpUrl: string;
-    };
+    opponent: UserProfile;
     actualType: "REAL" | "BOT";
   }>>([]);
   // Track if we've ever successfully loaded matches (to prevent premature error display)
@@ -72,7 +55,7 @@ export default function MultiChatContainer({ fid }: Props) {
     data: matchData,
     error,
     mutate,
-  } = useSWR(`/api/match/active?fid=${fid}`, fetcher, {
+  } = useSWR(`/api/match/active?fid=${fid}`, fetcherWithGameNotLive, {
     refreshInterval: isTransitioning ? 1000 : (gameFinished ? 0 : 2000),
     refreshWhenHidden: false,
     revalidateOnFocus: false,
