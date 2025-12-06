@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { sdk } from "@farcaster/miniapp-sdk";
-import AuthInput from "@/components/AuthInput";
 import SpinningDetective from "@/components/SpinningDetective";
 import AnimatedGridBackdrop from "@/components/AnimatedGridBackdrop";
 import StarfieldBackground from "@/components/StarfieldBackground";
@@ -28,13 +27,12 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Use SWR for polling the game state every 3 seconds
-  // keepPreviousData prevents component unmounting during refetch
+  // Use SWR for polling the game state
   const { data: gameState, error: gameStateError } = useSWR(
     sdkUser ? `/api/game/status?fid=${sdkUser.fid}` : "/api/game/status",
     fetcher,
     { 
-      refreshInterval: 3000,
+      refreshInterval: 2000, // Poll every 2s
       keepPreviousData: true,
       revalidateOnFocus: false,
     },
@@ -81,15 +79,6 @@ export default function Home() {
     };
     initAuth();
   }, []);
-
-  const handleWebAuth = (userProfile: {
-    fid: number;
-    username: string;
-    displayName: string;
-    pfpUrl: string;
-  }) => {
-    setSdkUser(userProfile);
-  };
 
   // Unified game state view - consolidates all game phase logic
   const renderGameState = () => {
@@ -157,9 +146,9 @@ export default function Home() {
         {/* Main Content - Fades in after hero disappears */}
         <div className={`w-full flex flex-col items-center transition-all duration-1000 ${introComplete ? 'opacity-100' : 'opacity-0'}`}>
           {!sdkUser ? (
-            // Not authenticated - Perfect centering
+            // Not authenticated - Show Farcaster gate
             <div className="w-full max-w-md flex flex-col items-center space-y-8">
-              {/* Clean Header - Perfectly centered */}
+              {/* Clean Header */}
               <div className="w-full flex flex-col items-center space-y-5 text-center">
                 <div className="flex items-center justify-center w-20 h-20 bg-gradient-to-br from-white/10 to-white/5 border-2 border-white/20 rounded-3xl backdrop-blur-md shadow-2xl">
                   <span className="text-4xl">🔍</span>
@@ -170,26 +159,34 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Game Status Card - Shows live game state */}
-              {gameState ? (
-                <GameStatusCard
-                  gameState={{
-                    state: gameState.state,
-                    playerCount: gameState.playerCount,
-                    registrationEnds: gameState.registrationEnds,
-                    gameEnds: gameState.gameEnds,
-                  }}
-                />
+              {/* Farcaster Required Gate */}
+              {authMode === "web" ? (
+                <div className="w-full bg-purple-900/20 border-2 border-purple-500/30 rounded-2xl p-8 text-center space-y-4">
+                  <div className="text-5xl mb-2">🎭</div>
+                  <h3 className="text-xl font-bold text-white">Farcaster Required</h3>
+                  <p className="text-sm text-gray-300 leading-relaxed">
+                    Detective is a Farcaster-exclusive game. Get your account to start playing!
+                  </p>
+                  <a
+                    href="https://farcaster.xyz/~/code/YKR2G8"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-primary inline-flex items-center gap-2 mt-4"
+                  >
+                    <span>Get Farcaster</span>
+                    <span className="text-xs">→</span>
+                  </a>
+                  <p className="text-xs text-gray-400 mt-4">
+                    Already have Farcaster? Open this game from the Farcaster app.
+                  </p>
+                </div>
               ) : (
-                <div className="w-full bg-white/5 border border-white/10 rounded-xl p-6 animate-pulse">
-                  <div className="h-20 bg-white/10 rounded" />
+                // Loading Farcaster auth
+                <div className="w-full bg-white/5 border border-white/10 rounded-xl p-8 text-center">
+                  <SpinningDetective size="md" className="mb-4" />
+                  <p className="text-sm text-gray-300">Connecting to Farcaster...</p>
                 </div>
               )}
-
-              {/* Authentication */}
-              <div className="w-full">
-                <AuthInput onAuthSuccess={handleWebAuth} />
-              </div>
 
               {/* Collapsible Sections */}
               <div className="w-full text-center space-y-0 pt-8">
@@ -254,81 +251,57 @@ export default function Home() {
               </div>
             </div>
           ) : (
-            // Authenticated content
-            gameState?.state === "FINISHED" ? (
-              // Game finished - show full screen leaderboard
-              renderGameState()
-            ) : (
-              // Game in progress - show layout with headers
-              <div className="space-y-8">
-                {/* User Info Card */}
-                <div className="card">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs text-gray-200">Logged in as</p>
-                      <p className="text-lg font-bold text-white">
-                        @{sdkUser.username}
-                        {authMode === "web" && (
-                          <span className="ml-2 text-xs bg-blue-900/70 text-blue-200 px-2 py-1 rounded border border-blue-500/50">
-                            Web Mode
-                          </span>
-                        )}
-                        {authMode === "sdk" && isFarcasterMiniApp() && (
-                          <span className="ml-2 text-xs bg-purple-900/70 text-purple-200 px-2 py-1 rounded border border-purple-500/50">
-                            Farcaster
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                    <button
-                      onClick={handleLogout}
-                      className="btn-secondary text-xs py-1 px-3"
-                    >
-                      Logout
-                    </button>
+            // Authenticated - Single-page lobby experience
+            <div className="w-full max-w-md flex flex-col items-center space-y-6">
+              {/* User Profile Header */}
+              <div className="w-full bg-gradient-to-br from-purple-900/30 to-blue-900/30 border-2 border-purple-500/30 rounded-2xl p-6">
+                <div className="flex items-center gap-4">
+                  {sdkUser.pfpUrl && (
+                    <img
+                      src={sdkUser.pfpUrl}
+                      alt={sdkUser.username}
+                      className="w-16 h-16 rounded-full border-2 border-white/20"
+                    />
+                  )}
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-300 mb-1">Playing as</p>
+                    <p className="text-xl font-bold text-white">@{sdkUser.username}</p>
+                    {sdkUser.displayName && (
+                      <p className="text-sm text-gray-300">{sdkUser.displayName}</p>
+                    )}
                   </div>
+                  <button
+                    onClick={handleLogout}
+                    className="text-xs text-gray-400 hover:text-white transition-colors"
+                  >
+                    Switch
+                  </button>
                 </div>
-
-                {/* Game Status */}
-                {gameState && (
-                  <div className="card text-center">
-                    <p className="text-xs text-gray-200 mb-1">Game Status</p>
-                    <p className="hero-title text-xl font-black text-stroke uppercase tracking-widest hover:text-stroke-white transition-all duration-300">
-                      {gameState.state}
-                    </p>
-                    <p className="text-xs text-gray-200 mt-1">
-                      {gameState.playerCount} players registered
-                    </p>
-                  </div>
-                )}
-
-                {/* Game Content */}
-                {renderGameState()}
-
-                {/* Back to Home */}
-                {sdkUser && gameState && (
-                  <div className="text-center">
-                    <button
-                      onClick={handleLogout}
-                      className="text-xs text-gray-300 hover:text-gray-200 transition-colors"
-                    >
-                      ← Return to home
-                    </button>
-                  </div>
-                )}
               </div>
-            )
-          )}
 
-          {/* Footer */}
-          <div className="mt-24 pt-8 text-center border-t border-white/5">
-            <a
-              href="/admin"
-              className="text-xs font-bold text-gray-600 hover:text-white transition-colors uppercase tracking-widest"
-            >
-              Admin Panel
-            </a>
-          </div>
+              {/* Game State Content */}
+              {gameState?.state === "FINISHED" ? (
+                renderGameState()
+              ) : (
+                <>
+                  {/* Live Game Status */}
+                  {gameState && (
+                    <GameStatusCard
+                      gameState={{
+                        state: gameState.state,
+                        playerCount: gameState.playerCount,
+                        registrationEnds: gameState.registrationEnds,
+                        gameEnds: gameState.gameEnds,
+                      }}
+                    />
+                  )}
+
+                  {/* Game Phase View */}
+                  {renderGameState()}
+                </>
+              )}
+            </div>
+          )}
         </div>
         </div>
       </main>

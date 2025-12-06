@@ -55,8 +55,10 @@ export default function GameStatusCard({ gameState }: Props) {
   // REGISTRATION - Show countdown and opportunity to join
   if (gameState.state === 'REGISTRATION') {
     const maxPlayers = 8;
+    const MIN_PLAYERS = 3;
     const progress = Math.min(100, (gameState.playerCount / maxPlayers) * 100);
-    const isReadyToStart = gameState.playerCount >= 4;
+    const hasMinPlayers = gameState.playerCount >= MIN_PLAYERS;
+    const countdownActive = hasMinPlayers && timeLeft < 999999999;
 
     return (
       <div className="bg-gradient-to-br from-emerald-900/30 via-blue-900/30 to-purple-900/30 border-2 border-emerald-500/40 rounded-2xl p-6 backdrop-blur-md shadow-2xl">
@@ -69,7 +71,9 @@ export default function GameStatusCard({ gameState }: Props) {
               </div>
               <div>
                 <h3 className="text-xl font-black text-white tracking-tight">Registration Open</h3>
-                <p className="text-sm text-emerald-300/90 font-medium">Join the next game</p>
+                <p className="text-sm text-emerald-300/90 font-medium">
+                  {!hasMinPlayers ? 'Waiting for players...' : countdownActive ? 'Starting soon!' : 'Ready to start'}
+                </p>
               </div>
             </div>
             <div className="status-badge open">
@@ -82,19 +86,26 @@ export default function GameStatusCard({ gameState }: Props) {
           <div className="space-y-3">
             <div className="flex items-baseline justify-between">
               <span className="text-2xl font-black text-white">{gameState.playerCount} <span className="text-base text-gray-400 font-normal">/ {maxPlayers}</span></span>
-              {isReadyToStart && (
-                <span className="chip active text-xs px-3 py-1">
-                  ✓ Ready to start
+              {!hasMinPlayers && (
+                <span className="chip text-xs px-3 py-1 bg-gray-700/50 text-gray-300">
+                  {MIN_PLAYERS - gameState.playerCount} more needed
+                </span>
+              )}
+              {hasMinPlayers && countdownActive && (
+                <span className="chip active text-xs px-3 py-1 animate-pulse">
+                  🚀 {Math.floor(timeLeft / 1000)}s
                 </span>
               )}
             </div>
             <div className="w-full bg-white/10 h-3 rounded-full overflow-hidden border border-white/20">
               <div
-                className={`h-full transition-all duration-700 ease-out ${isReadyToStart ? 'bg-gradient-to-r from-emerald-400 to-green-500' : 'bg-gradient-to-r from-blue-400 to-purple-500'}`}
+                className={`h-full transition-all duration-700 ease-out ${hasMinPlayers ? 'bg-gradient-to-r from-emerald-400 to-green-500' : 'bg-gradient-to-r from-blue-400 to-purple-500'}`}
                 style={{ width: `${progress}%` }}
               />
             </div>
-            <p className="text-xs text-gray-300 font-medium">players registered</p>
+            <p className="text-xs text-gray-300 font-medium">
+              {!hasMinPlayers ? `Need ${MIN_PLAYERS} players to start` : 'players registered'}
+            </p>
           </div>
         </div>
       </div>

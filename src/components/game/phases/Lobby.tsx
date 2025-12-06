@@ -11,7 +11,6 @@ type Props = {
     error: string | null;
     onRegister: () => void;
     onReady: () => void;
-    phaseMessage?: string;
 };
 
 export default function Lobby({
@@ -24,15 +23,16 @@ export default function Lobby({
     error,
     onRegister,
     onReady,
-    phaseMessage
 }: Props) {
     const spotsLeft = maxPlayers - registeredPlayers.length;
     const isFull = spotsLeft === 0;
+    const MIN_PLAYERS = 3;
+    const hasMinPlayers = registeredPlayers.length >= MIN_PLAYERS;
+    const countdownActive = hasMinPlayers && timeLeft < 999999999; // Countdown started
 
     const formatTimeLeft = (ms: number) => {
-        const minutes = Math.floor(ms / 60000);
-        const seconds = Math.floor((ms % 60000) / 1000);
-        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        const seconds = Math.floor(ms / 1000);
+        return `${seconds}s`;
     };
 
     return (
@@ -47,11 +47,6 @@ export default function Lobby({
                 <p className="text-gray-400 text-xs md:text-sm">
                     {isFull ? 'Lobby is full!' : `${spotsLeft} spot${spotsLeft !== 1 ? 's' : ''} remaining`}
                 </p>
-                {phaseMessage && (
-                    <p className="text-gray-500 text-xs mt-2 italic">
-                        {phaseMessage}
-                    </p>
-                )}
             </div>
 
             {/* Registration Progress */}
@@ -68,13 +63,32 @@ export default function Lobby({
                 </div>
             </div>
 
-            {/* Time Remaining */}
-            <div className="bg-slate-900/50 border border-white/10 rounded-xl p-4 md:p-6 text-center backdrop-blur-sm">
-                <span className="text-xs text-gray-400 uppercase tracking-wide">Time Remaining</span>
-                <div className="text-4xl md:text-5xl font-black text-white mt-2">
-                    {formatTimeLeft(timeLeft)}
+            {/* Game Status - Conditional based on player count */}
+            {!hasMinPlayers ? (
+                <div className="bg-slate-900/50 border border-white/10 rounded-xl p-4 md:p-6 text-center backdrop-blur-sm">
+                    <span className="text-xs text-gray-400 uppercase tracking-wide">Waiting for Players</span>
+                    <div className="text-2xl md:text-3xl font-bold text-white mt-2">
+                        {MIN_PLAYERS - registeredPlayers.length} more needed
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">Game starts when {MIN_PLAYERS}+ players join</p>
                 </div>
-            </div>
+            ) : countdownActive ? (
+                <div className="bg-gradient-to-br from-green-900/30 to-blue-900/30 border-2 border-green-500/30 rounded-xl p-4 md:p-6 text-center backdrop-blur-sm animate-pulse">
+                    <span className="text-xs text-green-300 uppercase tracking-wide font-bold">🚀 Starting Soon!</span>
+                    <div className="text-4xl md:text-5xl font-black text-white mt-2">
+                        {formatTimeLeft(timeLeft)}
+                    </div>
+                    <p className="text-xs text-gray-300 mt-2">Last chance to join!</p>
+                </div>
+            ) : (
+                <div className="bg-slate-900/50 border border-white/10 rounded-xl p-4 md:p-6 text-center backdrop-blur-sm">
+                    <span className="text-xs text-gray-400 uppercase tracking-wide">Ready to Start</span>
+                    <div className="text-2xl md:text-3xl font-bold text-green-400 mt-2">
+                        ✓ {registeredPlayers.length} Players
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">Waiting for all players to ready up</p>
+                </div>
+            )}
 
             {/* Registered Players List */}
             {registeredPlayers.length > 0 && (
