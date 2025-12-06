@@ -9,6 +9,7 @@ interface VoteToggleProps {
   showAnimation?: boolean;
   isCompact?: boolean;
   voteResult?: "correct" | "incorrect" | null;
+  secondsRemaining?: number; // Time until vote locks
 }
 
 export default function VoteToggle({
@@ -18,6 +19,7 @@ export default function VoteToggle({
   showAnimation = true,
   isCompact = false,
   voteResult = null,
+  secondsRemaining,
 }: VoteToggleProps) {
   const [isAnimating, setIsAnimating] = useState(false);
   const [hasInteracted, setHasInteracted] = useState(false);
@@ -122,8 +124,22 @@ export default function VoteToggle({
         </div>
       </button>
 
+      {/* Timer Warning - Critical State (< 3s) */}
+      {secondsRemaining !== undefined && secondsRemaining > 0 && secondsRemaining <= 3 && !isLocked && (
+        <div className={`${textSize} text-red-400 font-bold text-center animate-pulse`}>
+          🔒 LOCKING IN {secondsRemaining}s
+        </div>
+      )}
+
+      {/* Timer Warning - Yellow Alert (< 10s) */}
+      {secondsRemaining !== undefined && secondsRemaining > 3 && secondsRemaining <= 10 && !isLocked && (
+        <div className={`${textSize} text-yellow-400 text-center`}>
+          ⚠️ {secondsRemaining} seconds to lock
+        </div>
+      )}
+
       {/* Hint Text */}
-      {!hasInteracted && !isLocked && (
+      {!hasInteracted && !isLocked && (secondsRemaining === undefined || secondsRemaining > 10) && (
         <div
           className={`
             ${textSize} text-gray-500 text-center

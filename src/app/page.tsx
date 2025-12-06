@@ -187,12 +187,8 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Wallet Connect - Enhanced for real users */}
+              {/* Authentication */}
               <div className="w-full">
-                {/* TODO: Uncomment when ready for production wallet connection */}
-                {/* <WalletConnectCard onWalletConnect={handleWebAuth} /> */}
-                
-                {/* Fallback to AuthInput for development */}
                 <AuthInput onAuthSuccess={handleWebAuth} />
               </div>
 

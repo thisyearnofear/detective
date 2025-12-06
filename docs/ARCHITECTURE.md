@@ -286,4 +286,108 @@ NEXT_PUBLIC_ENABLE_WEBSOCKET=true
 - **On-Platform**: Mini app lives entirely in Warpcast feed
 - **Viral Loop**: Leaderboard displays naturally within casts
 
+## Recent Architecture Changes
+
+Based on recent development efforts, the following architectural improvements have been implemented to enhance the system's reliability and user experience:
+
+### 1. Server-Driven Game Phase Transitions
+
+**Problem**: GameLobby had `setTimeout` delays that could drift from server state, causing frozen UI.
+
+**Solution**: New `/api/game/phase` endpoint returns current phase + metadata with server-driven state management.
+
+**Implementation Details**:
+- GameLobby polls `/api/game/phase` every 1s instead of using client-side timeouts
+- Endpoint returns: `phase: 'REGISTRATION' | 'BOT_GENERATION' | 'PLAYER_REVEAL' | 'COUNTDOWN' | 'LIVE'`
+- Auto-transitions based on server response (not client timer)
+- Handles network failures gracefully with ErrorCard display
+
+**Benefits**:
+- No more client-server state drift
+- Server is source of truth for phase transitions
+- Handles network failures gracefully
+- Clear debugging via `reason` field in response
+
+### 2. Centralized Modal Management System
+
+**Problem**: Overlays (reveal screen, errors, loading) had no centralized management, causing z-index conflicts and confusion.
+
+**Solution**: ModalStack context provider with automatic layering and proper state management.
+
+**Implementation Details**:
+- Single source of truth for all overlays using React context
+- Automatic z-index calculation (50 + index*10)
+- Backdrop click to dismiss top modal
+- Auto-close timers with configurable durations
+- Proper component mounting/unmounting lifecycle
+
+**Benefits**:
+- No overlay conflicts or z-index issues
+- Automatic layering with proper precedence
+- Consistent modal behavior across the application
+- Built-in auto-close support for timed modals
+
+### 3. Consolidated Loading System
+
+**Problem**: RegistrationLoader + RoundStartLoader were nearly identical (90% code duplication).
+
+**Solution**: Single LoadingOverlay component with variants and flexible rendering.
+
+**Implementation Details**:
+- Supports 5 variants: `registration`, `round-start`, `preparing`, `reveal`, `generic`
+- Configurable progress bars and messages
+- Both inline and fixed positioning modes
+- Replaced both duplicate components
+
+**Benefits**:
+- Eliminates code duplication
+- Consistent loading experience across the app
+- Easier maintenance and updates
+- Flexible rendering options
+
+### 4. Centralized Countdown Timer System
+
+**Problem**: Multiple countdown timers scattered across components with different logic.
+
+**Solution**: Custom `useCountdown` hook with consistent interface and server time sync.
+
+**Implementation Details**:
+- Returns: `timeRemaining`, `secondsRemaining`, `isExpired`, `formattedTime`, `percentRemaining`
+- Configurable poll interval (defaults to 100ms for smooth updates)
+- Syncs with server time via timeOffset
+- Handles onComplete callback consistently
+
+**Benefits**:
+- Single source of truth for all timers
+- Smooth 100ms updates (not jerky 1s updates)
+- Server time sync via timeOffset
+- Easy to add warning states based on secondsRemaining
+
+### 5. Enhanced Vote Toggle System
+
+**Problem**: Users didn't know when their vote would lock, creating poor UX under time pressure.
+
+**Solution**: Three-tier warning system in VoteToggle with visual feedback.
+
+**Implementation Details**:
+- **Normal (> 10s)**: Hint text: "↑ Click to change your vote"
+- **Warning (3-10s)**: Yellow alert: "⚠️ 10 seconds to lock"
+- **Critical (< 3s)**: Red pulsing: "🔒 LOCKING IN 3s"
+- **Locked (= 0)**: Disabled state: "🔒 Vote locked"
+
+**Benefits**:
+- Clear visual feedback about time pressure
+- Reduces user confusion during critical moments
+- Better game flow and user experience
+- Consistent timing across all vote interactions
+
+### Technology Stack Updates
+
+| Layer              | Updated Technology                    | Reason for Change                                          |
+| ------------------ | ------------------------------------- | ---------------------------------------------------------- |
+| **Real-time Chat** | HTTP polling / WebSocket (configurable) | Added WebSocket support via Ably for better performance    |
+| **State Management** | Custom hooks + Context                | Consolidated state management patterns                     |
+| **UI Components**  | Component consolidation               | Reduced 31 components to 28, ~340 LOC saved                |
+| **Timer Logic**    | Centralized useCountdown hook         | Single source of truth for all countdowns                  |
+
 This architecture provides a solid foundation for scaling from MVP to production while maintaining the core Farcaster-native experience.

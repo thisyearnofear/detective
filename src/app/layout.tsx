@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import BottomLinks from '@/components/BottomLinks';
 import WagmiProviderWrapper from '@/components/providers/WagmiProvider';
+import { ModalProvider } from '@/components/ModalStack';
 
 export const metadata: Metadata = {
   title: 'Detective - Is That You?',
@@ -53,9 +54,11 @@ export default function RootLayout({
         <meta name="theme-color" content="#0f172a" />
       </head>
       <body className="text-white">
-        <WagmiProviderWrapper>
-          {children}
-        </WagmiProviderWrapper>
+        <ModalProvider>
+          <WagmiProviderWrapper>
+            {children}
+          </WagmiProviderWrapper>
+        </ModalProvider>
         <BottomLinks />
         {/* SVG Filter for Gooey Effect */}
         <svg className="svg-filters" xmlns="http://www.w3.org/2000/svg" version="1.1">

@@ -4,8 +4,8 @@ import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import useSWR from "swr";
 import ChatWindow from "./ChatWindow";
 import Leaderboard from "./Leaderboard";
-import RoundStartLoader from "./RoundStartLoader";
-import RoundTransition from "./RoundTransition";
+import LoadingOverlay from "./LoadingOverlay";
+import { useModal } from "@/hooks/useModal";
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -36,11 +36,11 @@ type RoundResult = {
 };
 
 export default function MultiChatContainer({ fid }: Props) {
+  const { show: showModal } = useModal();
   const [votes, setVotes] = useState<VoteState>({});
   const [newMatchIds, setNewMatchIds] = useState<Set<string>>(new Set());
   const [gameFinished, setGameFinished] = useState(false);
   const [roundResults, setRoundResults] = useState<RoundResult[]>([]);
-  const [showRevealScreen, setShowRevealScreen] = useState(false);
   const [batchReveals, setBatchReveals] = useState<Array<{
     opponent: {
       fid: number;
@@ -131,13 +131,7 @@ export default function MultiChatContainer({ fid }: Props) {
       // Round changed
       if (matchData.currentRound > lastRound) {
         setIsPreparingRound(false);
-
-        // Trigger reveal screen if we have results from the previous round
-        if (batchReveals.length > 0) {
-          setShowRevealScreen(true);
-          // Auto-hide after 5 seconds to let user play next round
-          setTimeout(() => setShowRevealScreen(false), 5000);
-        }
+        // Reveal screen now handled via modal system (shown in reveal effect above)
       }
 
       if (lastRound > 0 && matchData.matches?.length === 0) {
@@ -231,16 +225,32 @@ export default function MultiChatContainer({ fid }: Props) {
     }
   }, [matchData?.voteHistory?.length, matchData?.voteHistory?.map((v: any) => v.roundNumber).join(",")]);
 
-  // Show reveal screen when round ends (all matches locked, no new matches available)
+  // Show reveal screen via modal when round ends
   useEffect(() => {
     if (
       batchReveals.length > 0 &&
-      matchData?.matches?.length === 0 &&
-      !showRevealScreen
+      matchData?.matches?.length === 0
     ) {
-      setShowRevealScreen(true);
+      // Show reveal modal with 5s auto-close
+      showModal('reveal', 
+        {
+          reveals: batchReveals,
+          stats: {
+            accuracy: roundResults.length > 0 ? (roundResults.filter((r) => r.correct).length / roundResults.length) * 100 : 0,
+            correct: roundResults.filter((r) => r.correct).length,
+            total: roundResults.length,
+            playerRank: matchData?.playerRank,
+            totalPlayers: matchData?.playerPool?.totalPlayers,
+          },
+          nextRoundNumber: matchData.currentRound,
+        },
+        { 
+          autoClose: 5000,
+          onClose: () => setBatchReveals([])
+        }
+      );
     }
-  }, [batchReveals.length, matchData?.matches?.length, showRevealScreen]);
+  }, [batchReveals.length, matchData?.matches?.length, matchData?.currentRound, matchData?.playerRank, matchData?.playerPool?.totalPlayers, roundResults.length, showModal]);
 
 
 
@@ -474,23 +484,6 @@ export default function MultiChatContainer({ fid }: Props) {
     );
   }
 
-  // Show reveal screen overlay if active (renders via portal on top of matches)
-  const revealOverlay = showRevealScreen && batchReveals.length > 0 ? (
-    <RoundTransition
-      isVisible={true}
-      phase="reveal"
-      reveals={batchReveals}
-      stats={{
-        accuracy: roundResults.length > 0 ? (roundResults.filter((r) => r.correct).length / roundResults.length) * 100 : 0,
-        correct: roundResults.filter((r) => r.correct).length,
-        total: roundResults.length,
-        playerRank: matchData?.playerRank,
-        totalPlayers: matchData?.playerPool?.totalPlayers,
-      }}
-      nextRoundNumber={currentRound}
-    />
-  ) : null;
-
   if (matches.length === 0 || isPreparingRound) {
     // Show loading state if transitioning between rounds
     const loaderMessage = transitionTimeoutMessage === "delayed"
@@ -498,15 +491,13 @@ export default function MultiChatContainer({ fid }: Props) {
       : "Preparing next round...";
 
     return (
-      <>
-        {revealOverlay}
-        <RoundStartLoader
-          roundNumber={currentRound}
-          totalRounds={totalRounds}
-          message={loaderMessage}
-          inline={true}
-        />
-      </>
+      <LoadingOverlay
+        variant="round-start"
+        message={loaderMessage}
+        subtext={`Round ${Math.min(currentRound, totalRounds)} of ${totalRounds}`}
+        inline={true}
+        isVisible={true}
+      />
     );
   }
 
@@ -515,7 +506,6 @@ export default function MultiChatContainer({ fid }: Props) {
 
   return (
     <div className="space-y-4">
-      {revealOverlay}
       {/* Round indicator - more compact on mobile */}
       <div className="text-center mb-2 lg:mb-4">
         <span className="bg-slate-700 px-3 py-1 rounded-full text-xs lg:text-sm text-blue-300">

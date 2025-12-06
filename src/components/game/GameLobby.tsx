@@ -3,12 +3,14 @@
 import { useState, useEffect } from 'react';
 import useSWR from 'swr';
 import { Player, UserProfile } from '@/lib/types';
+import { useCountdown } from '@/hooks/useCountdown';
 import BotGeneration from './phases/BotGeneration';
 import PlayerReveal from './phases/PlayerReveal';
 import GameCountdown from './phases/GameCountdown';
 import Lobby from './phases/Lobby';
+import ErrorCard from '../ErrorCard';
 
-type GamePhase = 'lobby' | 'bot_generation' | 'player_reveal' | 'countdown' | 'live';
+type GamePhase = 'REGISTRATION' | 'BOT_GENERATION' | 'PLAYER_REVEAL' | 'COUNTDOWN' | 'LIVE' | 'ERROR';
 
 type Props = {
   currentPlayer: UserProfile;
@@ -22,8 +24,9 @@ export default function GameLobby({ currentPlayer, isRegistrationOpen = true, ga
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isRegistered, setIsRegistered] = useState(gameState?.isRegistered || false);
-  const [gamePhase, setGamePhase] = useState<GamePhase>('lobby');
+  const [gamePhase, setGamePhase] = useState<GamePhase>('REGISTRATION');
   const [timeLeft, setTimeLeft] = useState(0);
+  const [phaseMessage, setPhaseMessage] = useState('');
 
   // Fetch registered players list
   const { data: playersData } = useSWR(
@@ -35,36 +38,48 @@ export default function GameLobby({ currentPlayer, isRegistrationOpen = true, ga
     }
   );
 
+  // Poll server for phase transitions (server-driven, not client-side setTimeout)
+  const { data: phaseData, error: phaseError } = useSWR(
+    gameState?.cycleId ? `/api/game/phase?cycleId=${gameState.cycleId}&fid=${currentPlayer.fid}` : null,
+    fetcher,
+    {
+      refreshInterval: 2000, // Poll every 2s for phase changes (UI countdown keeps it smooth via useCountdown)
+      revalidateOnFocus: false,
+      shouldRetryOnError: true,
+      errorRetryInterval: 1000,
+    }
+  );
+
   const registeredPlayers = (playersData?.players || []) as Player[];
   const maxPlayers = 8;
 
-  // Countdown timer for registration
+  // Sync phase from server response (not from client logic)
   useEffect(() => {
-    const updateTimer = () => {
-      const now = Date.now();
-      const remaining = Math.max(0, (gameState?.registrationEnds || Date.now() + 300000) - now);
-      setTimeLeft(remaining);
-    };
-
-    updateTimer();
-    const interval = setInterval(updateTimer, 1000);
-    return () => clearInterval(interval);
-  }, [gameState?.registrationEnds]);
-
-  // Check if game should start (when lobby is full or registration ends)
-  useEffect(() => {
-    const isFull = registeredPlayers.length >= maxPlayers;
-    const isTimeUp = gameState?.registrationEnds && Date.now() > gameState.registrationEnds;
-
-    if ((isFull || isTimeUp) && registeredPlayers.length >= 3 && gamePhase === 'lobby') {
-      // Need minimum 3 players to start, transition to game start
-      const timer = setTimeout(() => {
-        setGamePhase('bot_generation');
-      }, 2000); // 2 second delay before starting sequence
-
-      return () => clearTimeout(timer);
+    if (phaseData?.phase) {
+      // Map server phase to component phase
+      const serverPhase = phaseData.phase as string;
+      
+      if (gamePhase === 'REGISTRATION' && serverPhase === 'BOT_GENERATION') {
+        // Server says transition to bot generation
+        setGamePhase('BOT_GENERATION');
+        setPhaseMessage(phaseData.reason);
+      }
+      
+      setPhaseMessage(phaseData.reason || '');
     }
-  }, [registeredPlayers.length, gameState?.registrationEnds, maxPlayers, gamePhase]);
+  }, [phaseData?.phase, gamePhase]);
+
+  // Use countdown hook for timer (syncs with server)
+  const countdownEndTime = phaseData?.phaseEndTime || gameState?.registrationEnds || 0;
+  const { timeRemaining } = useCountdown({
+    endTime: countdownEndTime,
+    pollInterval: 100, // Smooth updates
+  });
+
+  // Update timeLeft state for Lobby component
+  useEffect(() => {
+    setTimeLeft(timeRemaining);
+  }, [timeRemaining]);
 
   const handleRegister = async () => {
     console.log('handleRegister called for FID:', currentPlayer.fid); // Debug log
@@ -136,36 +151,49 @@ export default function GameLobby({ currentPlayer, isRegistrationOpen = true, ga
     return null;
   }
 
-  // Phase Rendering
+  // Show error if phase endpoint failed
+  if (phaseError && gamePhase === 'REGISTRATION') {
+    return (
+      <ErrorCard
+        title="Game Connection Lost"
+        message="Unable to connect to game server. Please refresh."
+        severity="error"
+        icon="🔌"
+        onDismiss={() => window.location.reload()}
+      />
+    );
+  }
+
+  // Phase Rendering - server-driven
   switch (gamePhase) {
-    case 'bot_generation':
+    case 'BOT_GENERATION':
       return (
         <BotGeneration
           playerCount={registeredPlayers.length}
-          onComplete={() => setGamePhase('player_reveal')}
+          onComplete={() => setGamePhase('PLAYER_REVEAL')}
         />
       );
 
-    case 'player_reveal':
+    case 'PLAYER_REVEAL':
       return (
         <PlayerReveal
           players={registeredPlayers}
-          onComplete={() => setGamePhase('countdown')}
+          onComplete={() => setGamePhase('COUNTDOWN')}
         />
       );
 
-    case 'countdown':
+    case 'COUNTDOWN':
       return (
         <GameCountdown
           playerCount={registeredPlayers.length}
           onComplete={() => {
-            setGamePhase('live');
+            setGamePhase('LIVE');
             handleGameStart();
           }}
         />
       );
 
-    case 'lobby':
+    case 'REGISTRATION':
     default:
       return (
         <Lobby
@@ -178,6 +206,7 @@ export default function GameLobby({ currentPlayer, isRegistrationOpen = true, ga
           error={error}
           onRegister={handleRegister}
           onReady={handleReady}
+          phaseMessage={phaseMessage}
         />
       );
   }

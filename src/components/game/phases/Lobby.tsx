@@ -1,5 +1,5 @@
 import { Player, UserProfile } from '@/lib/types';
-import RegistrationLoader from '@/components/RegistrationLoader';
+import LoadingOverlay from '@/components/LoadingOverlay';
 
 type Props = {
     currentPlayer: UserProfile;
@@ -11,6 +11,7 @@ type Props = {
     error: string | null;
     onRegister: () => void;
     onReady: () => void;
+    phaseMessage?: string;
 };
 
 export default function Lobby({
@@ -22,7 +23,8 @@ export default function Lobby({
     isLoading,
     error,
     onRegister,
-    onReady
+    onReady,
+    phaseMessage
 }: Props) {
     const spotsLeft = maxPlayers - registeredPlayers.length;
     const isFull = spotsLeft === 0;
@@ -35,7 +37,7 @@ export default function Lobby({
 
     return (
         <div className="space-y-6">
-            <RegistrationLoader isVisible={isLoading} />
+            <LoadingOverlay variant="registration" isVisible={isLoading} inline />
 
             {/* Registration Status Header */}
             <div className="text-center">
@@ -45,6 +47,11 @@ export default function Lobby({
                 <p className="text-gray-400 text-xs md:text-sm">
                     {isFull ? 'Lobby is full!' : `${spotsLeft} spot${spotsLeft !== 1 ? 's' : ''} remaining`}
                 </p>
+                {phaseMessage && (
+                    <p className="text-gray-500 text-xs mt-2 italic">
+                        {phaseMessage}
+                    </p>
+                )}
             </div>
 
             {/* Registration Progress */}
