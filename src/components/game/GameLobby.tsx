@@ -25,7 +25,6 @@ export default function GameLobby({ currentPlayer, isRegistrationOpen = true, ga
   const [isRegistered, setIsRegistered] = useState(gameState?.isRegistered || false);
   const [gamePhase, setGamePhase] = useState<GamePhase>('REGISTRATION');
   const [timeLeft, setTimeLeft] = useState(0);
-  const [phaseMessage, setPhaseMessage] = useState('');
 
   // Consolidated polling: single endpoint for game state, phase, and players
   // Reduces 2 requests/2s to 1 request/2s
@@ -50,10 +49,7 @@ export default function GameLobby({ currentPlayer, isRegistrationOpen = true, ga
       
       if (gamePhase === 'REGISTRATION' && serverPhase === 'BOT_GENERATION') {
         setGamePhase('BOT_GENERATION');
-        setPhaseMessage(statusData.reason);
       }
-      
-      setPhaseMessage(statusData.reason || '');
     }
   }, [statusData?.phase, gamePhase]);
 
@@ -194,7 +190,6 @@ export default function GameLobby({ currentPlayer, isRegistrationOpen = true, ga
           error={error}
           onRegister={handleRegister}
           onReady={handleReady}
-          phaseMessage={phaseMessage}
         />
       );
   }

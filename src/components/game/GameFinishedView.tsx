@@ -1,6 +1,5 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import useSWR from 'swr';
 import Leaderboard from '../Leaderboard';
 import { fetcher } from '@/lib/fetcher';
@@ -18,14 +17,7 @@ type Props = {
   onLogout: () => void;
 };
 
-/**
- * GameFinishedView - Displays when game is FINISHED
- * 
- * Shows the leaderboard and countdown to the next game cycle.
- */
-export default function GameFinishedView({ fid, gameState, onLogout }: Props) {
-  const [nextGameCountdown, setNextGameCountdown] = useState(0);
-
+export default function GameFinishedView({ fid, onLogout }: Props) {
   // Fetch player stats
   const { data: statsData } = useSWR(
     fid ? `/api/stats/player/${fid}` : null,
@@ -37,27 +29,6 @@ export default function GameFinishedView({ fid, gameState, onLogout }: Props) {
     total_games: 0,
     accuracy: 0,
     avg_speed_ms: 0,
-  };
-
-  // Calculate time until next registration phase
-  useEffect(() => {
-    const updateCountdown = () => {
-      const now = Date.now();
-      // Next game should start 5 seconds after this game finishes
-      // For now, estimate based on gameEnds + 5 second grace period
-      const remaining = Math.max(0, gameState.gameEnds + 5000 - now);
-      setNextGameCountdown(remaining);
-    };
-
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 1000);
-    return () => clearInterval(interval);
-  }, [gameState.gameEnds]);
-
-  const formatCountdown = (ms: number) => {
-    const minutes = Math.floor(ms / 60000);
-    const seconds = Math.floor((ms % 60000) / 1000);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -94,7 +65,6 @@ export default function GameFinishedView({ fid, gameState, onLogout }: Props) {
           {/* View Stats */}
           <button
             onClick={() => {
-              // TODO: Navigate to stats/profile page
               console.log('Navigate to stats');
             }}
             className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-3 rounded-lg text-center text-sm font-semibold transition-all"
@@ -104,29 +74,16 @@ export default function GameFinishedView({ fid, gameState, onLogout }: Props) {
         </div>
       </div>
 
-      {/* Countdown to Next Game */}
-      {nextGameCountdown > 0 && (
-        <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-green-500/30 rounded-xl p-6 text-center backdrop-blur-sm">
-          <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Next Game Starts In</p>
-          <div className="text-4xl font-black text-green-400 mb-1 font-mono">
-            {formatCountdown(nextGameCountdown)}
-          </div>
-          <p className="text-xs text-gray-500 mb-4">
-            {gameState.playerCount > 0 ? `${gameState.playerCount} players registered` : 'Waiting for players...'}
-          </p>
-          
-          {/* Auto Join or Manual */}
-          <div className="space-y-2 pt-4 border-t border-slate-700">
-            <p className="text-xs text-gray-400 mb-3">You'll automatically join the next game</p>
-            <button
-              onClick={onLogout}
-              className="w-full text-xs text-gray-400 hover:text-gray-300 transition-colors py-2"
-            >
-              ← Leave & Return to Home
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Next Game Prompt */}
+      <div className="bg-gradient-to-br from-green-800/80 to-emerald-900/80 border-2 border-green-500/50 rounded-xl p-6 text-center backdrop-blur-sm">
+        <p className="text-sm text-green-300 mb-4">Next game starting soon...</p>
+        <button
+          onClick={onLogout}
+          className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+        >
+          Join Next Game →
+        </button>
+      </div>
 
       {/* Your Stats Summary */}
       <div className="bg-slate-900/30 border border-white/5 rounded-lg p-4 space-y-3">
