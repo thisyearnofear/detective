@@ -866,12 +866,15 @@ class GameManager {
     }
 
     // LIVE -> FINISHED
+    // Game finishes when: (1) all players done, (2) 90% done, (3) time limit reached
     if (this.state!.state === "LIVE" && now > this.state!.gameEnds) {
       const totalPlayers = this.state!.players.size;
 
+      // No players registered - extend grace period
       if (totalPlayers === 0 || this.state!.playerSessions.size === 0) {
         this.state!.gameEnds = now + 60000;
       } else {
+        // Count players who completed all rounds
         let completedPlayers = 0;
         for (const [_fid, session] of this.state!.playerSessions) {
           if (session.currentRound > FIXED_ROUNDS) {
@@ -879,31 +882,48 @@ class GameManager {
           }
         }
 
-        const hasPlayerSessions = this.state!.playerSessions.size > 0;
-        const allPlayersComplete = hasPlayerSessions && completedPlayers === totalPlayers;
+        const allPlayersComplete = completedPlayers === totalPlayers;
+        const majorityComplete = completedPlayers >= Math.ceil(totalPlayers * 0.9); // 90%
         const extensionLimitReached = this.state!.extensionCount >= this.state!.maxExtensions;
-        const maxTotalDuration = GAME_DURATION + (this.state!.maxExtensions * 60 * 1000);
-        const hardDeadlineExceeded = now > this.state!.gameEnds - GAME_DURATION + maxTotalDuration;
 
         let shouldFinish = false;
+        let reason = "";
 
+        // Finish if all players completed
         if (allPlayersComplete) {
           shouldFinish = true;
-        } else if (extensionLimitReached || hardDeadlineExceeded) {
+          reason = `all ${totalPlayers} players completed`;
+        }
+        // Finish if 90% completed and we've used extensions
+        else if (majorityComplete && extensionLimitReached) {
           shouldFinish = true;
+          reason = `${completedPlayers}/${totalPlayers} players completed + extension limit reached`;
+        }
+        // Finish if extension limit reached (force finish)
+        else if (extensionLimitReached) {
+          shouldFinish = true;
+          reason = `extension limit reached (${completedPlayers}/${totalPlayers} completed)`;
         }
 
         if (shouldFinish) {
-          console.log(`[GameManager] Transitioning to FINISHED (allPlayersComplete=${allPlayersComplete}, extensionLimitReached=${extensionLimitReached}, hardDeadlineExceeded=${hardDeadlineExceeded})`);
+          console.log(`[GameManager] LIVE -> FINISHED: ${reason}`);
           this.state!.state = "FINISHED";
           this.state!.finishedAt = now;
           this.state!.leaderboard = await this.getLeaderboard();
-
           this.saveGameResultsToDatabase().catch(console.error);
-
         } else if (this.state!.extensionCount < this.state!.maxExtensions) {
+          // Grant extension to allow more players to finish
           this.state!.extensionCount++;
           this.state!.gameEnds = now + 60000;
+          console.log(`[GameManager] Granting extension ${this.state!.extensionCount}/${this.state!.maxExtensions} (${completedPlayers}/${totalPlayers} completed)`);
+        } else {
+          // Should not reach here - extensionLimitReached should have triggered finish
+          // But as safety net, force finish
+          console.warn(`[GameManager] Unexpected state: extensions exhausted but shouldFinish=false. Force finishing.`);
+          this.state!.state = "FINISHED";
+          this.state!.finishedAt = now;
+          this.state!.leaderboard = await this.getLeaderboard();
+          this.saveGameResultsToDatabase().catch(console.error);
         }
       }
     }
