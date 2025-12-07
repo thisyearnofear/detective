@@ -19,9 +19,9 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.0",
+    "@farcaster/auth-client": "^0.7.0",
     "@farcaster/auth-kit": "^0.6.1",
     "@farcaster/miniapp-sdk": "^0.2.1",
-    "@farcaster/quick-auth": "^0.0.8",
     "@neynar/nodejs-sdk": "^3.97.0",
     "@tailwindcss/postcss": "^4.1.17",
     "lightningcss": "1.27.0",
