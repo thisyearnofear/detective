@@ -292,20 +292,20 @@ export default function Home() {
                     )}
                   </div>
                   <div className="flex gap-2">
-                    <button
-                      onClick={() => setShowResults(true)}
-                      className="text-xs bg-white/10 hover:bg-white/20 text-gray-300 px-2 py-1 rounded transition-colors"
-                      title="View results and leaderboard"
-                    >
-                      📊
-                    </button>
-                    <button
-                      onClick={handleLogout}
-                      className="text-xs text-gray-400 hover:text-white transition-colors"
-                    >
-                      Switch
-                    </button>
-                  </div>
+                     <button
+                       onClick={() => setShowResults(true)}
+                       className="text-xs bg-purple-600/80 hover:bg-purple-500 text-white px-3 py-2 rounded-lg font-semibold transition-all"
+                       title="View your results and leaderboard"
+                     >
+                       📊 Stats
+                     </button>
+                     <button
+                       onClick={handleLogout}
+                       className="text-xs text-gray-400 hover:text-white transition-colors"
+                     >
+                       Switch
+                     </button>
+                   </div>
                 </div>
               </div>
 
