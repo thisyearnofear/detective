@@ -107,7 +107,7 @@ export default function Home() {
   const gridImages = Array.from({ length: 9 }, (_, i) => `/grid-images/${i + 1}.jpg`);
 
   return (
-    <main className="min-h-screen flex items-center justify-center relative overflow-hidden px-4">
+    <main className="min-h-screen flex items-center justify-center relative overflow-hidden px-4 z-0">
         {/* Layer 1: Starfield (deepest) */}
         <StarfieldBackground />
 
@@ -115,7 +115,7 @@ export default function Home() {
         <AnimatedGridBackdrop images={gridImages} />
 
         {/* Layer 3: Content Container - Perfect centering */}
-        <div className="relative z-10 w-full max-w-2xl flex flex-col items-center justify-center min-h-screen">
+        <div className="relative z-20 w-full max-w-2xl flex flex-col items-center justify-center min-h-screen">
 
         {/* Hero Section - The DETECTIVE Title - Centered with entrance animation */}
         <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-1000 ${introComplete ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
@@ -137,7 +137,9 @@ export default function Home() {
                 </div>
                 <div className="space-y-3">
                   <h2 className="text-2xl font-black text-white tracking-tight">Can you spot the AI?</h2>
-                  <p className="text-base text-gray-300 font-medium">Chat with opponents. Vote: Real or Bot?</p>
+                  <p className="text-sm text-gray-300 leading-relaxed">
+                    Chat with opponents. Figure out who's real.
+                  </p>
                 </div>
               </div>
 
