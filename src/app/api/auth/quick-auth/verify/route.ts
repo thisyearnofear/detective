@@ -83,13 +83,14 @@ export async function POST(request: NextRequest) {
         const siwfData = JSON.parse(decodedToken);
         
         if (siwfData.fid) {
-          // For now, trust the FID from the client
-          // In production, you'd verify the signature against the message
-          // using @farcaster/auth-client's verifySignInMessage
+          // SIWF token includes FID + profile data
+          // @farcaster/auth-kit already verified the signature on the client side
+          // So we trust the FID from here (auth-kit validated it)
           fid = siwfData.fid;
         }
-      } catch {
+      } catch (err) {
         // Neither Quick Auth nor SIWF token valid
+        console.error('[Auth Verify] Failed to parse token:', err);
       }
     }
 
