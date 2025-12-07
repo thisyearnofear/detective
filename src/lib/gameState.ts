@@ -246,7 +246,6 @@ class GameManager {
       this.state!.state = "LIVE";
       this.state!.registrationEnds = now - 1;
       this.state!.gameEnds = now + GAME_DURATION;
-      this.state!.extensionCount = 0;
 
       await persistence.saveGameStateMeta({
         cycleId: this.state!.cycleId,
@@ -815,7 +814,6 @@ class GameManager {
         console.log(`[GameManager] Registration countdown complete, starting game with ${playerCount} players`);
         this.state!.state = "LIVE";
         this.state!.gameEnds = now + GAME_DURATION;
-        this.state!.extensionCount = 0;
 
         // Persist state transition to Redis so all instances see LIVE state
         await persistence.saveGameStateMeta({
@@ -846,7 +844,6 @@ class GameManager {
         this.state!.registrationEnds = now + REGISTRATION_COUNTDOWN;
         this.state!.gameEnds = now + GAME_DURATION;
         this.state!.countdownStarted = false;
-        this.state!.extensionCount = 0;
         this.state!.finishedAt = undefined;
 
         await persistence.saveGameStateMeta({
