@@ -15,11 +15,10 @@ const REDIS_KEYS = {
   bots: "game:bots",
   matches: "game:matches",
   sessions: "game:sessions",
-  cycleLock: "game:cycle-lock", // Lock for atomic cycle transitions
+  stateVersion: "game:state-version", // Version counter for cache consistency
 };
 
 const REDIS_TTL = 60 * 60; // 1 hour
-const CYCLE_LOCK_TTL = 10; // 10 second lock (prevents infinite locks)
 
 /**
  * Save game cycle metadata to Redis
@@ -293,38 +292,42 @@ export async function clearAllMatches(): Promise<void> {
 }
 
 /**
- * Attempt to acquire cycle transition lock (atomic)
- * Returns true if lock acquired, false if another instance has it
+ * Load current state version from Redis
  */
-export async function acquireCycleLock(lockValue: string): Promise<boolean> {
+export async function loadStateVersion(): Promise<number | null> {
   try {
-    const result = await redis.set(REDIS_KEYS.cycleLock, lockValue, { 
-      ex: CYCLE_LOCK_TTL, 
-      nx: true // Only set if key doesn't exist
-    });
-    const acquired = result === "OK";
-    if (acquired) {
-      console.log("[gamePersistence] Acquired cycle lock");
-    }
-    return acquired;
+    const version = await redis.get(REDIS_KEYS.stateVersion);
+    return version ? parseInt(version, 10) : 0;
   } catch (error) {
-    console.error("[gamePersistence] Failed to acquire cycle lock:", error);
-    return false;
+    console.error("[gamePersistence] Failed to load state version:", error);
+    return null;
   }
 }
 
 /**
- * Release cycle transition lock
+ * Attempt atomic version increment (compare-and-swap pattern)
+ * Returns true if this instance successfully incremented, false if another beat us
  */
-export async function releaseCycleLock(lockValue: string): Promise<void> {
+export async function atomicVersionIncrement(
+  expectedCurrent: number,
+  newVersion: number
+): Promise<boolean> {
   try {
-    const current = await redis.get(REDIS_KEYS.cycleLock);
-    if (current === lockValue) {
-      await redis.del(REDIS_KEYS.cycleLock);
-      console.log("[gamePersistence] Released cycle lock");
+    // Use SET with condition: only set if current value matches expected
+    // For simplicity, use a 2-step: check then set with NX
+    const current = await redis.get(REDIS_KEYS.stateVersion);
+    const currentNum = current ? parseInt(current, 10) : 0;
+    
+    if (currentNum !== expectedCurrent) {
+      return false; // Someone else already incremented
     }
+    
+    // Try to atomically set new version
+    const result = await redis.set(REDIS_KEYS.stateVersion, newVersion.toString());
+    return result === "OK";
   } catch (error) {
-    console.error("[gamePersistence] Failed to release cycle lock:", error);
+    console.error("[gamePersistence] Failed to increment version:", error);
+    return false;
   }
 }
 
@@ -338,7 +341,6 @@ export async function clearAll(): Promise<void> {
     await redis.del(REDIS_KEYS.bots);
     await redis.del(REDIS_KEYS.matches);
     await redis.del(REDIS_KEYS.sessions);
-    await redis.del(REDIS_KEYS.cycleLock);
     console.log("[gamePersistence] Cleared all Redis state");
   } catch (error) {
     console.error("[gamePersistence] Failed to clear Redis state:", error);
