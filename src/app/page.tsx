@@ -8,7 +8,7 @@ import AnimatedGridBackdrop from "@/components/AnimatedGridBackdrop";
 import StarfieldBackground from "@/components/StarfieldBackground";
 import GameStateView from "@/components/game/GameStateView";
 import GameStatusCard from "@/components/game/GameStatusCard";
-import ResultsSheet from "@/components/ResultsSheet";
+import Leaderboard from "@/components/Leaderboard";
 import CollapsibleSection from "@/components/CollapsibleSection";
 import { fetcher } from "@/lib/fetcher";
 
@@ -17,7 +17,7 @@ export default function Home() {
   const [sdkUser, setSdkUser] = useState<any>(null);
   const [isSdkLoading, setIsSdkLoading] = useState(true);
   const [introComplete, setIntroComplete] = useState(false);
-  const [showResults, setShowResults] = useState(false);
+  const [isLeaderboardView, setIsLeaderboardView] = useState(false);
 
   useEffect(() => {
     // Auto-advance intro after 2 seconds
@@ -293,11 +293,10 @@ export default function Home() {
                   </div>
                   <div className="flex gap-2">
                      <button
-                       onClick={() => setShowResults(true)}
-                       className="text-xs bg-purple-600/80 hover:bg-purple-500 text-white px-3 py-2 rounded-lg font-semibold transition-all"
-                       title="View your results and leaderboard"
+                       onClick={() => setIsLeaderboardView(!isLeaderboardView)}
+                       className="text-xs text-gray-400 hover:text-white transition-colors"
                      >
-                       📊 Stats
+                       {isLeaderboardView ? '← Game' : '🏆 Leaderboard'}
                      </button>
                      <button
                        onClick={handleLogout}
@@ -309,31 +308,33 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Game State Content */}
-              {/* Live Game Status */}
-              {gameState && (
-                <GameStatusCard
-                  gameState={{
-                    state: gameState.state,
-                    playerCount: gameState.playerCount,
-                    registrationEnds: gameState.registrationEnds,
-                    gameEnds: gameState.gameEnds,
-                  }}
-                />
-              )}
-
-              {/* Game Phase View (Registration/Live only, not FINISHED) */}
-              {gameState?.state !== "FINISHED" && renderGameState()}
-
-                  {/* Results Sheet */}
-                  {sdkUser && (
-                  <ResultsSheet
-                  fid={sdkUser.fid}
-                  isOpen={showResults}
-                  onClose={() => setShowResults(false)}
-                  />
+              {/* Toggle View: Game vs Leaderboard */}
+              {isLeaderboardView ? (
+                // Leaderboard View
+                <div className="w-full space-y-4">
+                  <div className="text-xs text-gray-500 uppercase tracking-widest px-4">Global Leaderboard</div>
+                  <Leaderboard />
+                </div>
+              ) : (
+                // Game View
+                <>
+                  {/* Live Game Status */}
+                  {gameState && (
+                    <GameStatusCard
+                      gameState={{
+                        state: gameState.state,
+                        playerCount: gameState.playerCount,
+                        registrationEnds: gameState.registrationEnds,
+                        gameEnds: gameState.gameEnds,
+                      }}
+                    />
                   )}
-                  </div>
+
+                  {/* Game Phase View (Registration/Live only, not FINISHED) */}
+                  {gameState?.state !== "FINISHED" && renderGameState()}
+                </>
+              )}
+              </div>
                   )}
                   </div>
                   </div>
