@@ -117,11 +117,7 @@ export interface GameState {
   matches: Map<string, Match>; // Map of matchId -> Match
   playerSessions: Map<number, PlayerGameSession>; // Map of fid -> session
   leaderboard: LeaderboardEntry[];
-
-  // Game extension tracking
-  extensionCount: number; // Number of times game was extended
-  maxExtensions: number; // Maximum allowed extensions
-  finishedAt?: number; // Timestamp when game finished (for cleanup grace period)
+  finishedAt?: number; // Timestamp when game finished
 
   // Smart registration countdown
   countdownStarted: boolean; // True once minimum players join and countdown begins
