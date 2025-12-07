@@ -16,6 +16,14 @@
 const DATABASE_URL = process.env.DATABASE_URL;
 const USE_DATABASE = process.env.USE_DATABASE === "true" && DATABASE_URL;
 
+// Helper to convert PostgreSQL DECIMAL strings to numbers
+function convertAccuracy(entry: any): any {
+  if (entry && typeof entry.accuracy === 'string') {
+    return { ...entry, accuracy: parseFloat(entry.accuracy) };
+  }
+  return entry;
+}
+
 // Types for database records
 export interface DbGameCycle {
     id: string;
@@ -668,7 +676,7 @@ class PostgresDatabase {
             OFFSET $1 LIMIT $2
         `, [startRank - 1, limit]);
 
-        return result.rows;
+        return result.rows.map(convertAccuracy);
     }
 
     async getTopPlayers(chain: string = 'arbitrum', limit: number = 100): Promise<DbLeaderboardEntry[]> {
@@ -690,7 +698,7 @@ class PostgresDatabase {
             LIMIT $1`,
             [limit]
         );
-        return result.rows;
+        return result.rows.map(convertAccuracy);
     }
 
     async getFriendsLeaderboard(fid: number, chain: string = 'arbitrum', limit: number = 100): Promise<DbLeaderboardEntry[]> {
@@ -714,7 +722,7 @@ class PostgresDatabase {
             LIMIT $1`,
             [limit]
         );
-        return result.rows;
+        return result.rows.map(convertAccuracy);
     }
 
     async getCurrentGameLeaderboard(chain: string = 'arbitrum', limit: number = 100): Promise<DbLeaderboardEntry[]> {
@@ -736,7 +744,7 @@ class PostgresDatabase {
             LIMIT $1`,
             [limit]
         );
-        return result.rows;
+        return result.rows.map(convertAccuracy);
     }
 
     async getSeasonLeaderboard(chain: string = 'arbitrum', timeframe: string = '7d', limit: number = 100): Promise<DbLeaderboardEntry[]> {
@@ -758,7 +766,7 @@ class PostgresDatabase {
             LIMIT $1`,
             [limit]
         );
-        return result.rows;
+        return result.rows.map(convertAccuracy);
     }
 
     async getAllTimeLeaderboard(chain: string = 'arbitrum', limit: number = 100): Promise<DbLeaderboardEntry[]> {
@@ -780,7 +788,7 @@ class PostgresDatabase {
             LIMIT $1`,
             [limit]
         );
-        return result.rows;
+        return result.rows.map(convertAccuracy);
     }
 
     async getNFTHolderLeaderboard(chain: string = 'arbitrum', timeframe: string = '7d', limit: number = 100): Promise<DbLeaderboardEntry[]> {
@@ -802,7 +810,7 @@ class PostgresDatabase {
             LIMIT $1`,
             [limit]
         );
-        return result.rows;
+        return result.rows.map(convertAccuracy);
     }
 
     async getTokenHolderLeaderboard(chain: string = 'monad', timeframe: string = '7d', limit: number = 100): Promise<DbLeaderboardEntry[]> {
@@ -824,7 +832,7 @@ class PostgresDatabase {
             LIMIT $1`,
             [limit]
         );
-        return result.rows;
+        return result.rows.map(convertAccuracy);
     }
 
     async getCrossChainLeaderboard(limit: number = 100): Promise<DbLeaderboardEntry[]> {
@@ -844,7 +852,7 @@ class PostgresDatabase {
             LIMIT $1`,
             [limit]
         );
-        return result.rows;
+        return result.rows.map(convertAccuracy);
     }
 
     async close(): Promise<void> {
