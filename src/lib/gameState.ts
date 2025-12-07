@@ -782,11 +782,19 @@ class GameManager {
       this.state!.gameEnds = stateMeta.gameEnds;
     }
 
-    // Reload players from Redis to prevent stale in-memory cache issues
+    // Reload players, sessions, and matches from Redis to prevent stale in-memory cache issues
     if (USE_REDIS) {
       const freshPlayers = await persistence.loadAllPlayers();
       this.state!.players.clear();
       freshPlayers.forEach(p => this.state!.players.set(p.fid, p));
+
+      const freshSessions = await persistence.loadAllSessions();
+      this.state!.playerSessions.clear();
+      freshSessions.forEach(s => this.state!.playerSessions.set(s.fid, s));
+
+      const freshMatches = await persistence.loadAllMatches();
+      this.state!.matches.clear();
+      freshMatches.forEach(m => this.state!.matches.set(m.id, m));
     }
 
     const now = Date.now();
