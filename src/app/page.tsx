@@ -38,12 +38,52 @@ export default function Home() {
 
   const handleLogout = () => {
     setSdkUser(null);
+    localStorage.removeItem('auth-token');
+    localStorage.removeItem('cached-user');
   };
 
   useEffect(() => {
-    // Quick Auth handles everything automatically
-    // Just set loading to false to show the auth UI
-    setIsSdkLoading(false);
+    // Try to restore auth from localStorage on mount
+    const restoreAuth = async () => {
+      try {
+        const token = localStorage.getItem('auth-token');
+        const cachedUser = localStorage.getItem('cached-user');
+        
+        if (token && cachedUser) {
+          // Verify token is still valid on server
+          const response = await fetch('/api/auth/quick-auth/verify', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ token }),
+          });
+
+          if (response.ok) {
+            const userData = await response.json();
+            setSdkUser({
+              fid: userData.fid,
+              username: userData.username || '',
+              displayName: userData.displayName || '',
+              pfpUrl: userData.pfpUrl || '',
+            });
+          } else {
+            // Token invalid - clear it
+            localStorage.removeItem('auth-token');
+            localStorage.removeItem('cached-user');
+          }
+        }
+      } catch (error) {
+        console.error('Failed to restore auth:', error);
+        localStorage.removeItem('auth-token');
+        localStorage.removeItem('cached-user');
+      } finally {
+        setIsSdkLoading(false);
+      }
+    };
+
+    restoreAuth();
   }, []);
 
   const handleWebAuth = (userProfile: {
