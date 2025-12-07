@@ -201,7 +201,7 @@ export default function UnifiedAuthComponent({
             - Deep link for mobile
             - Polling for signature completion
         */}
-        <div className="flex justify-center">
+        <div className="flex justify-center relative z-10">
           <SignInButton
             timeout={300_000}
             interval={1500}
