@@ -407,9 +407,9 @@ export default function MultiChatContainer({ fid }: Props) {
       }
 
       // Check if this is actually a different match or just a re-render
-      const messageCountChanged = (previousMatch.messages?.length || 0) !== (currentMatch.messages?.length || 0);
+      const messageCountChanged = (previousMatch?.messages?.length || 0) !== (currentMatch?.messages?.length || 0);
       const messageContentChanged = messageCountChanged || 
-        JSON.stringify(previousMatch.messages) !== JSON.stringify(currentMatch.messages);
+        JSON.stringify(previousMatch?.messages) !== JSON.stringify(currentMatch?.messages);
       
       if (
         !previousMatch ||
