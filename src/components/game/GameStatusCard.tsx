@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { GameCycleState } from '@/lib/types';
+import { getServerTime } from '@/lib/timeSynchronization';
 
 type Props = {
   gameState: {
@@ -27,7 +28,7 @@ export default function GameStatusCard({ gameState }: Props) {
   // Update timer based on game state
   useEffect(() => {
     const updateTimer = () => {
-      const now = Date.now();
+      const now = getServerTime(); // Use synced server time
       let remaining = 0;
 
       if (gameState.state === 'REGISTRATION') {
