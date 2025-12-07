@@ -869,42 +869,42 @@ class GameManager {
     if (this.state!.state === "LIVE" && now > this.state!.gameEnds) {
       const totalPlayers = this.state!.players.size;
 
-      if (totalPlayers === 0 || this.state!.matches.size === 0) {
+      if (totalPlayers === 0 || this.state!.playerSessions.size === 0) {
         this.state!.gameEnds = now + 60000;
-        return;
-      }
-
-      let completedPlayers = 0;
-      for (const [_fid, session] of this.state!.playerSessions) {
-        if (session.currentRound > FIXED_ROUNDS) {
-          completedPlayers++;
+      } else {
+        let completedPlayers = 0;
+        for (const [_fid, session] of this.state!.playerSessions) {
+          if (session.currentRound > FIXED_ROUNDS) {
+            completedPlayers++;
+          }
         }
-      }
 
-      const hasPlayerSessions = this.state!.playerSessions.size > 0;
-      const allPlayersComplete = hasPlayerSessions && completedPlayers === totalPlayers;
-      const extensionLimitReached = this.state!.extensionCount >= this.state!.maxExtensions;
-      const maxTotalDuration = GAME_DURATION + (this.state!.maxExtensions * 60 * 1000);
-      const hardDeadlineExceeded = now > this.state!.gameEnds - GAME_DURATION + maxTotalDuration;
+        const hasPlayerSessions = this.state!.playerSessions.size > 0;
+        const allPlayersComplete = hasPlayerSessions && completedPlayers === totalPlayers;
+        const extensionLimitReached = this.state!.extensionCount >= this.state!.maxExtensions;
+        const maxTotalDuration = GAME_DURATION + (this.state!.maxExtensions * 60 * 1000);
+        const hardDeadlineExceeded = now > this.state!.gameEnds - GAME_DURATION + maxTotalDuration;
 
-      let shouldFinish = false;
+        let shouldFinish = false;
 
-      if (allPlayersComplete) {
-        shouldFinish = true;
-      } else if (extensionLimitReached || hardDeadlineExceeded) {
-        shouldFinish = true;
-      }
+        if (allPlayersComplete) {
+          shouldFinish = true;
+        } else if (extensionLimitReached || hardDeadlineExceeded) {
+          shouldFinish = true;
+        }
 
-      if (shouldFinish) {
-        this.state!.state = "FINISHED";
-        this.state!.finishedAt = now;
-        this.state!.leaderboard = await this.getLeaderboard();
+        if (shouldFinish) {
+          console.log(`[GameManager] Transitioning to FINISHED (allPlayersComplete=${allPlayersComplete}, extensionLimitReached=${extensionLimitReached}, hardDeadlineExceeded=${hardDeadlineExceeded})`);
+          this.state!.state = "FINISHED";
+          this.state!.finishedAt = now;
+          this.state!.leaderboard = await this.getLeaderboard();
 
-        this.saveGameResultsToDatabase().catch(console.error);
+          this.saveGameResultsToDatabase().catch(console.error);
 
-      } else if (this.state!.extensionCount < this.state!.maxExtensions) {
-        this.state!.extensionCount++;
-        this.state!.gameEnds = now + 60000;
+        } else if (this.state!.extensionCount < this.state!.maxExtensions) {
+          this.state!.extensionCount++;
+          this.state!.gameEnds = now + 60000;
+        }
       }
     }
 
