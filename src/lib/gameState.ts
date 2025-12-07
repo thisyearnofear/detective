@@ -779,6 +779,7 @@ class GameManager {
       this.state!.state = stateMeta.state;
       this.state!.registrationEnds = stateMeta.registrationEnds;
       this.state!.gameEnds = stateMeta.gameEnds;
+      this.state!.finishedAt = stateMeta.finishedAt;
     }
 
     // Reload players, sessions, and matches from Redis to prevent stale in-memory cache issues
@@ -876,16 +877,27 @@ class GameManager {
       this.state!.finishedAt = now;
       this.state!.leaderboard = await this.getLeaderboard();
       
+      // Persist state transition to Redis immediately
+      await persistence.saveGameStateMeta({
+        cycleId: this.state!.cycleId,
+        state: this.state!.state,
+        registrationEnds: this.state!.registrationEnds,
+        gameEnds: this.state!.gameEnds,
+        finishedAt: this.state!.finishedAt,
+      });
+      
       // Save results async (non-blocking)
       this.saveGameResultsToDatabase().catch(console.error);
-    }
+      return;
+      }
 
-    await persistence.saveGameStateMeta({
+      await persistence.saveGameStateMeta({
       cycleId: this.state!.cycleId,
       state: this.state!.state,
       registrationEnds: this.state!.registrationEnds,
       gameEnds: this.state!.gameEnds,
-    });
+      finishedAt: this.state!.finishedAt,
+      });
   }
 
   private async cleanupOldMatches(): Promise<void> {

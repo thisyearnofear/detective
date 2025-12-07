@@ -27,6 +27,7 @@ export async function saveGameStateMeta(state: {
   state: "REGISTRATION" | "LIVE" | "FINISHED";
   registrationEnds: number;
   gameEnds: number;
+  finishedAt?: number;
 }): Promise<void> {
   try {
     await setJSON(REDIS_KEYS.gameState, state, REDIS_TTL);
@@ -43,6 +44,7 @@ export async function loadGameStateMeta(): Promise<{
   state: "REGISTRATION" | "LIVE" | "FINISHED";
   registrationEnds: number;
   gameEnds: number;
+  finishedAt?: number;
 } | null> {
   try {
     return await getJSON(REDIS_KEYS.gameState);
