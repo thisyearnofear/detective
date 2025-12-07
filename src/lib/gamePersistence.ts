@@ -200,7 +200,6 @@ export async function saveSession(session: PlayerGameSession): Promise<void> {
       completedMatchIds: Array.from(session.completedMatchIds),
       facedOpponents: Array.from(session.facedOpponents.entries()),
       currentRound: session.currentRound,
-      completedMatchesPerRound: Array.from(session.completedMatchesPerRound.entries()),
     };
     await redis.hset(REDIS_KEYS.sessions, session.fid.toString(), JSON.stringify(serializable));
     await redis.expire(REDIS_KEYS.sessions, REDIS_TTL);
@@ -226,8 +225,7 @@ export async function loadAllSessions(): Promise<Map<number, PlayerGameSession>>
             activeMatches: new Map(sessionData.activeMatches || []),
             completedMatchIds: new Set(sessionData.completedMatchIds || []),
             facedOpponents: new Map(sessionData.facedOpponents || []),
-            currentRound: 0, // Reset for new game cycle
-            completedMatchesPerRound: new Map(sessionData.completedMatchesPerRound || []),
+            currentRound: 0, // Reset for new game cycle (synchronized to game timer)
           };
           sessions.set(parseInt(fid, 10), session);
         } catch (e) {

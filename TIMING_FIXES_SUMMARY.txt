@@ -1,0 +1,90 @@
+# Game Timing Architecture Improvements
+## DRY + ENHANCEMENT FIRST + MODULAR
+
+### PROBLEM
+1. Timer countdown vs server game timer drift - cause: timeOffset changing mid-game
+2. Multiple sources of time truth scattered across components
+3. ChatWindow passed timeOffset prop causing cascading updates
+4. useCountdown timer could restart when endTime or timeOffset changed
+
+### SOLUTION (Following Core Principles)
+
+## 1. Centralized Time Synchronization (DRY)
+NEW FILE: src/lib/timeSynchronization.ts
+- Single module for ALL time offset logic
+- Syncs once per game session (not continuously)
+- Exported functions: syncTimeOffset(), getServerTime(), resetTimeOffset()
+- Used by: MultiChatContainer on first API poll
+
+PRINCIPLE: DRY - No scattered timeOffset state across 3+ components anymore
+
+---
+
+## 2. Enhanced useCountdown Hook (MODULAR)
+FILE: src/hooks/useCountdown.ts
+KEY CHANGES:
+- Uses stable endTime (unix timestamp) as single source of truth
+- Locks initial duration on first mount (prevents mid-timer percent changes)
+- Relies on completedRef to prevent duplicate onComplete() calls
+- Added totalDuration config param for progress bars
+- Removed isExpired from dependencies (was causing timer reset)
+
+PRINCIPLE: MODULAR - Timer is now independent of parent component updates
+
+---
+
+## 3. Removed timeOffset Propagation (ENHANCEMENT + CLEAN)
+FILES MODIFIED:
+- ChatWindow.tsx: Removed timeOffset prop, don't add to endTime
+- ProgressRingTimer.tsx: Removed timeOffset prop, use direct Date.now()
+- MultiChatContainer.tsx: Removed timeOffset state, use centralized module
+
+PRINCIPLE: CLEAN - Clear separation - server endTimes already include offset
+
+---
+
+## 4. Fixed Match.endTime Usage (PERFORMANT)
+FILE: src/components/ChatWindow.tsx
+CHANGE: 
+  Before: endTime: match.endTime + (timeOffset || 0)
+  After: endTime: match.endTime (already synced by server)
+
+PRINCIPLE: DRY + PERFORMANT - No need to add offset twice
+
+---
+
+## 5. Consolidated Timer Logic (ENHANCEMENT)
+FILE: src/components/MultiChatContainer.tsx
+- Syncs timeOffset ONCE on first successful API call
+- Doesn't continuously update offset (prevents timer jumps)
+- Resets offset when cycleId changes (new game cycle)
+
+PRINCIPLE: PREVENTION BLOAT - Removed continuous polling of time sync
+
+---
+
+## Time Flow Now Works As:
+
+1. Game starts: Server sets match.endTime = serverTime + 60000
+2. Client polls API: Gets serverTime
+3. MultiChatContainer: Calculates offset ONCE
+4. ChatWindow receives match.endTime (already absolute)
+5. useCountdown: Uses match.endTime directly, no modifications
+6. ProgressRingTimer: Uses endTime - Date.now() directly
+
+NO DRIFT because:
+- Server endTime is absolute (accounts for initial network delay)
+- Client clock is most reliable for elapsed time
+- Offset not recalculated mid-game
+
+---
+
+## Testing Checklist
+[ ] Timer doesn't jump during round transitions
+[ ] Chat messages persist and display correctly
+[ ] Round progression happens when last match completes
+[ ] Timer reaches 0:00 exactly when vote locks
+[ ] New game cycle properly resets all timers
+[ ] No console "TimeSync" logs after first poll
+[ ] ProgressRingTimer progress bar smooth (not jumping)
+[ ] Mobile frames have stable timers

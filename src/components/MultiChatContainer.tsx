@@ -7,6 +7,7 @@ import Leaderboard from "./Leaderboard";
 import LoadingOverlay from "./LoadingOverlay";
 import { useModal } from "@/hooks/useModal";
 import { fetcherWithGameNotLive } from "@/lib/fetcher";
+import { syncTimeOffset, resetTimeOffset } from "@/lib/timeSynchronization";
 import { UserProfile } from "@/lib/types";
 
 // Polling intervals - single source of truth
@@ -57,9 +58,8 @@ export default function MultiChatContainer({ fid }: Props) {
   // Track cycleId to detect new game cycle (FINISHED → REGISTRATION transition)
   const lastCycleIdRef = useRef<string>("");
 
-  // Time synchronization with server
-  const [timeOffset, setTimeOffset] = useState(0);
-  const timeOffsetRef = useRef(0);
+  // Time synchronization - now centralized in timeSynchronization.ts
+  // Remove local state; use module exports instead
 
   // Determine polling interval based on game state
   // ENHANCEMENT: Keep minimal polling during post-game to detect cycleId transition
@@ -84,22 +84,16 @@ export default function MultiChatContainer({ fid }: Props) {
     errorRetryInterval: 1000,
   });
 
-  // Track successful loads and errors, calculate time offset
+  // Track successful loads and errors, sync time offset on first poll only
   useEffect(() => {
     if (matchData && !error) {
       setHasLoadedOnce(true);
       setConsecutiveErrors(0);
 
-      // Calculate time offset for synchronization
-      // Only update if offset changes significantly (>100ms) to reduce state updates
+      // Sync time offset ONLY on first successful load (prevents mid-game drift)
+      // Uses centralized timing module - syncs once per session
       if (matchData.serverTime) {
-        const clientTime = Date.now();
-        const newOffset = matchData.serverTime - clientTime;
-
-        if (Math.abs(newOffset - timeOffsetRef.current) > 100) {
-          timeOffsetRef.current = newOffset;
-          setTimeOffset(newOffset);
-        }
+        syncTimeOffset(matchData.serverTime);
       }
 
       // Update last valid round to prevent flashing
@@ -124,6 +118,8 @@ export default function MultiChatContainer({ fid }: Props) {
         setBatchReveals([]);
         setLastRound(0);
         lastValidRoundRef.current = 1;
+        // Reset time sync for new cycle
+        resetTimeOffset();
       }
       lastCycleIdRef.current = matchData.cycleId;
     }
@@ -411,11 +407,15 @@ export default function MultiChatContainer({ fid }: Props) {
       }
 
       // Check if this is actually a different match or just a re-render
+      const messageCountChanged = (previousMatch.messages?.length || 0) !== (currentMatch.messages?.length || 0);
+      const messageContentChanged = messageCountChanged || 
+        JSON.stringify(previousMatch.messages) !== JSON.stringify(currentMatch.messages);
+      
       if (
         !previousMatch ||
         previousMatch.id !== currentMatch.id ||
         previousMatch.voteLocked !== currentMatch.voteLocked ||
-        (previousMatch.messages?.length || 0) !== (currentMatch.messages?.length || 0)
+        messageContentChanged
       ) {
         newSlots[slotNum] = currentMatch;
         hasChanges = true;
@@ -595,7 +595,6 @@ export default function MultiChatContainer({ fid }: Props) {
                 variant="minimal"
                 showVoteToggle={true}
                 isNewMatch={newMatchIds.has(match.id)}
-                timeOffset={timeOffset}
                 onRefresh={async () => {
                   await mutate();
                 }}

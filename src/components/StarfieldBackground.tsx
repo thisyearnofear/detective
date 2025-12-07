@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 
-export default function StarfieldBackground() {
+const StarfieldBackground = memo(function StarfieldBackground() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const sceneRef = useRef<THREE.Scene | null>(null);
     const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -218,4 +218,6 @@ export default function StarfieldBackground() {
             }}
         />
     );
-}
+});
+
+export default StarfieldBackground;
