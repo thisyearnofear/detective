@@ -561,7 +561,7 @@ class PostgresDatabase {
             "SELECT * FROM player_stats WHERE fid = $1",
             [fid]
         );
-        return result.rows[0] || null;
+        return result.rows[0] ? convertAccuracy(result.rows[0]) : null;
     }
 
     async getGlobalLeaderboard(limit: number = 100): Promise<DbLeaderboardEntry[]> {
@@ -623,7 +623,7 @@ class PostgresDatabase {
        ORDER BY rank ASC`,
             [cycleId]
         );
-        return result.rows;
+        return result.rows.map(convertAccuracy);
     }
 
     async getGameResultsByPlayer(fid: number, limit: number = 50): Promise<DbGameResult[]> {
@@ -635,7 +635,7 @@ class PostgresDatabase {
        LIMIT $2`,
             [fid, limit]
         );
-        return result.rows;
+        return result.rows.map(convertAccuracy);
     }
 
     async getLeaderboardNearPlayer(fid: number, chain: string = 'arbitrum', limit: number = 10): Promise<DbLeaderboardEntry[]> {
