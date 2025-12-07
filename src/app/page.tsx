@@ -8,6 +8,7 @@ import AnimatedGridBackdrop from "@/components/AnimatedGridBackdrop";
 import StarfieldBackground from "@/components/StarfieldBackground";
 import GameStateView from "@/components/game/GameStateView";
 import GameStatusCard from "@/components/game/GameStatusCard";
+import ResultsSheet from "@/components/ResultsSheet";
 import CollapsibleSection from "@/components/CollapsibleSection";
 import { fetcher } from "@/lib/fetcher";
 
@@ -16,6 +17,7 @@ export default function Home() {
   const [sdkUser, setSdkUser] = useState<any>(null);
   const [isSdkLoading, setIsSdkLoading] = useState(true);
   const [introComplete, setIntroComplete] = useState(false);
+  const [showResults, setShowResults] = useState(false);
 
   useEffect(() => {
     // Auto-advance intro after 2 seconds
@@ -289,40 +291,52 @@ export default function Home() {
                       <p className="text-sm text-gray-300">{sdkUser.displayName}</p>
                     )}
                   </div>
-                  <button
-                    onClick={handleLogout}
-                    className="text-xs text-gray-400 hover:text-white transition-colors"
-                  >
-                    Switch
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowResults(true)}
+                      className="text-xs bg-white/10 hover:bg-white/20 text-gray-300 px-2 py-1 rounded transition-colors"
+                      title="View results and leaderboard"
+                    >
+                      📊
+                    </button>
+                    <button
+                      onClick={handleLogout}
+                      className="text-xs text-gray-400 hover:text-white transition-colors"
+                    >
+                      Switch
+                    </button>
+                  </div>
                 </div>
               </div>
 
               {/* Game State Content */}
-              {gameState?.state === "FINISHED" ? (
-                renderGameState()
-              ) : (
-                <>
-                  {/* Live Game Status */}
-                  {gameState && (
-                    <GameStatusCard
-                      gameState={{
-                        state: gameState.state,
-                        playerCount: gameState.playerCount,
-                        registrationEnds: gameState.registrationEnds,
-                        gameEnds: gameState.gameEnds,
-                      }}
-                    />
-                  )}
-
-                  {/* Game Phase View */}
-                  {renderGameState()}
-                </>
+              {/* Live Game Status */}
+              {gameState && (
+                <GameStatusCard
+                  gameState={{
+                    state: gameState.state,
+                    playerCount: gameState.playerCount,
+                    registrationEnds: gameState.registrationEnds,
+                    gameEnds: gameState.gameEnds,
+                  }}
+                />
               )}
-            </div>
-          )}
-        </div>
-        </div>
-      </main>
-  );
-}
+
+              {/* Game Phase View (Registration/Live only, not FINISHED) */}
+              {gameState?.state !== "FINISHED" && renderGameState()}
+
+                  {/* Results Sheet */}
+                  {sdkUser && (
+                  <ResultsSheet
+                  fid={sdkUser.fid}
+                  isOpen={showResults}
+                  onClose={() => setShowResults(false)}
+                  />
+                  )}
+                  </div>
+                  )}
+                  </div>
+                  </div>
+                  </main>
+                  );
+                  }
