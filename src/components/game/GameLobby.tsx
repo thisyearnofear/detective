@@ -110,10 +110,6 @@ export default function GameLobby({ currentPlayer, isRegistrationOpen = true, ga
     }
   };
 
-  const handleGameStart = () => {
-    console.log('Game starting with players:', registeredPlayers);
-  };
-
   if (!isRegistrationOpen) {
     return null;
   }
