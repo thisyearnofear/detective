@@ -15,9 +15,11 @@ const REDIS_KEYS = {
   bots: "game:bots",
   matches: "game:matches",
   sessions: "game:sessions",
+  cycleLock: "game:cycle-lock", // Lock for atomic cycle transitions
 };
 
 const REDIS_TTL = 60 * 60; // 1 hour
+const CYCLE_LOCK_TTL = 10; // 10 second lock (prevents infinite locks)
 
 /**
  * Save game cycle metadata to Redis
@@ -291,6 +293,42 @@ export async function clearAllMatches(): Promise<void> {
 }
 
 /**
+ * Attempt to acquire cycle transition lock (atomic)
+ * Returns true if lock acquired, false if another instance has it
+ */
+export async function acquireCycleLock(lockValue: string): Promise<boolean> {
+  try {
+    const result = await redis.set(REDIS_KEYS.cycleLock, lockValue, { 
+      ex: CYCLE_LOCK_TTL, 
+      nx: true // Only set if key doesn't exist
+    });
+    const acquired = result === "OK";
+    if (acquired) {
+      console.log("[gamePersistence] Acquired cycle lock");
+    }
+    return acquired;
+  } catch (error) {
+    console.error("[gamePersistence] Failed to acquire cycle lock:", error);
+    return false;
+  }
+}
+
+/**
+ * Release cycle transition lock
+ */
+export async function releaseCycleLock(lockValue: string): Promise<void> {
+  try {
+    const current = await redis.get(REDIS_KEYS.cycleLock);
+    if (current === lockValue) {
+      await redis.del(REDIS_KEYS.cycleLock);
+      console.log("[gamePersistence] Released cycle lock");
+    }
+  } catch (error) {
+    console.error("[gamePersistence] Failed to release cycle lock:", error);
+  }
+}
+
+/**
  * Clear all Redis state (for reset)
  */
 export async function clearAll(): Promise<void> {
@@ -300,6 +338,7 @@ export async function clearAll(): Promise<void> {
     await redis.del(REDIS_KEYS.bots);
     await redis.del(REDIS_KEYS.matches);
     await redis.del(REDIS_KEYS.sessions);
+    await redis.del(REDIS_KEYS.cycleLock);
     console.log("[gamePersistence] Cleared all Redis state");
   } catch (error) {
     console.error("[gamePersistence] Failed to clear Redis state:", error);
