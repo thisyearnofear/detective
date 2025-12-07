@@ -104,6 +104,10 @@ class GameManager {
           },
         };
         console.log(`[GameManager] Loaded cycle ${stateMeta.cycleId} from Redis`);
+        
+        // Mark cache as fresh - version is loaded from Redis
+        const version = await stateConsistency.loadStateVersion();
+        stateConsistency.markCacheFresh(version || 0);
       } else {
         // Create new cycle
         this.state = this.createNewGameState();
@@ -114,6 +118,9 @@ class GameManager {
           gameEnds: this.state.gameEnds,
         });
         console.log(`[GameManager] Created new cycle ${this.state.cycleId}`);
+        
+        // Mark cache as fresh (version 0 for new cycle)
+        stateConsistency.markCacheFresh(0);
       }
     } finally {
       this.initializing = false;
