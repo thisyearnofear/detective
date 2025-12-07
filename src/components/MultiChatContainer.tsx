@@ -9,6 +9,13 @@ import { useModal } from "@/hooks/useModal";
 import { fetcherWithGameNotLive } from "@/lib/fetcher";
 import { UserProfile } from "@/lib/types";
 
+// Polling intervals - single source of truth
+const POLLING_INTERVALS = {
+  ACTIVE_GAME: 2000,      // Normal active game polling
+  ROUND_TRANSITION: 500,  // Fast polling during round transitions
+  POST_GAME_WAIT: 1000,   // Minimal polling while waiting for next cycle (detects cycleId change)
+} as const;
+
 type Props = {
   fid: number;
 };
@@ -47,9 +54,20 @@ export default function MultiChatContainer({ fid }: Props) {
   // Track last valid round to prevent flashing if API returns partial data
   const lastValidRoundRef = useRef<number>(1);
 
+  // Track cycleId to detect new game cycle (FINISHED → REGISTRATION transition)
+  const lastCycleIdRef = useRef<string>("");
+
   // Time synchronization with server
   const [timeOffset, setTimeOffset] = useState(0);
   const timeOffsetRef = useRef(0);
+
+  // Determine polling interval based on game state
+  // ENHANCEMENT: Keep minimal polling during post-game to detect cycleId transition
+  const refreshInterval = isTransitioning 
+    ? POLLING_INTERVALS.ROUND_TRANSITION 
+    : gameFinished 
+      ? POLLING_INTERVALS.POST_GAME_WAIT  // Keep polling to detect new cycle
+      : POLLING_INTERVALS.ACTIVE_GAME;
 
   // Poll for active matches
   const {
@@ -57,11 +75,11 @@ export default function MultiChatContainer({ fid }: Props) {
     error,
     mutate,
   } = useSWR(`/api/match/active?fid=${fid}`, fetcherWithGameNotLive, {
-    refreshInterval: isTransitioning ? 500 : (gameFinished ? 0 : 2000),
+    refreshInterval,
     refreshWhenHidden: false,
     revalidateOnFocus: false,
     keepPreviousData: true,
-    shouldRetryOnError: !gameFinished,
+    shouldRetryOnError: true, // Keep retrying even post-game to detect state change
     errorRetryCount: 3,
     errorRetryInterval: 1000,
   });
@@ -92,6 +110,24 @@ export default function MultiChatContainer({ fid }: Props) {
       setConsecutiveErrors(prev => prev + 1);
     }
   }, [matchData, error]);
+
+  // Detect new game cycle (cycleId changed) and reset UI state
+  // This happens when FINISHED → REGISTRATION transition completes
+  useEffect(() => {
+    if (matchData?.cycleId && matchData.cycleId !== lastCycleIdRef.current) {
+      if (lastCycleIdRef.current !== "") {
+        // CycleId changed - new game cycle started, reset all state
+        console.log(`[MultiChatContainer] New cycle detected: ${lastCycleIdRef.current} → ${matchData.cycleId}`);
+        setGameFinished(false);
+        setRoundResults([]);
+        setVotes({});
+        setBatchReveals([]);
+        setLastRound(0);
+        lastValidRoundRef.current = 1;
+      }
+      lastCycleIdRef.current = matchData.cycleId;
+    }
+  }, [matchData?.cycleId]);
 
   // Check if game is finished (all rounds completed and no active matches)
   // Add safeguards to prevent premature game ending
