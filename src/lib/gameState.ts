@@ -808,6 +808,13 @@ class GameManager {
         this.state!.gameEnds = now + GAME_DURATION;
         this.state!.extensionCount = 0;
 
+        // Persist state transition to Redis so all instances see LIVE state
+        await persistence.saveGameStateMeta({
+          cycleId: this.state!.cycleId,
+          state: this.state!.state,
+          registrationEnds: this.state!.registrationEnds,
+          gameEnds: this.state!.gameEnds,
+        });
       }
     }
 
