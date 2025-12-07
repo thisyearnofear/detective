@@ -150,12 +150,7 @@ class GameManager {
   async getGameState() {
     await this.ensureInitialized();
     
-    // Check if in-memory cache is stale and reload if needed
-    const isConsistent = await stateConsistency.validateStateConsistency();
-    if (!isConsistent) {
-      await this.reloadFromRedis();
-    }
-    
+    // Update state based on timers every time it's requested
     await this.updateCycleState();
     await this.cleanupOldMatches();
 
@@ -276,6 +271,13 @@ class GameManager {
    */
   async getActiveMatches(fid: number): Promise<Match[]> {
     await this.ensureInitialized();
+    
+    // Check if another instance made a state change (version mismatch)
+    const isConsistent = await stateConsistency.validateStateConsistency();
+    if (!isConsistent) {
+      // Reload state from Redis if another instance changed it
+      await this.reloadFromRedis();
+    }
 
     const player = this.state!.players.get(fid);
     if (!player || this.state!.state !== "LIVE") {
@@ -878,6 +880,9 @@ class GameManager {
           registrationEnds: this.state!.registrationEnds,
           gameEnds: this.state!.gameEnds,
         });
+        
+        // Increment version to notify other instances of state change
+        await stateConsistency.tryIncrementStateVersion();
       }
     }
 
@@ -958,10 +963,13 @@ class GameManager {
         finishedAt: this.state!.finishedAt,
       });
       
+      // Increment version to notify other instances of state change
+      await stateConsistency.tryIncrementStateVersion();
+      
       // Save results async (non-blocking)
       this.saveGameResultsToDatabase().catch(console.error);
       return;
-      }
+    }
 
       await persistence.saveGameStateMeta({
       cycleId: this.state!.cycleId,
