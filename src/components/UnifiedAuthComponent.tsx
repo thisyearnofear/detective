@@ -208,14 +208,18 @@ export default function UnifiedAuthComponent({
             onSuccess={async (res) => {
               try {
                 // res contains the SIWF signature and user profile data
-                if (!res.signature || !res.message) {
-                  throw new Error('Invalid sign-in response');
+                if (!res.signature || !res.message || !res.fid) {
+                  throw new Error('Invalid sign-in response: missing signature, message, or FID');
                 }
 
-                // Create a temporary token from the signature
-                // Server endpoint will verify this and extract FID
+                // Create a temporary token from the signature and profile data
+                // Include FID so server doesn't need to verify signature (auth-kit already did)
                 const tempToken = btoa(
                   JSON.stringify({
+                    fid: res.fid,
+                    username: res.username,
+                    displayName: res.displayName,
+                    pfpUrl: res.pfpUrl,
                     message: res.message,
                     signature: res.signature,
                   })
