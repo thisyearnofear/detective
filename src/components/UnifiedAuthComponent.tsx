@@ -3,24 +3,18 @@
 /**
  * Unified Authentication Component (December 2025)
  * 
- * Handles both Farcaster MiniApp and web contexts seamlessly:
+ * Single component handling both contexts with DRY principles:
  * 
  * 1. **In Farcaster (MiniApp)**: Auto-connects via Quick Auth
- *    - No UI needed, automatic authentication
- *    - User gets instant access
+ * 2. **On Web**: QR code via @farcaster/auth-kit
  * 
- * 2. **On Web**: Shows AuthKit's SignInButton for QR code flow
- *    - User scans QR with Farcaster/Warpcast
- *    - Gets full access, same as MiniApp users
- *    - Clear, standard Farcaster authentication
- * 
- * Reference: 
- * - https://miniapps.farcaster.xyz/docs/guides/auth
- * - https://docs.farcaster.xyz/auth-kit/
+ * Both flows converge at server verification and use the same token handling.
+ * No duplicate logic - single path for onAuthSuccess callback.
  */
 
 import { useEffect, useState } from 'react';
 import { sdk } from '@farcaster/miniapp-sdk';
+import { SignInButton } from '@farcaster/auth-kit';
 import SpinningDetective from './SpinningDetective';
 
 export type AuthUser = {
@@ -35,6 +29,13 @@ type Props = {
   onError?: (error: string) => void;
 };
 
+type VerifyResponse = {
+  fid: number;
+  username?: string;
+  displayName?: string;
+  pfpUrl?: string;
+};
+
 export default function UnifiedAuthComponent({
   onAuthSuccess,
   onError,
@@ -42,16 +43,78 @@ export default function UnifiedAuthComponent({
   const [step, setStep] = useState<'detecting' | 'authenticating' | 'webauth' | 'error'>('detecting');
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const authenticate = async () => {
-      try {
-        // Detect if we're in Farcaster MiniApp context
-        let inMiniApp = false;
-        let token: string | null = null;
+  /**
+   * Unified server verification for both MiniApp and Web flows
+   * DRY principle: Single source of truth for token validation
+   */
+  const verifyTokenOnServer = async (token: string): Promise<VerifyResponse> => {
+    const response = await fetch('/api/auth/quick-auth/verify', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ token }),
+    });
 
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to verify authentication');
+    }
+
+    return response.json();
+  };
+
+  /**
+   * Handle successful authentication from either source
+   * DRY principle: Single path for all auth success cases
+   */
+  const handleAuthSuccess = async (token: string) => {
+    try {
+      // Verify token on server
+      const userData = await verifyTokenOnServer(token);
+
+      // Store token for subsequent API requests
+      localStorage.setItem('auth-token', token);
+
+      // Notify parent component
+      onAuthSuccess(
+        {
+          fid: userData.fid,
+          username: userData.username,
+          displayName: userData.displayName,
+          pfpUrl: userData.pfpUrl,
+        },
+        token
+      );
+
+      // Signal ready to Farcaster (if in MiniApp context)
+      try {
+        await sdk.actions.ready();
+      } catch {
+        // Not critical - will fail if not in MiniApp context
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Authentication failed';
+      setError(errorMessage);
+      setStep('error');
+      onError?.(errorMessage);
+    }
+  };
+
+  /**
+   * MiniApp Quick Auth flow
+   * Only runs on initial mount in MiniApp context
+   */
+  useEffect(() => {
+    const authenticateViaQuickAuth = async () => {
+      try {
+        setStep('authenticating');
+        setError(null);
+
+        // Try Quick Auth (only available in MiniApp)
+        let token: string | null = null;
         try {
-          // Try Quick Auth (only works in MiniApp)
-          setStep('authenticating');
           const result = await Promise.race([
             sdk.quickAuth.getToken(),
             new Promise((_, reject) => 
@@ -61,58 +124,19 @@ export default function UnifiedAuthComponent({
           
           const quickAuthResult = result as { token?: string };
           token = quickAuthResult?.token || null;
-          inMiniApp = !!token;
-        } catch (sdkError) {
-          // Not in MiniApp or Quick Auth failed - will show web auth
-          inMiniApp = false;
+        } catch {
+          // Not in MiniApp - fall through to web auth
+          return;
         }
 
-
-
-        if (!inMiniApp) {
-          // Show web auth UI (QR code via AuthKit)
+        if (!token) {
+          // No token - show web auth UI
           setStep('webauth');
           return;
         }
 
-        // MiniApp: We got a token, verify it on server
-        if (!token) {
-          throw new Error('Failed to obtain authentication token');
-        }
-
-        const response = await fetch('/api/auth/quick-auth/verify', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ token }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to verify authentication');
-        }
-
-        const userData = await response.json();
-        localStorage.setItem('auth-token', token);
-
-        onAuthSuccess(
-          {
-            fid: userData.fid,
-            username: userData.username,
-            displayName: userData.displayName,
-            pfpUrl: userData.pfpUrl,
-          },
-          token
-        );
-
-        // Signal ready to Farcaster
-        try {
-          await sdk.actions.ready();
-        } catch {
-          // Not critical
-        }
+        // Got token - proceed to verification
+        await handleAuthSuccess(token);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Authentication failed';
         setError(errorMessage);
@@ -121,10 +145,10 @@ export default function UnifiedAuthComponent({
       }
     };
 
-    authenticate();
+    authenticateViaQuickAuth();
   }, [onAuthSuccess, onError]);
 
-  // Detecting context
+  // Detecting MiniApp context
   if (step === 'detecting') {
     return (
       <div className="flex flex-col items-center justify-center space-y-6">
@@ -137,7 +161,7 @@ export default function UnifiedAuthComponent({
     );
   }
 
-  // MiniApp authenticating
+  // MiniApp authenticating via Quick Auth
   if (step === 'authenticating') {
     return (
       <div className="flex flex-col items-center justify-center space-y-6">
@@ -150,24 +174,9 @@ export default function UnifiedAuthComponent({
     );
   }
 
-  // Web auth - show QR code instructions
+  // Web: Show QR code via AuthKit
   if (step === 'webauth') {
-    return (
-      <div className="space-y-6">
-        <div className="text-center space-y-4">
-          <div className="text-4xl">📱</div>
-          <div>
-            <h3 className="text-lg font-bold text-white mb-2">Sign in with Farcaster</h3>
-            <p className="text-sm text-gray-300">
-              Scan the QR code below with Warpcast or any Farcaster client to authenticate
-            </p>
-          </div>
-        </div>
-
-        {/* Web Auth QR Component - Import from @farcaster/auth-kit */}
-        <WebAuthQRComponent />
-      </div>
-    );
+    return <WebAuthFlow onAuthSuccess={handleAuthSuccess} onError={onError} />;
   }
 
   // Error state
@@ -193,39 +202,85 @@ export default function UnifiedAuthComponent({
 }
 
 /**
- * Web Auth QR Component
- * Uses @farcaster/auth-kit for standard QR code sign-in
+ * Web Auth Flow Component
+ * Self-contained QR code sign-in using @farcaster/auth-kit
+ * Modular: Can be tested independently
+ * CLEAN: Explicit dependency injection of callbacks
  */
-function WebAuthQRComponent() {
+interface WebAuthFlowProps {
+  onAuthSuccess: (token: string) => Promise<void>;
+  onError?: (error: string) => void;
+}
 
-  // This is a placeholder - in production, import SignInButton from @farcaster/auth-kit
-  // For now, show instructions on how to integrate
+function WebAuthFlow({ onAuthSuccess, onError }: WebAuthFlowProps) {
+  const [localError, setLocalError] = useState<string | null>(null);
+
   return (
-    <div className="space-y-4">
-      <div className="bg-blue-500/15 border-2 border-blue-500/30 rounded-xl p-6 text-center">
-        <p className="text-sm text-gray-300 mb-4">
-          ℹ️ QR code will appear here after integrating @farcaster/auth-kit
-        </p>
-        
-        {/* This is where SignInButton from @farcaster/auth-kit would go:
-          <SignInButton
-            onSuccess={(res) => {
-              // Handle successful sign-in
-              // Verify token on server
-              // Call onAuthSuccess with user data
-            }}
-            onError={(err) => {
-              onError?.(err.message);
-            }}
-          />
-        */}
-
-        <div className="bg-white/5 border border-white/20 rounded-lg p-6 text-left text-xs text-gray-300 font-mono">
-          <p className="mb-2 font-bold text-white">Integration needed:</p>
-          <p className="mb-4">npm install @farcaster/auth-kit</p>
-          <p className="text-gray-400">Then add SignInButton component above</p>
+    <div className="space-y-6">
+      <div className="text-center space-y-4">
+        <div className="text-4xl">📱</div>
+        <div>
+          <h3 className="text-lg font-bold text-white mb-2">Sign in with Farcaster</h3>
+          <p className="text-sm text-gray-300">
+            Scan the QR code below with Warpcast or any Farcaster client
+          </p>
         </div>
       </div>
+
+      {/* Error state */}
+      {localError && (
+        <div className="bg-red-500/15 border-2 border-red-500/30 rounded-xl p-3 text-red-200 text-sm text-center">
+          <p>{localError}</p>
+        </div>
+      )}
+
+      {/* Sign In Button - Standard Farcaster AuthKit component */}
+      <div className="flex justify-center">
+        <SignInButton
+          timeout={300_000}
+          interval={1500}
+          onSuccess={async (res) => {
+            try {
+              setLocalError(null);
+
+              // res contains the SIWF signature message and user data
+              // We need to verify the signature on the server
+
+              if (!res.signature || !res.message) {
+                throw new Error('Invalid sign-in response');
+              }
+
+              // Create a temporary token from the signature
+              // This gets verified on the server endpoint
+              const tempToken = btoa(
+                JSON.stringify({
+                  message: res.message,
+                  signature: res.signature,
+                  // FID will be extracted from the message/signature on server
+                })
+              );
+
+              // Call unified auth handler
+              await onAuthSuccess(tempToken);
+            } catch (err) {
+              const errorMsg = err instanceof Error ? err.message : 'Sign-in failed';
+              setLocalError(errorMsg);
+              onError?.(errorMsg);
+            }
+          }}
+          onError={(err) => {
+            const errorMsg = err?.message || 'Sign-in failed';
+            setLocalError(errorMsg);
+            onError?.(errorMsg);
+          }}
+          hideSignOut={true}
+          debug={false}
+        />
+      </div>
+
+      <p className="text-xs text-gray-400 text-center">
+        Don't have Farcaster? Download Warpcast or use any Farcaster client
+      </p>
     </div>
   );
 }
