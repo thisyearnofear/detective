@@ -159,6 +159,7 @@ class GameManager {
       playerCount: this.state!.players.size,
       config: this.state!.config,
       isRegistered: false, // Will be set by routes if needed
+      finishedAt: this.state!.finishedAt, // For calculating next cycle time
     };
   }
 
