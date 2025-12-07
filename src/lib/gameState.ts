@@ -774,12 +774,19 @@ class GameManager {
   }
 
   private async updateCycleState(): Promise<void> {
-    // Reload state metadata from Redis to ensure consistency across serverless instances
+    // Reload state metadata and players from Redis to ensure consistency across serverless instances
     const stateMeta = await persistence.loadGameStateMeta();
     if (stateMeta) {
       this.state!.state = stateMeta.state;
       this.state!.registrationEnds = stateMeta.registrationEnds;
       this.state!.gameEnds = stateMeta.gameEnds;
+    }
+
+    // Reload players from Redis to prevent stale in-memory cache issues
+    if (USE_REDIS) {
+      const freshPlayers = await persistence.loadAllPlayers();
+      this.state!.players.clear();
+      freshPlayers.forEach(p => this.state!.players.set(p.fid, p));
     }
 
     const now = Date.now();
