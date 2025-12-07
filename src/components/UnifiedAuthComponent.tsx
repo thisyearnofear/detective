@@ -3,13 +3,11 @@
 /**
  * Unified Authentication Component (December 2025)
  * 
- * Single component handling both contexts with DRY principles:
+ * Smart routing based on context:
+ * - MiniApp: Auto-connects via Quick Auth
+ * - Web: Shows @farcaster/auth-kit SignInButton (handles button + QR UI)
  * 
- * 1. **In Farcaster (MiniApp)**: Auto-connects via Quick Auth
- * 2. **On Web**: QR code via @farcaster/auth-kit
- * 
- * Both flows converge at server verification and use the same token handling.
- * No duplicate logic - single path for onAuthSuccess callback.
+ * Both converge at single server verification endpoint.
  */
 
 import { useEffect, useState } from 'react';
@@ -45,7 +43,7 @@ export default function UnifiedAuthComponent({
 
   /**
    * Unified server verification for both MiniApp and Web flows
-   * DRY principle: Single source of truth for token validation
+   * DRY: Single source of truth for token validation
    */
   const verifyTokenOnServer = async (token: string): Promise<VerifyResponse> => {
     const response = await fetch('/api/auth/quick-auth/verify', {
@@ -67,7 +65,7 @@ export default function UnifiedAuthComponent({
 
   /**
    * Handle successful authentication from either source
-   * DRY principle: Single path for all auth success cases
+   * DRY: Single path for all auth success cases
    */
   const handleAuthSuccess = async (token: string) => {
     try {
@@ -104,10 +102,10 @@ export default function UnifiedAuthComponent({
 
   /**
    * MiniApp Quick Auth flow
-   * Only runs on initial mount in MiniApp context
+   * Only runs on initial mount; detects context and either authenticates or shows web UI
    */
   useEffect(() => {
-    const authenticateViaQuickAuth = async () => {
+    const detectContextAndAuth = async () => {
       try {
         setError(null);
 
@@ -152,7 +150,7 @@ export default function UnifiedAuthComponent({
       }
     };
 
-    authenticateViaQuickAuth();
+    detectContextAndAuth();
   }, [onAuthSuccess, onError]);
 
   // Detecting MiniApp context
@@ -181,9 +179,70 @@ export default function UnifiedAuthComponent({
     );
   }
 
-  // Web: Show QR code via AuthKit
+  // Web: Show native SignInButton from @farcaster/auth-kit
+  // This component handles the button + QR code UI automatically
   if (step === 'webauth') {
-    return <WebAuthFlow onAuthSuccess={handleAuthSuccess} onError={onError} />;
+    return (
+      <div className="space-y-6">
+        <div className="text-center space-y-4">
+          <div className="text-4xl">📱</div>
+          <div>
+            <h3 className="text-lg font-bold text-white mb-2">Sign in with Farcaster</h3>
+            <p className="text-sm text-gray-300">
+              Connect your Farcaster account using the button below
+            </p>
+          </div>
+        </div>
+
+        {/* Native SignInButton from @farcaster/auth-kit */}
+        {/* This handles:
+            - Button UI
+            - QR code display
+            - Deep link for mobile
+            - Polling for signature completion
+        */}
+        <div className="flex justify-center">
+          <SignInButton
+            timeout={300_000}
+            interval={1500}
+            onSuccess={async (res) => {
+              try {
+                // res contains the SIWF signature and user profile data
+                if (!res.signature || !res.message) {
+                  throw new Error('Invalid sign-in response');
+                }
+
+                // Create a temporary token from the signature
+                // Server endpoint will verify this and extract FID
+                const tempToken = btoa(
+                  JSON.stringify({
+                    message: res.message,
+                    signature: res.signature,
+                  })
+                );
+
+                // Call unified auth handler
+                await handleAuthSuccess(tempToken);
+              } catch (err) {
+                const errorMsg = err instanceof Error ? err.message : 'Sign-in failed';
+                setError(errorMsg);
+                onError?.(errorMsg);
+              }
+            }}
+            onError={(err) => {
+              const errorMsg = err?.message || 'Sign-in failed';
+              setError(errorMsg);
+              onError?.(errorMsg);
+            }}
+            hideSignOut={true}
+          />
+        </div>
+
+        <p className="text-xs text-gray-400 text-center">
+          Don't have Farcaster? Download the app or visit farcaster.xyz
+        </p>
+      </div>
+    );
   }
 
   // Error state
@@ -206,88 +265,4 @@ export default function UnifiedAuthComponent({
   }
 
   return null;
-}
-
-/**
- * Web Auth Flow Component
- * Self-contained QR code sign-in using @farcaster/auth-kit
- * Modular: Can be tested independently
- * CLEAN: Explicit dependency injection of callbacks
- */
-interface WebAuthFlowProps {
-  onAuthSuccess: (token: string) => Promise<void>;
-  onError?: (error: string) => void;
-}
-
-function WebAuthFlow({ onAuthSuccess, onError }: WebAuthFlowProps) {
-  const [localError, setLocalError] = useState<string | null>(null);
-
-  return (
-    <div className="space-y-6">
-      <div className="text-center space-y-4">
-        <div className="text-4xl">📱</div>
-        <div>
-          <h3 className="text-lg font-bold text-white mb-2">Sign in with Farcaster</h3>
-          <p className="text-sm text-gray-300">
-            Scan the QR code below with Warpcast or any Farcaster client
-          </p>
-        </div>
-      </div>
-
-      {/* Error state */}
-      {localError && (
-        <div className="bg-red-500/15 border-2 border-red-500/30 rounded-xl p-3 text-red-200 text-sm text-center">
-          <p>{localError}</p>
-        </div>
-      )}
-
-      {/* Sign In Button - Standard Farcaster AuthKit component */}
-      <div className="flex justify-center">
-        <SignInButton
-          timeout={300_000}
-          interval={1500}
-          onSuccess={async (res) => {
-            try {
-              setLocalError(null);
-
-              // res contains the SIWF signature message and user data
-              // We need to verify the signature on the server
-
-              if (!res.signature || !res.message) {
-                throw new Error('Invalid sign-in response');
-              }
-
-              // Create a temporary token from the signature
-              // This gets verified on the server endpoint
-              const tempToken = btoa(
-                JSON.stringify({
-                  message: res.message,
-                  signature: res.signature,
-                  // FID will be extracted from the message/signature on server
-                })
-              );
-
-              // Call unified auth handler
-              await onAuthSuccess(tempToken);
-            } catch (err) {
-              const errorMsg = err instanceof Error ? err.message : 'Sign-in failed';
-              setLocalError(errorMsg);
-              onError?.(errorMsg);
-            }
-          }}
-          onError={(err) => {
-            const errorMsg = err?.message || 'Sign-in failed';
-            setLocalError(errorMsg);
-            onError?.(errorMsg);
-          }}
-          hideSignOut={true}
-          debug={false}
-        />
-      </div>
-
-      <p className="text-xs text-gray-400 text-center">
-        Don't have Farcaster? Download Warpcast or use any Farcaster client
-      </p>
-    </div>
-  );
 }
