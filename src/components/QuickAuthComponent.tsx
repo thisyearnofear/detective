@@ -47,10 +47,18 @@ export default function QuickAuthComponent({
         setError(null);
 
         // Get Quick Auth token (handles both MiniApp and web contexts)
-        const { token } = await sdk.quickAuth.getToken();
+        let token: string | null = null;
+        
+        try {
+          const result = await sdk.quickAuth.getToken();
+          token = result?.token || null;
+        } catch (sdkError) {
+          console.log('SDK Quick Auth unavailable, likely not in Farcaster context', sdkError);
+          // This is expected for web users - they'll use the fallback
+        }
 
         if (!token) {
-          throw new Error('Failed to obtain authentication token');
+          throw new Error('Not authenticated via Farcaster. Use "Continue Without Auth" to explore or try again.');
         }
 
         // Verify token on your server
