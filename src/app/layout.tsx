@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import '@farcaster/auth-kit/styles.css';
 import BottomLinks from '@/components/BottomLinks';
 import { RootProviders } from '@/components/Providers';
 
