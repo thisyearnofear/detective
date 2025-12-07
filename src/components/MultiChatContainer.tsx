@@ -49,6 +49,7 @@ export default function MultiChatContainer({ fid }: Props) {
 
   // Time synchronization with server
   const [timeOffset, setTimeOffset] = useState(0);
+  const timeOffsetRef = useRef(0);
 
   // Poll for active matches
   const {
@@ -56,7 +57,7 @@ export default function MultiChatContainer({ fid }: Props) {
     error,
     mutate,
   } = useSWR(`/api/match/active?fid=${fid}`, fetcherWithGameNotLive, {
-    refreshInterval: isTransitioning ? 1000 : (gameFinished ? 0 : 2000),
+    refreshInterval: isTransitioning ? 500 : (gameFinished ? 0 : 2000),
     refreshWhenHidden: false,
     revalidateOnFocus: false,
     keepPreviousData: true,
@@ -72,11 +73,13 @@ export default function MultiChatContainer({ fid }: Props) {
       setConsecutiveErrors(0);
 
       // Calculate time offset for synchronization
+      // Only update if offset changes significantly (>100ms) to reduce state updates
       if (matchData.serverTime) {
         const clientTime = Date.now();
         const newOffset = matchData.serverTime - clientTime;
 
-        if (Math.abs(newOffset - timeOffset) > 100) {
+        if (Math.abs(newOffset - timeOffsetRef.current) > 100) {
+          timeOffsetRef.current = newOffset;
           setTimeOffset(newOffset);
         }
       }
@@ -88,7 +91,7 @@ export default function MultiChatContainer({ fid }: Props) {
     } else if (error) {
       setConsecutiveErrors(prev => prev + 1);
     }
-  }, [matchData, error, timeOffset]);
+  }, [matchData, error]);
 
   // Check if game is finished (all rounds completed and no active matches)
   // Add safeguards to prevent premature game ending
@@ -339,6 +342,12 @@ export default function MultiChatContainer({ fid }: Props) {
   const slots = matchData?.slots || {};
 
   const stableSlots = useMemo(() => {
+    // If we're transitioning between rounds, keep showing the previous slots
+    // This prevents flashing when matches disappear momentarily
+    if (isTransitioning && Object.keys(previousSlotsRef.current).length > 0) {
+      return previousSlotsRef.current;
+    }
+
     if (!slots || Object.keys(slots).length === 0) {
       // Keep previous slots during transitions to prevent flicker
       return previousSlotsRef.current || {};
@@ -387,6 +396,7 @@ export default function MultiChatContainer({ fid }: Props) {
 
     return previousSlotsRef.current;
   }, [
+    isTransitioning,
     slots[1]?.id,
     slots[2]?.id,
     slots[1]?.voteLocked,

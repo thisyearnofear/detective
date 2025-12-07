@@ -1,5 +1,24 @@
 # Detective Advanced Features & Implementation
 
+## Timer & State Management (Dec 2024)
+
+### Recent Fixes
+Fixed timer reset issues and state flashing during round transitions:
+
+1. **Callback memoization** - Wrapped inline callbacks in `useCallback` in MobileAppContainer to prevent ChatWindow re-renders
+2. **Grace period alignment** - Aligned frontend grace period (500ms) to match backend auto-lock timing
+3. **Time offset optimization** - Use ref-based comparison to reduce unnecessary state updates during clock sync
+
+**Files modified:**
+- `src/components/MobileAppContainer.tsx`
+- `src/components/ProgressRingTimer.tsx` 
+- `src/components/MultiChatContainer.tsx`
+- `src/hooks/useCountdown.ts`
+
+**Result:** Smooth timer countdown, precise vote locking within 1s, no state flashing between rounds
+
+---
+
 ## WebSocket Implementation Analysis
 
 ### Current Architecture Assessment
