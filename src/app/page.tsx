@@ -2,15 +2,13 @@
 
 import { useEffect, useState } from "react";
 import useSWR from "swr";
-import { sdk } from "@farcaster/miniapp-sdk";
-import FarcasterAuthKit from "@/components/FarcasterAuthKit";
+import QuickAuthComponent from "@/components/QuickAuthComponent";
 import SpinningDetective from "@/components/SpinningDetective";
 import AnimatedGridBackdrop from "@/components/AnimatedGridBackdrop";
 import StarfieldBackground from "@/components/StarfieldBackground";
 import GameStateView from "@/components/game/GameStateView";
 import GameStatusCard from "@/components/game/GameStatusCard";
 import CollapsibleSection from "@/components/CollapsibleSection";
-import { isFarcasterMiniApp, authenticateWithFarcaster } from "@/lib/farcasterAuth";
 import { fetcher } from "@/lib/fetcher";
 
 // Main component for the application's home page
@@ -44,42 +42,23 @@ export default function Home() {
   };
 
   useEffect(() => {
-    const initAuth = async () => {
-      try {
-        // Check if we're in a Farcaster miniapp context
-        if (isFarcasterMiniApp()) {
-          console.log('[Home] Detected Farcaster miniapp context');
-          
-          // Use our enhanced Farcaster authentication
-          const farcasterUser = await authenticateWithFarcaster();
-          setSdkUser(farcasterUser);
-          // Tell Farcaster SDK to hide splash screen
-          await sdk.actions.ready();
-          
-        } else {
-          // Fallback to original SDK method for compatibility
-          const context = await sdk.context;
-          if (context) {
-            setSdkUser((context as any).user);
-            await sdk.actions.ready();
-          }
-        }
-      } catch (err) {
-        console.log("Farcaster SDK not available, using web mode:", err);
-      } finally {
-        setIsSdkLoading(false);
-      }
-    };
-    initAuth();
+    // Quick Auth handles everything automatically
+    // Just set loading to false to show the auth UI
+    setIsSdkLoading(false);
   }, []);
 
   const handleWebAuth = (userProfile: {
     fid: number;
-    username: string;
-    displayName: string;
-    pfpUrl: string;
+    username?: string;
+    displayName?: string;
+    pfpUrl?: string;
   }) => {
-    setSdkUser(userProfile);
+    setSdkUser({
+      fid: userProfile.fid,
+      username: userProfile.username || '',
+      displayName: userProfile.displayName || '',
+      pfpUrl: userProfile.pfpUrl || '',
+    });
     setIsExploringWithoutAuth(false); // Reset explore mode when user authenticates
   };
 
@@ -182,10 +161,10 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Authentication */}
+              {/* Authentication - Using modern Quick Auth (2025) */}
               <div className="w-full">
-                <FarcasterAuthKit 
-                  onAuthSuccess={handleWebAuth} 
+                <QuickAuthComponent 
+                  onAuthSuccess={(user, _token) => handleWebAuth(user)} 
                   onExploreWithoutAuth={handleExploreWithoutAuth}
                 />
               </div>

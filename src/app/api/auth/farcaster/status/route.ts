@@ -87,6 +87,7 @@ export async function POST(request: Request) {
       username: userData.userProfile.username,
       displayName: userData.userProfile.displayName,
       pfpUrl: userData.userProfile.pfpUrl,
+      address: "", // TODO: Get wallet address from signin response
       verifiedAt: Date.now(),
     };
 

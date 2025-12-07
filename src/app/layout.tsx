@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import BottomLinks from '@/components/BottomLinks';
-import WagmiProviderWrapper from '@/components/providers/WagmiProvider';
 import { ModalProvider } from '@/components/ModalStack';
 
 export const metadata: Metadata = {
@@ -55,9 +54,7 @@ export default function RootLayout({
       </head>
       <body className="text-white">
         <ModalProvider>
-          <WagmiProviderWrapper>
-            {children}
-          </WagmiProviderWrapper>
+          {children}
         </ModalProvider>
         <BottomLinks />
         {/* SVG Filter for Gooey Effect */}
