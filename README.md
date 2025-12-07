@@ -184,28 +184,29 @@ See [UI_UX_ROADMAP.md](UI_UX_ROADMAP.md) for detailed specs.
 ## Authentication
 
 ### Quick Auth (2025 Standard)
-Detective uses **Farcaster Quick Auth** - an edge-deployed service that replaces manual Sign In with Farcaster.
+Detective uses **Farcaster Quick Auth** - an official Farcaster edge-deployed service built on Sign In with Farcaster (SIWF).
 
 **Key Features**:
-- **Auto-approval in MiniApp**: Works in Warpcast without user action
-- **QR Code on Web**: Automatic QR for web users to scan
-- **Local JWT Verification**: No API calls needed to verify tokens
-- **Token Claims**: `{ sub: fid, iat, exp }`
+- **Auto-approval in Farcaster clients**: Works in Warpcast and other clients without user friction
+- **QR Code on Web**: Automatic QR code generation for web users
+- **Local JWT Verification**: Asymmetrically signed tokens - no API calls needed to verify
+- **No API Key Required**: Farcaster service is public, verification uses cryptographic signatures only
+- **Token Claims**: `{ sub: fid, iat, exp, aud: domain, iss: "https://auth.farcaster.xyz" }`
 
 **Implementation**:
 ```typescript
-// Client
+// Client - No API key needed
 import QuickAuthComponent from '@/components/QuickAuthComponent';
 <QuickAuthComponent onAuthSuccess={(user, token) => {...}} />
 
-// Server
+// Server - Verify JWT locally using public key cryptography
 import { verifyQuickAuthToken } from '@/lib/quickAuthUtils';
 const payload = await verifyQuickAuthToken(token, hostname);
 const fid = payload.sub; // User's Farcaster ID
 ```
 
 **Files**:
-- `src/lib/quickAuthUtils.ts` - JWT verification utilities
+- `src/lib/quickAuthUtils.ts` - JWT verification utilities (no secret key needed)
 - `src/components/QuickAuthComponent.tsx` - Auth UI component
 - `src/app/api/auth/quick-auth/verify/route.ts` - Verification endpoint
 
