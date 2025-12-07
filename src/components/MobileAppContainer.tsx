@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { farcaster } from '@/lib/viewport';
 import MobileNavigationTabs from './MobileNavigationTabs';
@@ -49,6 +49,19 @@ export default function MobileAppContainer({
     setCurrentRank(Math.floor(Math.random() * 100) + 1);
     setRankChange(Math.floor(Math.random() * 10) - 5);
   }, [fid]);
+
+  // Memoize callbacks to prevent ChatWindow re-renders
+  const handleVoteToggle = useCallback(() => {
+    if (matches[0]?.id) {
+      onVoteToggle(matches[0].id);
+    }
+  }, [matches[0]?.id, onVoteToggle]);
+
+  const handleMatchComplete = useCallback(() => {
+    if (matches[0]?.id) {
+      onMatchComplete(matches[0].id);
+    }
+  }, [matches[0]?.id, onMatchComplete]);
 
   // Auto-switch to appropriate tab based on game state
   useEffect(() => {
@@ -101,8 +114,8 @@ export default function MobileAppContainer({
                   fid={fid}
                   match={matches[0]}
                   currentVote={currentVotes[matches[0]?.id] || 'REAL'}
-                  onVoteToggle={() => onVoteToggle(matches[0]?.id)}
-                  onComplete={() => onMatchComplete(matches[0]?.id)}
+                  onVoteToggle={handleVoteToggle}
+                  onComplete={handleMatchComplete}
                   variant="minimal"
                   showVoteToggle={true}
                 />

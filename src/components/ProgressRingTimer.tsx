@@ -40,8 +40,9 @@ export default function ProgressRingTimer({
   }, [duration]);
 
   useEffect(() => {
-    // Frontend grace period to match backend auto-lock timing
-    const FRONTEND_GRACE_PERIOD = 3000; // 3 seconds to sync with backend grace periods
+    // Frontend grace period: 500ms to match backend VOTE_GRACE_PERIOD
+    // Backend auto-locks at (endTime + 500ms) when vote is still unlocked
+    const FRONTEND_GRACE_PERIOD = 500;
 
     // Use server end time if provided, otherwise calculate from duration
     const baseEndTime = serverEndTime || (Date.now() + duration * 1000);
@@ -78,7 +79,7 @@ export default function ProgressRingTimer({
     updateTimer();
 
     return () => clearInterval(interval);
-  }, [duration, onComplete, timeOffset]);
+  }, [duration, timeOffset]);
 
   const minutes = Math.floor(remaining / 60);
   const seconds = Math.round(remaining % 60);

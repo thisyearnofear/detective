@@ -64,7 +64,7 @@ export function useCountdown(config: CountdownConfig): CountdownResult {
     // Poll at regular intervals
     const interval = setInterval(updateCountdown, pollInterval);
     return () => clearInterval(interval);
-  }, [endTime, onComplete, isExpired, pollInterval]);
+  }, [endTime, isExpired, pollInterval]);
 
   const secondsRemaining = Math.ceil(timeRemaining / 1000);
   const formattedTime = formatTime(timeRemaining);
