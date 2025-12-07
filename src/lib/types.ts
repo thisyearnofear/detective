@@ -102,8 +102,7 @@ export interface PlayerGameSession {
   activeMatches: Map<number, string>; // slot number -> match ID
   completedMatchIds: Set<string>; // All completed match IDs
   facedOpponents: Map<number, number>; // opponent fid -> times faced
-  currentRound: number;
-  completedMatchesPerRound: Map<number, number>; // round number -> count of completed matches
+  currentRound: number; // Synchronized with game timer (not event-based)
 }
 
 // Defines the structure for the overall in-memory game state
@@ -112,6 +111,7 @@ export interface GameState {
   state: GameCycleState;
   registrationEnds: number;
   gameEnds: number;
+  gameStartTime?: number; // Timestamp when LIVE state began (for synchronized round timing)
   players: Map<number, Player>; // Map of fid -> Player
   bots: Map<number, Bot>; // Map of fid -> Bot (impersonating that fid)
   matches: Map<string, Match>; // Map of matchId -> Match

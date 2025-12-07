@@ -285,9 +285,28 @@ class GameManager {
       return [];
     }
 
-    // Check existing matches - auto-lock expired ones, remove completed ones
-    let activeMatchCount = 0;
+    // SYNCHRONIZED ROUNDS: Calculate which round should be active based on game time
+    // This ensures all players progress through rounds at the same time
+    const gameStartTime = this.state!.gameStartTime || this.state!.registrationEnds + REGISTRATION_COUNTDOWN;
+    const elapsedTime = now - gameStartTime;
+    const expectedRound = Math.floor(elapsedTime / MATCH_DURATION) + 1;
+    
+    // If expected round is ahead of player's current round, advance them
+    if (expectedRound > session.currentRound && expectedRound <= maxRounds) {
+      console.log(`[GameManager] FID ${fid} auto-advanced: round ${session.currentRound} → ${expectedRound} (game time based)`);
+      session.currentRound = expectedRound;
+      session.activeMatches.clear();
+    }
 
+    // If game time has exceeded all rounds, mark as complete
+    if (expectedRound > maxRounds && session.currentRound <= maxRounds) {
+      console.log(`[GameManager] FID ${fid} all rounds complete (game timer exceeded)`);
+      session.currentRound = maxRounds + 1;
+      session.activeMatches.clear();
+      return [];
+    }
+
+    // Check existing matches - auto-lock expired ones, remove completed ones
     for (const [slotNum, matchId] of session.activeMatches) {
       const match = this.state!.matches.get(matchId);
       if (!match) {
@@ -304,17 +323,7 @@ class GameManager {
       } else {
         // Still active and not expired
         matches.push(match);
-        activeMatchCount++;
       }
-    }
-
-    // DETERMINISTIC ROUND PROGRESSION: Advance when all matches are complete
-    const matchesPlayedThisRound = session.completedMatchesPerRound.get(session.currentRound) || 0;
-    const isRoundComplete = activeMatchCount === 0 && session.activeMatches.size === 0 && matchesPlayedThisRound > 0;
-
-    // Debug logging for round transitions
-    if (activeMatchCount === 0 && session.activeMatches.size === 0) {
-      console.log(`[GameManager] FID ${fid} Round ${session.currentRound}: isRoundComplete=${isRoundComplete}, matchesPlayedThisRound=${matchesPlayedThisRound}`);
     }
 
     if (!session.currentRound || session.currentRound === 0) {
@@ -326,24 +335,21 @@ class GameManager {
       const selectedThisRound = new Set<number>();
 
       for (let slotNum = 1; slotNum <= SIMULTANEOUS_MATCHES; slotNum++) {
-        const match = this.createMatchForSlot(fid, slotNum as 1 | 2, session, selectedThisRound);
+        const match = this.createMatchForSlot(fid, slotNum as 1 | 2, session, selectedThisRound, gameStartTime);
         if (match) {
           selectedThisRound.add(match.opponent.fid);
           session.activeMatches.set(slotNum, match.id);
           matches.push(match);
         }
       }
-    } else if (isRoundComplete && session.currentRound < maxRounds) {
-      // Advance to next round IMMEDIATELY (no grace period)
-      console.log(`[GameManager] ✓ Round ${session.currentRound} complete for FID ${fid}, advancing to round ${session.currentRound + 1}`);
-      session.currentRound++;
-      session.activeMatches.clear();
-
-      // Create new matches synchronously
+    } else if (session.activeMatches.size === 0 && session.currentRound <= maxRounds) {
+      // Matches were all locked/removed from this round, create next round's matches
+      console.log(`[GameManager] Creating new matches for round ${session.currentRound} for FID ${fid}`);
+      
       const selectedThisRound = new Set<number>();
 
       for (let slotNum = 1; slotNum <= SIMULTANEOUS_MATCHES; slotNum++) {
-        const match = this.createMatchForSlot(fid, slotNum as 1 | 2, session, selectedThisRound);
+        const match = this.createMatchForSlot(fid, slotNum as 1 | 2, session, selectedThisRound, gameStartTime);
         if (match) {
           selectedThisRound.add(match.opponent.fid);
           session.activeMatches.set(slotNum, match.id);
@@ -352,11 +358,6 @@ class GameManager {
           console.warn(`[GameManager] Failed to create match for FID ${fid} round ${session.currentRound} slot ${slotNum}`);
         }
       }
-    } else if (isRoundComplete && session.currentRound === maxRounds) {
-      // Last round complete
-      console.log(`[GameManager] ✓ All rounds complete for FID ${fid}`);
-      session.currentRound++;
-      session.activeMatches.clear();
     }
 
     await persistence.saveSession(session);
@@ -465,10 +466,7 @@ class GameManager {
     if (session) {
       session.completedMatchIds.add(matchId);
 
-      // Increment completed matches for this round
-      const currentCount = session.completedMatchesPerRound.get(match.roundNumber) || 0;
-      session.completedMatchesPerRound.set(match.roundNumber, currentCount + 1);
-
+      // Remove from active matches (round progression is now time-based, not event-based)
       for (const [slot, id] of session.activeMatches) {
         if (id === matchId) {
           session.activeMatches.delete(slot);
@@ -644,7 +642,6 @@ class GameManager {
         completedMatchIds: new Set(),
         facedOpponents: new Map(),
         currentRound: 0,
-        completedMatchesPerRound: new Map(),
       });
     }
     return this.state!.playerSessions.get(fid)!;
@@ -655,6 +652,7 @@ class GameManager {
     slotNumber: 1 | 2,
     session: PlayerGameSession,
     excludeFids?: Set<number>,
+    gameStartTime?: number,
   ): Match | null {
     const player = this.state!.players.get(fid);
     if (!player) return null;
@@ -663,12 +661,19 @@ class GameManager {
     if (!opponent) return null;
 
     const now = Date.now();
+    
+    // SYNCHRONIZED ROUND TIMING: All matches in a round end at the same absolute time
+    // Calculate the round end time based on when the game started
+    const actualGameStartTime = gameStartTime || this.state!.gameStartTime || this.state!.registrationEnds + REGISTRATION_COUNTDOWN;
+    const roundStartTime = actualGameStartTime + ((session.currentRound - 1) * MATCH_DURATION);
+    const roundEndTime = roundStartTime + MATCH_DURATION;
+    
     const match: Match = {
       id: `match-${player.fid}-${opponent.fid}-${now}-s${slotNumber}`,
       player,
       opponent,
-      startTime: now,
-      endTime: now + MATCH_DURATION,
+      startTime: roundStartTime,
+      endTime: roundEndTime, // All matches in this round have same endTime
       messages: [],
       isVotingComplete: false,
       isFinished: false,
@@ -814,6 +819,7 @@ class GameManager {
       if (this.state!.countdownStarted && now > this.state!.registrationEnds) {
         console.log(`[GameManager] Registration countdown complete, starting game with ${playerCount} players`);
         this.state!.state = "LIVE";
+        this.state!.gameStartTime = now; // Record when game actually started for synchronized round timing
         this.state!.gameEnds = now + GAME_DURATION;
 
         // Persist state transition to Redis so all instances see LIVE state

@@ -4,10 +4,9 @@ import { useEffect, useState, useRef } from "react";
 
 interface ProgressRingTimerProps {
   duration: number; // Duration in seconds (initial)
-  endTime?: number; // Absolute end time in ms (preferred - from server)
+  endTime?: number; // Absolute end time in ms (from server, already synced)
   onComplete?: () => void;
   compact?: boolean;
-  timeOffset?: number; // Server time offset for synchronization
 }
 
 export default function ProgressRingTimer({
@@ -15,7 +14,6 @@ export default function ProgressRingTimer({
   endTime: serverEndTime,
   onComplete,
   compact = false,
-  timeOffset = 0,
 }: ProgressRingTimerProps) {
   const [remaining, setRemaining] = useState(duration);
   const [isWarning, setIsWarning] = useState(false);
@@ -54,7 +52,7 @@ export default function ProgressRingTimer({
     }
 
     const updateTimer = () => {
-      const now = Date.now() + timeOffset; // Use synced time
+      const now = Date.now(); // Client time is reliable; server already synced endTime
       const timeLeft = Math.max(0, endTime - now);
       const secondsLeft = timeLeft / 1000;
 
@@ -79,7 +77,7 @@ export default function ProgressRingTimer({
     updateTimer();
 
     return () => clearInterval(interval);
-  }, [duration, timeOffset]);
+  }, [duration]);
 
   const minutes = Math.floor(remaining / 60);
   const seconds = Math.round(remaining % 60);

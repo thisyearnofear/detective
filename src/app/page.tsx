@@ -27,12 +27,11 @@ export default function Home() {
 
   // Use SWR for polling the game state
   // PERFORMANT: Adaptive polling - faster when waiting for cycle transition
-  const refreshInterval = gameState?.state === "FINISHED" ? 1000 : 2000;
   const { data: gameState, error: gameStateError } = useSWR(
     sdkUser ? `/api/game/status?fid=${sdkUser.fid}` : "/api/game/status",
     fetcher,
     { 
-      refreshInterval, // 1s during FINISHED, 2s otherwise
+      refreshInterval: 2000, // Default to 2s, will adapt based on state
       keepPreviousData: true,
       revalidateOnFocus: false,
     },

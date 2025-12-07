@@ -47,10 +47,13 @@ class UpstashRedisClient {
         }
 
         const data = await response.json();
+        if (!data) {
+            throw new Error(`Upstash error: Empty response`);
+        }
         if (data.error) {
             throw new Error(`Upstash error: ${data.error}`);
         }
-        return data.result;
+        return data.result ?? null;
     }
 
     // String operations

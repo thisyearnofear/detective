@@ -34,7 +34,6 @@ type Props = {
   onVoteToggle?: () => void;
   onComplete?: () => void;
   showVoteToggle?: boolean;
-  timeOffset?: number;
   variant?: "full" | "compact" | "minimal"; // Replaces isCompact + isMobileStacked
   onRefresh?: () => Promise<void>; // Callback to refresh match data
 };
@@ -47,7 +46,6 @@ export default function ChatWindow({
   onComplete,
   showVoteToggle = false,
   isNewMatch = false,
-  timeOffset = 0,
   variant = "full",
   onRefresh,
 }: Props) {
@@ -68,10 +66,13 @@ export default function ChatWindow({
   } | null>(null);
 
   // Countdown timer for vote lock warning
+  // IMPORTANT: endTime is already synced by server (includes timeOffset)
+  // We DON'T add timeOffset here - it causes timer to jump when offset updates
   const { secondsRemaining } = useCountdown({
-    endTime: match.endTime + (timeOffset || 0), // Sync with server
+    endTime: match.endTime,
     onComplete: () => setIsTimeUp(true),
     pollInterval: 100,
+    totalDuration: 60000, // Always 60s per match for consistent progress bar
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -208,9 +209,6 @@ export default function ChatWindow({
     setInput(processedValue);
   }, [processEmojis]);
 
-  const getSyncedTime = () => Date.now() + timeOffset;
-  const matchDuration = Math.round((match.endTime - getSyncedTime()) / 1000);
-
   // CONSOLIDATED: Single source for all responsive styling
   const styles = {
     container: `bg-slate-800 rounded-lg transition-all duration-300 relative ${isFarcasterFrame ? responsive.padding.small :
@@ -275,11 +273,10 @@ export default function ChatWindow({
         </div>
         {match.endTime && !isTimeUp && (
           <ProgressRingTimer
-            duration={matchDuration > 0 ? matchDuration : 60}
-            endTime={match.endTime}
-            onComplete={handleTimeUp}
-            compact={isFarcasterFrame || variant !== "full"}
-            timeOffset={timeOffset}
+            duration={60}
+             endTime={match.endTime}
+             onComplete={handleTimeUp}
+             compact={isFarcasterFrame || variant !== "full"}
           />
         )}
       </div>
