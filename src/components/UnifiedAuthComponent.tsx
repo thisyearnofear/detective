@@ -109,12 +109,14 @@ export default function UnifiedAuthComponent({
   useEffect(() => {
     const authenticateViaQuickAuth = async () => {
       try {
-        setStep('authenticating');
         setError(null);
 
         // Try Quick Auth (only available in MiniApp)
         let token: string | null = null;
+        let inMiniApp = false;
+
         try {
+          setStep('authenticating');
           const result = await Promise.race([
             sdk.quickAuth.getToken(),
             new Promise((_, reject) => 
@@ -124,15 +126,20 @@ export default function UnifiedAuthComponent({
           
           const quickAuthResult = result as { token?: string };
           token = quickAuthResult?.token || null;
+          inMiniApp = !!token;
         } catch {
-          // Not in MiniApp - fall through to web auth
+          // Not in MiniApp - show web auth instead
+          inMiniApp = false;
+        }
+
+        // If not in MiniApp, show web auth UI
+        if (!inMiniApp) {
+          setStep('webauth');
           return;
         }
 
         if (!token) {
-          // No token - show web auth UI
-          setStep('webauth');
-          return;
+          throw new Error('Failed to get authentication token');
         }
 
         // Got token - proceed to verification
