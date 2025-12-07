@@ -23,6 +23,7 @@ import {
   ChatMessage,
 } from "./types";
 import * as persistence from "./gamePersistence";
+import * as stateConsistency from "./stateConsistency";
 import { database } from "./database";
 import { inferPersonality } from "./botProactive";
 
@@ -148,6 +149,13 @@ class GameManager {
    */
   async getGameState() {
     await this.ensureInitialized();
+    
+    // Check if in-memory cache is stale and reload if needed
+    const isConsistent = await stateConsistency.validateStateConsistency();
+    if (!isConsistent) {
+      await this.reloadFromRedis();
+    }
+    
     await this.updateCycleState();
     await this.cleanupOldMatches();
 
@@ -772,6 +780,46 @@ class GameManager {
     return botMatches / matches.length;
   }
 
+  /**
+   * Reload all game data from Redis
+   * Called when version mismatch detected (another instance changed state)
+   */
+  private async reloadFromRedis(): Promise<void> {
+    console.log("[GameManager] Reloading state from Redis due to version change");
+    
+    const stateMeta = await persistence.loadGameStateMeta();
+    if (stateMeta) {
+      this.state!.cycleId = stateMeta.cycleId;
+      this.state!.state = stateMeta.state;
+      this.state!.registrationEnds = stateMeta.registrationEnds;
+      this.state!.gameEnds = stateMeta.gameEnds;
+      this.state!.finishedAt = stateMeta.finishedAt;
+    }
+
+    // Reload all collections from Redis
+    const players = await persistence.loadAllPlayers();
+    this.state!.players.clear();
+    players.forEach(p => this.state!.players.set(p.fid, p));
+
+    const bots = await persistence.loadAllBots();
+    this.state!.bots.clear();
+    bots.forEach(b => this.state!.bots.set(b.fid, b));
+
+    const sessions = await persistence.loadAllSessions();
+    this.state!.playerSessions.clear();
+    sessions.forEach(s => this.state!.playerSessions.set(s.fid, s));
+
+    const matches = await persistence.loadAllMatches();
+    this.state!.matches.clear();
+    matches.forEach(m => this.state!.matches.set(m.id, m));
+
+    // Mark cache as fresh at the new version
+    const version = await stateConsistency.loadStateVersion();
+    if (version !== null && version !== undefined) {
+      stateConsistency.markCacheFresh(version);
+    }
+  }
+
   private async updateCycleState(): Promise<void> {
     // Reload state metadata and players from Redis to ensure consistency across serverless instances
     const stateMeta = await persistence.loadGameStateMeta();
@@ -833,65 +881,56 @@ class GameManager {
       }
     }
 
-    // FINISHED -> REGISTRATION (auto-cycle)
+    // FINISHED -> REGISTRATION (auto-cycle with version-based atomicity)
     if (this.state!.state === "FINISHED") {
       const CLEANUP_GRACE_PERIOD = 5000;
       if (this.state!.finishedAt && now - this.state!.finishedAt > CLEANUP_GRACE_PERIOD) {
         // Deterministic cycleId based on finishedAt
         const newCycleId = `cycle-${this.state!.finishedAt}`;
-        const lockId = `lock-${Date.now()}-${Math.random()}`; // Unique lock identifier
         
-        // Try to acquire exclusive lock for cycle transition
-        const acquiredLock = await persistence.acquireCycleLock(lockId);
+        // Try to atomically increment version (only one instance succeeds)
+        const didIncrement = await stateConsistency.tryIncrementStateVersion();
         
-        if (!acquiredLock) {
-          // Another instance is doing the transition, reload their state
-          const redisMeta = await persistence.loadGameStateMeta();
-          if (redisMeta && redisMeta.state === "REGISTRATION") {
-            this.state!.cycleId = redisMeta.cycleId;
-            this.state!.registrationEnds = redisMeta.registrationEnds;
-            this.state!.gameEnds = redisMeta.gameEnds;
-            this.state!.finishedAt = redisMeta.finishedAt;
-            console.log(`[GameManager] Another instance is cycling, using cycleId: ${redisMeta.cycleId}`);
-          }
+        if (!didIncrement) {
+          // Another instance incremented first, they're doing the transition
+          // Reload their new cycle state
+          await this.reloadFromRedis();
+          console.log(`[GameManager] Another instance is cycling, reloaded state`);
           return;
         }
 
-        try {
-          console.log(`[GameManager] Acquired lock, starting new cycle with ID: ${newCycleId}`);
+        // This instance won the race, perform the cycle transition
+        console.log(`[GameManager] Version incremented, performing cycle transition to ${newCycleId}`);
 
-          // Clear game data
-          this.state!.players.clear();
-          this.state!.bots.clear();
-          this.state!.playerSessions.clear();
-          this.state!.matches.clear();
-          this.state!.leaderboard = [];
+        // Clear in-memory game data
+        this.state!.players.clear();
+        this.state!.bots.clear();
+        this.state!.playerSessions.clear();
+        this.state!.matches.clear();
+        this.state!.leaderboard = [];
 
-          // Start new cycle with deterministic ID
-          this.state!.cycleId = newCycleId;
-          this.state!.state = "REGISTRATION";
-          this.state!.registrationEnds = now + REGISTRATION_COUNTDOWN;
-          this.state!.gameEnds = now + GAME_DURATION;
-          this.state!.countdownStarted = false;
-          this.state!.finishedAt = undefined;
+        // Start new cycle with deterministic ID
+        this.state!.cycleId = newCycleId;
+        this.state!.state = "REGISTRATION";
+        this.state!.registrationEnds = now + REGISTRATION_COUNTDOWN;
+        this.state!.gameEnds = now + GAME_DURATION;
+        this.state!.countdownStarted = false;
+        this.state!.finishedAt = undefined;
 
-          await persistence.saveGameStateMeta({
-            cycleId: this.state!.cycleId,
-            state: this.state!.state,
-            registrationEnds: this.state!.registrationEnds,
-            gameEnds: this.state!.gameEnds,
-          });
+        // Atomically save new state to Redis
+        await persistence.saveGameStateMeta({
+          cycleId: this.state!.cycleId,
+          state: this.state!.state,
+          registrationEnds: this.state!.registrationEnds,
+          gameEnds: this.state!.gameEnds,
+        });
 
-          // Clear persistence data (players, sessions, matches from Redis)
-          if (USE_REDIS) {
-            await persistence.clearAllPlayers();
-            await persistence.clearAllBots();
-            await persistence.clearAllSessions();
-            await persistence.clearAllMatches();
-          }
-        } finally {
-          // Always release lock
-          await persistence.releaseCycleLock(lockId);
+        // Clear all player data from Redis
+        if (USE_REDIS) {
+          await persistence.clearAllPlayers();
+          await persistence.clearAllBots();
+          await persistence.clearAllSessions();
+          await persistence.clearAllMatches();
         }
       }
       return;
