@@ -243,6 +243,54 @@ export async function loadAllSessions(): Promise<Map<number, PlayerGameSession>>
 }
 
 /**
+ * Clear all players from Redis
+ */
+export async function clearAllPlayers(): Promise<void> {
+  try {
+    await redis.del(REDIS_KEYS.players);
+    console.log("[gamePersistence] Cleared all players");
+  } catch (error) {
+    console.error("[gamePersistence] Failed to clear players:", error);
+  }
+}
+
+/**
+ * Clear all bots from Redis
+ */
+export async function clearAllBots(): Promise<void> {
+  try {
+    await redis.del(REDIS_KEYS.bots);
+    console.log("[gamePersistence] Cleared all bots");
+  } catch (error) {
+    console.error("[gamePersistence] Failed to clear bots:", error);
+  }
+}
+
+/**
+ * Clear all sessions from Redis
+ */
+export async function clearAllSessions(): Promise<void> {
+  try {
+    await redis.del(REDIS_KEYS.sessions);
+    console.log("[gamePersistence] Cleared all sessions");
+  } catch (error) {
+    console.error("[gamePersistence] Failed to clear sessions:", error);
+  }
+}
+
+/**
+ * Clear all matches from Redis
+ */
+export async function clearAllMatches(): Promise<void> {
+  try {
+    await redis.del(REDIS_KEYS.matches);
+    console.log("[gamePersistence] Cleared all matches");
+  } catch (error) {
+    console.error("[gamePersistence] Failed to clear matches:", error);
+  }
+}
+
+/**
  * Clear all Redis state (for reset)
  */
 export async function clearAll(): Promise<void> {

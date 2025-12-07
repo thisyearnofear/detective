@@ -839,6 +839,21 @@ class GameManager {
       if (this.state!.finishedAt && now - this.state!.finishedAt > CLEANUP_GRACE_PERIOD) {
         console.log(`[GameManager] Cleanup complete, starting new cycle`);
 
+        // Deterministic cycleId based on finishedAt (prevents multiple instances from creating different IDs)
+        const newCycleId = `cycle-${this.state!.finishedAt}`;
+        
+        // Check if another instance already started the new cycle
+        // If Redis has different cycleId but is in REGISTRATION, skip this transition
+        const redisMeta = await persistence.loadGameStateMeta();
+        if (redisMeta && redisMeta.state === "REGISTRATION" && redisMeta.cycleId !== newCycleId) {
+          // Another instance already cycled, reload their new cycle
+          this.state!.cycleId = redisMeta.cycleId;
+          this.state!.registrationEnds = redisMeta.registrationEnds;
+          this.state!.gameEnds = redisMeta.gameEnds;
+          console.log(`[GameManager] Another instance already cycled, using cycleId: ${redisMeta.cycleId}`);
+          return;
+        }
+
         // Clear game data
         this.state!.players.clear();
         this.state!.bots.clear();
@@ -846,8 +861,8 @@ class GameManager {
         this.state!.matches.clear();
         this.state!.leaderboard = [];
 
-        // Start new cycle
-        this.state!.cycleId = `cycle-${Date.now()}`;
+        // Start new cycle with deterministic ID
+        this.state!.cycleId = newCycleId;
         this.state!.state = "REGISTRATION";
         this.state!.registrationEnds = now + REGISTRATION_COUNTDOWN;
         this.state!.gameEnds = now + GAME_DURATION;
@@ -860,6 +875,14 @@ class GameManager {
           registrationEnds: this.state!.registrationEnds,
           gameEnds: this.state!.gameEnds,
         });
+
+        // Clear persistence data (players, sessions, matches from Redis)
+        if (USE_REDIS) {
+          await persistence.clearAllPlayers();
+          await persistence.clearAllBots();
+          await persistence.clearAllSessions();
+          await persistence.clearAllMatches();
+        }
       }
       return;
     }
