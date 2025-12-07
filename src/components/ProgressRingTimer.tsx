@@ -78,7 +78,7 @@ export default function ProgressRingTimer({
     updateTimer();
 
     return () => clearInterval(interval);
-  }, [duration, serverEndTime, onComplete, timeOffset]);
+  }, [duration, onComplete, timeOffset]);
 
   const minutes = Math.floor(remaining / 60);
   const seconds = Math.round(remaining % 60);

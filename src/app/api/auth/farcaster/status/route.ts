@@ -53,8 +53,16 @@ export async function POST(request: Request) {
 
     const channelStatus = await statusResponse.json();
 
+    // Validate response structure
+    if (!channelStatus || !channelStatus.result) {
+      return NextResponse.json(
+        { state: "pending", error: "Invalid channel response" },
+        { status: 200 }
+      );
+    }
+
     // Channel is still pending
-    if (channelStatus.result?.state !== "completed") {
+    if (channelStatus.result.state !== "completed") {
       return NextResponse.json(
         { state: "pending" },
         { status: 200 }
