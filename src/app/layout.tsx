@@ -1,8 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import BottomLinks from '@/components/BottomLinks';
-import { ModalProvider } from '@/components/ModalStack';
-import { AuthKitProvider } from '@farcaster/auth-kit';
+import { RootProviders } from '@/components/Providers';
 
 export const metadata: Metadata = {
   title: 'Detective - Is That You?',
@@ -54,12 +53,10 @@ export default function RootLayout({
         <meta name="theme-color" content="#0f172a" />
       </head>
       <body className="text-white">
-        <AuthKitProvider config={{ relay: 'https://relay.farcaster.xyz' }}>
-          <ModalProvider>
-            {children}
-          </ModalProvider>
+        <RootProviders>
+          {children}
           <BottomLinks />
-        </AuthKitProvider>
+        </RootProviders>
         {/* SVG Filter for Gooey Effect */}
         <svg className="svg-filters" xmlns="http://www.w3.org/2000/svg" version="1.1">
           <defs>
