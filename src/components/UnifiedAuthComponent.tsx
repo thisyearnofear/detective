@@ -72,8 +72,14 @@ export default function UnifiedAuthComponent({
       // Verify token on server
       const userData = await verifyTokenOnServer(token);
 
-      // Store token for subsequent API requests
+      // Store token and user data for session persistence
       localStorage.setItem('auth-token', token);
+      localStorage.setItem('cached-user', JSON.stringify({
+        fid: userData.fid,
+        username: userData.username,
+        displayName: userData.displayName,
+        pfpUrl: userData.pfpUrl,
+      }));
 
       // Notify parent component
       onAuthSuccess(
