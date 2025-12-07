@@ -63,6 +63,7 @@ export async function GET(request: Request) {
       playerCount: gameState.playerCount,
       registrationEnds: gameState.registrationEnds,
       gameEnds: gameState.gameEnds,
+      finishedAt: gameState.finishedAt, // For calculating next cycle countdown
       isRegistered,
 
       // Phase info (replaces separate /api/game/phase call)
