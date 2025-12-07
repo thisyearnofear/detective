@@ -17,13 +17,20 @@ Detective is a social deduction game where players chat with opponents and try t
 
 ## Game Flow & Mechanics
 
+### State Management Architecture
+**Single Source of Truth**: Server state (`REGISTRATION` → `LIVE` → `FINISHED`) drives all client transitions. 
+- When 3+ players register, server starts 30s countdown
+- Client polls every 2s and updates UI accordingly
+- When countdown expires, server transitions to LIVE and client switches from GameLobby to GameActiveView
+- No client-side phase conflicts or timer resets
+
 ### Registration Flow with Blockchain Integration
 Instead of time-based registration, use **player-count-based triggers**:
 ```
 Game starts when:
-- Minimum 10 players registered, OR
-- Maximum 50 players registered (auto-start), OR
-- 5 minutes since first registration (if >= 6 players)
+- Minimum 3 players registered (triggers countdown), OR
+- Countdown timer expires (30 seconds), OR
+- Manual ready signal when all players ready (if 4+ players)
 ```
 
 ### Registration Interface

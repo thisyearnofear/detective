@@ -5,13 +5,8 @@ import useSWR from 'swr';
 import { Player, UserProfile } from '@/lib/types';
 import { useCountdown } from '@/hooks/useCountdown';
 import { fetcher } from '@/lib/fetcher';
-import BotGeneration from './phases/BotGeneration';
-import PlayerReveal from './phases/PlayerReveal';
-import GameCountdown from './phases/GameCountdown';
 import Lobby from './phases/Lobby';
 import ErrorCard from '../ErrorCard';
-
-type GamePhase = 'REGISTRATION' | 'BOT_GENERATION' | 'PLAYER_REVEAL' | 'COUNTDOWN' | 'LIVE' | 'ERROR';
 
 type Props = {
   currentPlayer: UserProfile;
@@ -23,7 +18,6 @@ export default function GameLobby({ currentPlayer, isRegistrationOpen = true, ga
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isRegistered, setIsRegistered] = useState(gameState?.isRegistered || false);
-  const [gamePhase, setGamePhase] = useState<GamePhase>('REGISTRATION');
   const [timeLeft, setTimeLeft] = useState(0);
 
   // Consolidated polling: single endpoint for game state, phase, and players
@@ -41,17 +35,6 @@ export default function GameLobby({ currentPlayer, isRegistrationOpen = true, ga
 
   const registeredPlayers = (statusData?.players || []) as Player[];
   const maxPlayers = 8;
-
-  // Sync phase from consolidated server response (not from client logic)
-  useEffect(() => {
-    if (statusData?.phase) {
-      const serverPhase = statusData.phase as string;
-      
-      if (gamePhase === 'REGISTRATION' && serverPhase === 'BOT_GENERATION') {
-        setGamePhase('BOT_GENERATION');
-      }
-    }
-  }, [statusData?.phase, gamePhase]);
 
   // Use countdown hook for timer (syncs with server)
   const countdownEndTime = statusData?.phaseEndTime || gameState?.registrationEnds || 0;
@@ -136,7 +119,7 @@ export default function GameLobby({ currentPlayer, isRegistrationOpen = true, ga
   }
 
   // Show error if status endpoint failed
-  if (error && gamePhase === 'REGISTRATION') {
+  if (error) {
     return (
       <ErrorCard
         title="Game Connection Lost"
@@ -148,49 +131,18 @@ export default function GameLobby({ currentPlayer, isRegistrationOpen = true, ga
     );
   }
 
-  // Phase Rendering - server-driven
-  switch (gamePhase) {
-    case 'BOT_GENERATION':
-      return (
-        <BotGeneration
-          playerCount={registeredPlayers.length}
-          onComplete={() => setGamePhase('PLAYER_REVEAL')}
-        />
-      );
-
-    case 'PLAYER_REVEAL':
-      return (
-        <PlayerReveal
-          players={registeredPlayers}
-          onComplete={() => setGamePhase('COUNTDOWN')}
-        />
-      );
-
-    case 'COUNTDOWN':
-      return (
-        <GameCountdown
-          playerCount={registeredPlayers.length}
-          onComplete={() => {
-            setGamePhase('LIVE');
-            handleGameStart();
-          }}
-        />
-      );
-
-    case 'REGISTRATION':
-    default:
-      return (
-        <Lobby
-          currentPlayer={currentPlayer}
-          registeredPlayers={registeredPlayers}
-          maxPlayers={maxPlayers}
-          timeLeft={timeLeft}
-          isRegistered={isRegistered}
-          isLoading={isLoading}
-          error={error}
-          onRegister={handleRegister}
-          onReady={handleReady}
-        />
-      );
-  }
+  // Only show Lobby during REGISTRATION - parent GameStateView will switch to GameActiveView when LIVE
+  return (
+    <Lobby
+      currentPlayer={currentPlayer}
+      registeredPlayers={registeredPlayers}
+      maxPlayers={maxPlayers}
+      timeLeft={timeLeft}
+      isRegistered={isRegistered}
+      isLoading={isLoading}
+      error={error}
+      onRegister={handleRegister}
+      onReady={handleReady}
+    />
+  );
 }
