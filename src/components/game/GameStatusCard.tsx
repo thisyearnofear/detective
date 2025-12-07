@@ -9,6 +9,7 @@ type Props = {
     playerCount: number;
     registrationEnds: number;
     gameEnds: number;
+    finishedAt?: number;
   };
 };
 
@@ -34,8 +35,9 @@ export default function GameStatusCard({ gameState }: Props) {
       } else if (gameState.state === 'LIVE') {
         remaining = Math.max(0, gameState.gameEnds - now);
       } else if (gameState.state === 'FINISHED') {
-        // Estimate next registration (5 second grace period)
-        remaining = Math.max(0, gameState.gameEnds + 5000 - now);
+        // Calculate when registration reopens (5 second grace period after finish)
+        const nextRegistration = (gameState.finishedAt || now) + 5000;
+        remaining = Math.max(0, nextRegistration - now);
       }
 
       setTimeLeft(remaining);
@@ -44,7 +46,7 @@ export default function GameStatusCard({ gameState }: Props) {
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
-  }, [gameState.state, gameState.registrationEnds, gameState.gameEnds]);
+  }, [gameState.state, gameState.registrationEnds, gameState.gameEnds, gameState.finishedAt]);
 
   const formatTime = (ms: number) => {
     const minutes = Math.floor(ms / 60000);
