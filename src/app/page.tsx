@@ -17,7 +17,8 @@ export default function Home() {
   const [sdkUser, setSdkUser] = useState<any>(null);
   const [isSdkLoading, setIsSdkLoading] = useState(true);
   const [introComplete, setIntroComplete] = useState(false);
-  const [justFinishedCycle, setJustFinishedCycle] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [lastGameState, setLastGameState] = useState<string>('');
 
   useEffect(() => {
     // Auto-advance intro after 2 seconds
@@ -39,19 +40,20 @@ export default function Home() {
     },
   );
 
-  // Track when we transition from FINISHED to REGISTRATION to show recent games
+  // Auto-show stats when transitioning from FINISHED to REGISTRATION
   useEffect(() => {
-    if (gameState?.state === 'REGISTRATION' && justFinishedCycle) {
-      // Reset flag after a short delay so Leaderboard can render
-      const timer = setTimeout(() => {
-        setJustFinishedCycle(false);
-      }, 100);
-      return () => clearTimeout(timer);
+    if (lastGameState === 'FINISHED' && gameState?.state === 'REGISTRATION') {
+      setShowLeaderboard(true);
     }
-    
-    // Set flag when entering FINISHED state (user just completed a game)
-    if (gameState?.state === 'FINISHED') {
-      setJustFinishedCycle(true);
+    if (gameState?.state) {
+      setLastGameState(gameState.state);
+    }
+  }, [gameState?.state, lastGameState]);
+
+  // Reset leaderboard view when starting a new game
+  useEffect(() => {
+    if (gameState?.state === 'LIVE') {
+      setShowLeaderboard(false);
     }
   }, [gameState?.state]);
 
@@ -132,7 +134,6 @@ export default function Home() {
         displayName={sdkUser.displayName}
         pfpUrl={sdkUser.pfpUrl}
         gameState={gameState}
-        onLogout={handleLogout}
       />
     );
   };
@@ -309,6 +310,12 @@ export default function Home() {
                   </div>
                   <div className="flex gap-2">
                      <button
+                       onClick={() => setShowLeaderboard(!showLeaderboard)}
+                       className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-white/10 hover:bg-white/20 text-white border border-white/20"
+                     >
+                       {showLeaderboard ? '← Game' : '🏆 Stats'}
+                     </button>
+                     <button
                        onClick={handleLogout}
                        className="text-xs text-gray-400 hover:text-white transition-colors"
                      >
@@ -330,10 +337,22 @@ export default function Home() {
                 />
               )}
 
-              {/* Show recent games/leaderboard if we just finished a cycle */}
-              {gameState?.state === "REGISTRATION" && justFinishedCycle && sdkUser ? (
+              {/* Toggle between Game View and Leaderboard */}
+              {showLeaderboard ? (
                 <div className="w-full space-y-4">
-                  <div className="text-xs text-gray-500 uppercase tracking-widest px-4">Your Recent Games</div>
+                  {/* Contextual Header */}
+                  <div className="bg-gradient-to-r from-purple-900/30 to-blue-900/30 border border-purple-500/30 rounded-xl p-4">
+                    <div className="text-xs text-gray-400 uppercase tracking-widest mb-2">
+                      {lastGameState === 'FINISHED' ? '🎉 Latest Game Results' : '📊 Your Career Stats'}
+                    </div>
+                    {lastGameState === 'FINISHED' && (
+                      <p className="text-sm text-gray-300">
+                        Great job! Here's how you performed in your last game.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Leaderboard */}
                   <Leaderboard
                     fid={sdkUser.fid}
                     mode="career"
@@ -341,8 +360,8 @@ export default function Home() {
                 </div>
               ) : (
                 <>
-                  {/* Game Phase View (Registration/Live only, not FINISHED) */}
-                  {gameState?.state !== "FINISHED" && renderGameState()}
+                  {/* Game Phase View */}
+                  {renderGameState()}
                 </>
               )}
               </div>

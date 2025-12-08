@@ -555,6 +555,13 @@ export default function Leaderboard({
                       <div className="font-bold text-green-400">{stats.topAccuracy.toFixed(1)}%</div>
                     </div>
                   </div>
+                  
+                  {/* Development notice when no stats available */}
+                  {stats.totalPlayers === 0 && (
+                    <div className="mt-3 p-2 bg-yellow-900/20 border border-yellow-700/30 rounded text-xs text-yellow-300">
+                      🚧 Game in development - stats will appear when players join
+                    </div>
+                  )}
                 </div>
               );
             })}
