@@ -6,7 +6,6 @@ import { sendGameStartNotification } from '@/lib/farcasterAuth';
 import GameLobby from './GameLobby';
 import GameActiveView from './GameActiveView';
 import GameFinishedView from './GameFinishedView';
-import ErrorCard from '../ErrorCard';
 
 type Props = {
   fid: number;
@@ -63,14 +62,15 @@ export default function GameStateView({
       // Player missed registration window
       if (!gameState.isRegistered) {
         return (
-          <ErrorCard
-            title="Not Registered"
-            message="You missed the registration window for this game."
-            action={{
-              text: 'Use Admin Panel to force register',
-              href: '/admin',
-            }}
-          />
+          <div className="w-full space-y-6 text-center py-8">
+            <div className="text-6xl mb-4">⏰</div>
+            <div className="space-y-2">
+              <h2 className="text-xl font-bold text-white">Game in Progress</h2>
+              <p className="text-gray-400 text-sm">
+                A game is currently running. Join the next one!
+              </p>
+            </div>
+          </div>
         );
       }
       return (

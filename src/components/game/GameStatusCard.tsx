@@ -128,7 +128,9 @@ export default function GameStatusCard({ gameState }: Props) {
               </div>
               <div>
                 <h3 className="text-xl font-black text-white tracking-tight">Game Live</h3>
-                <p className="text-sm text-purple-300/90 font-medium">{gameState.playerCount} players competing</p>
+                <p className="text-sm text-purple-300/90 font-medium">
+                  {gameState.playerCount > 0 ? `${gameState.playerCount} players competing` : 'Game in progress'}
+                </p>
               </div>
             </div>
             <div className="status-badge live">
