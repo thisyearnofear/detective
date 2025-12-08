@@ -355,8 +355,17 @@ export async function generateBotResponse(
 
   const lastUserMessage = userMessages[userMessages.length - 1] || "hello";
 
-  // Check for adaptive follow-up based on personality (if available)
-  if (bot.personality && messageHistory.length > 0) {
+  // Extract user intent FIRST to understand context
+  const userIntent = extractUserIntent(messageHistory);
+  const convContext = analyzeConversationContext(messageHistory, bot.fid);
+
+  // Only use adaptive follow-up if it's contextually appropriate
+  // Don't use it when user asked a direct question - they need a coherent answer
+  if (
+    bot.personality &&
+    messageHistory.length > 0 &&
+    !convContext.hasUserAskedQuestion
+  ) {
     const { generateAdaptiveFollowup } = require("./botProactive");
     const adaptiveResponse = generateAdaptiveFollowup(
       lastUserMessage,
@@ -368,9 +377,6 @@ export async function generateBotResponse(
       return adaptiveResponse;
     }
   }
-
-  // Extract user intent for better context understanding
-  const userIntent = extractUserIntent(messageHistory);
 
   // Note: Response caching disabled to ensure natural variation
   // Each response is generated fresh with temperature=0.8 for variety
@@ -478,10 +484,7 @@ export async function generateBotResponse(
     }
   }
 
-  // Analyze conversation flow for dynamic responses
-  const convContext = analyzeConversationContext(messageHistory, bot.fid);
-
-  // Build adaptive instructions based on conversation state
+  // Build adaptive instructions based on conversation state (convContext already analyzed above)
   let adaptiveInstructions = "";
 
   if (convContext.hasUserAskedQuestion) {
@@ -528,6 +531,7 @@ ${conversationContext || "[conversation starting]"}
 ${adaptiveInstructions}
 
 CRITICAL GUIDELINES FOR YOUR RESPONSE:
+✓ COHERENCE FIRST: Answer what they asked, in their style
 ✓ Use THEIR phrases and speech patterns from above
 ✓ Match THEIR exact tone and style
 ✓ Keep it SHORT and natural - no corporate language
@@ -535,15 +539,16 @@ CRITICAL GUIDELINES FOR YOUR RESPONSE:
 ✓ If they're casual, be casual. If they're witty, be witty.
 ✓ Sometimes ask questions - real people are curious!
 ✓ VARY your responses - don't repeat the same phrasing twice
+✓ NEVER go off-topic or pivot to random subjects
 
 RESPONSE TYPES (vary these based on context):
 - Direct answers: "yeah", "nah", "facts", "fr"
 - Questions: "wdym?", "why?", "you?", "fr?", "how so?"
 - Reactions: "haha", "lol", "oof", "nice", "damn"
-BAD RESPONSES (never sound like this): "That's interesting!", "I appreciate you sharing", "How can I help", "Great point!", "Fascinating!"
+BAD RESPONSES (never sound like this): "That's interesting!", "I appreciate you sharing", "How can I help", "Great point!", "Fascinating!" Also avoid off-topic responses that ignore what was asked.
 
 Context: ${userIntent} conversation
-Now respond as @${bot.username} would - keep it SHORT, use their actual voice, and make it feel spontaneous:`;
+Now respond as @${bot.username} would - ANSWER THEIR ACTUAL QUESTION in your voice, keep it SHORT, and make it feel spontaneous:`;
 
   try {
     const response = await fetch(VENICE_API_URL, {
@@ -586,6 +591,32 @@ Now respond as @${bot.username} would - keep it SHORT, use their actual voice, a
         console.log(`[coherenceCheck] Response rejected: ${coherenceCheck.reason}`);
         // Try to regenerate or fallback
         return generateFallbackResponse(lengthDistribution, bot.recentCasts);
+      }
+
+      // Additional check: if user asked a question, response should acknowledge it
+      if (convContext.hasUserAskedQuestion) {
+        const questionKeywords = ["why", "how", "what", "when", "where", "who", "which"];
+        const lastUserMsg = lastUserMessage.toLowerCase();
+        const userAskedQuestion = questionKeywords.some(kw => lastUserMsg.includes(kw) && lastUserMsg.includes("?"));
+        
+        if (userAskedQuestion) {
+          const responseAcknowledges = 
+            botResponse.toLowerCase().includes("because") ||
+            botResponse.toLowerCase().includes("since") ||
+            botResponse.toLowerCase().includes("that's") ||
+            botResponse.toLowerCase().includes("it's") ||
+            botResponse.toLowerCase().includes("yeah") ||
+            botResponse.toLowerCase().includes("nah") ||
+            botResponse.toLowerCase().includes("idk") ||
+            botResponse.toLowerCase().includes("i don't") ||
+            botResponse.toLowerCase().includes("not sure");
+          
+          if (!responseAcknowledges && Math.random() < 0.3) {
+            // 30% of off-topic responses slip through - fallback instead
+            console.log(`[coherenceCheck] Question asked but response doesn't acknowledge: "${botResponse.substring(0, 50)}"`);
+            return generateFallbackResponse(lengthDistribution, bot.recentCasts);
+          }
+        }
       }
     }
 

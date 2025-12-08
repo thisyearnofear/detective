@@ -4,6 +4,7 @@ import { gameManager } from "@/lib/gameState";
 import { generateBotResponse } from "@/lib/inference";
 import { Bot } from "@/lib/types";
 import { getRepository } from "@/lib/gameRepository";
+import { calculateTypingDelay } from "@/lib/typingDelay";
 
 /**
  * API route to send a message in a match.
@@ -52,12 +53,12 @@ export async function POST(request: Request) {
         const botResponse = await generateBotResponse(bot, match.messages, matchId);
         console.log(`[chat/send] Generated bot response: "${botResponse.substring(0, 50)}${botResponse.length > 50 ? '...' : ''}"`);
 
-        // Add natural delay (300-800ms) to feel more human
-        // This replaces the complex Redis scheduling system
-        const naturalDelay = 300 + Math.random() * 500; // 300-800ms
-        console.log(`[chat/send] Delaying bot response by ${Math.round(naturalDelay)}ms for natural feel`);
+        // Calculate variable typing delay based on message length and emoji count
+        // Longer messages and emoji-heavy responses take longer to "type"
+        const typingDelay = calculateTypingDelay(botResponse);
+        console.log(`[chat/send] Delaying bot response by ${typingDelay}ms (message: ${botResponse.length} chars, estimated typing time)`);
 
-        await new Promise(resolve => setTimeout(resolve, naturalDelay));
+        await new Promise(resolve => setTimeout(resolve, typingDelay));
 
         // Deliver the bot response immediately
         await gameManager.addMessageToMatch(matchId, botResponse, bot.fid);
