@@ -164,9 +164,20 @@ class GameManager {
 
   /**
    * Get the current game state, updating cycle state as needed.
+   * 
+   * IMPORTANT: Reloads player count from Redis each call to ensure new registrations
+   * are visible across all instances, without causing expensive full-collection reloads.
    */
   async getGameState() {
     await this.ensureInitialized();
+    
+    // Reload ONLY player count from Redis (lightweight, done every call)
+    // This ensures new registrations are visible without triggering phase-transition reloads
+    if (USE_REDIS) {
+      const players = await persistence.loadAllPlayers();
+      this.state!.players.clear();
+      players.forEach(p => this.state!.players.set(p.fid, p));
+    }
     
     // Update state based on timers every time it's requested
     await this.updateCycleState();
@@ -239,8 +250,10 @@ class GameManager {
     await persistence.savePlayer(player);
     await persistence.saveBot(bot);
 
-    // Notify other instances that player count changed (critical for state consistency)
-    await stateConsistency.tryIncrementStateVersion();
+    // Note: We do NOT increment state version here
+    // Player registration is a collection change, not a phase transition
+    // The next getGameState() call will reload metadata and see the new playerCount
+    // The countdown timer (not event count) drives phase transitions
 
     return player;
   }
