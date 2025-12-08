@@ -229,7 +229,7 @@ export default function Leaderboard({
       : null,
     fetcher,
     {
-      revalidateOnFocus: false,
+      revalidateOnFocus: true, // Mobile: Refresh when user returns
       dedupingInterval: 5000,
     }
   );

@@ -27,7 +27,7 @@ export default function GameLobby({ currentPlayer, isRegistrationOpen = true, ga
     fetcher,
     {
       refreshInterval: 2000, // Poll every 2s for phase changes + player updates
-      revalidateOnFocus: false,
+      revalidateOnFocus: true, // Mobile: Refresh when user returns
       shouldRetryOnError: true,
       errorRetryInterval: 1000,
     }

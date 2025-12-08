@@ -34,9 +34,9 @@ export default function Home() {
     sdkUser ? `/api/game/status?fid=${sdkUser.fid}` : "/api/game/status",
     fetcher,
     { 
-      refreshInterval: 2000, // Default to 2s, will adapt based on state
+      refreshInterval: 2000,
       keepPreviousData: true,
-      revalidateOnFocus: false,
+      revalidateOnFocus: true, // Mobile: Refresh when user returns
     },
   );
 
