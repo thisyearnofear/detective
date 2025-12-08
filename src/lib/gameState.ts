@@ -167,27 +167,29 @@ class GameManager {
    * Get the current game state, updating cycle state as needed.
    * 
    * ARCHITECTURE:
-   * - Metadata (state, timers) reloaded from Redis every call
+   * - Metadata (state, timers) cached in memory - only reload on version change
    * - Collections (players, bots, matches) loaded on-demand via repository
    * - Repository handles caching with TTL + version invalidation
    * 
-   * This keeps getGameState() lightweight and ensures fresh metadata
-   * while repository provides efficient collection access.
+   * CRITICAL: Only reload metadata when version bumps (state transitions).
+   * Avoids flashing/jitter from Redis reloads every request.
    */
   async getGameState() {
     await this.ensureInitialized();
     
-    // Always reload metadata (lightweight, tells us about phase transitions)
-    const stateMeta = await persistence.loadGameStateMeta();
-    if (stateMeta) {
-      this.state!.state = stateMeta.state;
-      this.state!.registrationEnds = stateMeta.registrationEnds;
-      this.state!.gameEnds = stateMeta.gameEnds;
-      this.state!.finishedAt = stateMeta.finishedAt;
-    }
-
-    // Check for version bump and invalidate repository cache if needed
-    if (await stateConsistency.hasVersionChanged()) {
+    // Check for version bump FIRST - this tells us if metadata changed
+    const versionChanged = await stateConsistency.hasVersionChanged();
+    
+    // Only reload metadata from Redis if version changed
+    // Otherwise use in-memory cache (prevents flashing/jitter)
+    if (versionChanged) {
+      const stateMeta = await persistence.loadGameStateMeta();
+      if (stateMeta) {
+        this.state!.state = stateMeta.state;
+        this.state!.registrationEnds = stateMeta.registrationEnds;
+        this.state!.gameEnds = stateMeta.gameEnds;
+        this.state!.finishedAt = stateMeta.finishedAt;
+      }
       getRepository().invalidateAll();
     }
     

@@ -28,6 +28,7 @@ type Props = {
     slotNumber?: number;
     messages?: any[];
     voteLocked?: boolean;
+    isOpponentTyping?: boolean;
   };
   currentVote?: "REAL" | "BOT";
   isNewMatch?: boolean;
@@ -217,7 +218,7 @@ export default function ChatWindow({
       }`,
     chatHeight: isFarcasterFrame ? "h-32" : variant === "compact" ? "h-48" : "h-80",
     spacing: isFarcasterFrame ? "mb-2" : variant === "compact" ? "mb-3" : "mb-4",
-    messageSpacing: isFarcasterFrame ? "p-2 space-y-2" : variant === "compact" ? "p-3 space-y-2" : "p-4 space-y-3",
+    messageSpacing: isFarcasterFrame ? "space-y-2" : variant === "compact" ? "space-y-3" : "space-y-4",
   };
 
   return (
@@ -325,13 +326,15 @@ export default function ChatWindow({
             <div className="text-center text-gray-500">No messages yet...</div>
           </div>
         ) : (
-          <VirtualizedMessageList
-            messages={messages || []}
-            currentUserId={fid}
-            containerHeight={styles.chatHeight}
-            opponentColors={opponentColors || undefined}
-          />
-        )}
+           <VirtualizedMessageList
+             messages={messages || []}
+             currentUserId={fid}
+             containerHeight={styles.chatHeight}
+             opponentColors={opponentColors || undefined}
+             isOpponentTyping={match.isOpponentTyping}
+             opponentUsername={match.opponent.username}
+           />
+         )}
       </div>
 
       {isTimeUp || match.voteLocked ? (

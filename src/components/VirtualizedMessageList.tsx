@@ -27,12 +27,14 @@ interface Props {
     primary: [number, number, number];
     secondary: [number, number, number];
   };
+  isOpponentTyping?: boolean;
+  opponentUsername?: string;
 }
 
 // Dynamic item heights - messages vary in length
 const BASE_ITEM_HEIGHT = 60;
 const OVERSCAN = 3; // Render extra items outside viewport
-const PADDING_PER_ITEM = 8; // p-2 = 8px
+const PADDING_PER_ITEM = 12; // py-3 = 12px vertical spacing between messages
 
 // Helper to estimate message height based on text length
 function estimateMessageHeight(text: string): number {
@@ -55,10 +57,10 @@ const MessageBubble = memo(({
   isFarcasterFrame: boolean;
 }) => {
   return (
-    <div className={`flex flex-col ${isCurrentUser ? "items-end" : "items-start"} mb-2`}>
+    <div className={`flex flex-col ${isCurrentUser ? "items-end" : "items-start"} py-1.5`}>
       <div
         className={`${isFarcasterFrame ? "max-w-[85%]" : "max-w-xs md:max-w-md"
-          } rounded-lg ${isFarcasterFrame ? "px-2 py-1" : "px-3 py-2"
+          } rounded-lg ${isFarcasterFrame ? "px-2.5 py-1.5" : "px-3 py-2"
           } ${isCurrentUser ? "bg-blue-600 text-white" : "bg-slate-700 text-gray-200"}`}
         style={
           !isCurrentUser && opponentColors
@@ -74,7 +76,7 @@ const MessageBubble = memo(({
         </p>
       </div>
       {!isFarcasterFrame && (
-        <span className="text-xs text-gray-500 mt-1">@{message.sender.username}</span>
+        <span className="text-xs text-gray-500 mt-2">@{message.sender.username}</span>
       )}
     </div>
   );
@@ -82,11 +84,49 @@ const MessageBubble = memo(({
 
 MessageBubble.displayName = 'MessageBubble';
 
+// TYPING INDICATOR COMPONENT
+const TypingIndicator = memo(({
+  opponentColors,
+  isFarcasterFrame
+}: {
+  opponentColors?: { primary: [number, number, number]; secondary: [number, number, number] };
+  isFarcasterFrame: boolean;
+}) => {
+  return (
+    <div className={`flex flex-col items-start py-1.5`}>
+      <div
+        className={`${isFarcasterFrame ? "max-w-[85%]" : "max-w-xs md:max-w-md"
+          } rounded-lg ${isFarcasterFrame ? "px-2.5 py-1.5" : "px-3 py-2"
+          } bg-slate-700 text-gray-200 flex items-center gap-1`}
+        style={
+          opponentColors
+            ? {
+              backgroundColor: `rgba(${opponentColors.primary[0]}, ${opponentColors.primary[1]}, ${opponentColors.primary[2]}, 0.15)`,
+              borderLeft: `3px solid rgb(${opponentColors.primary[0]}, ${opponentColors.primary[1]}, ${opponentColors.primary[2]})`,
+            }
+            : {}
+        }
+      >
+        {/* Three animated dots */}
+        <span className="inline-flex gap-0.5">
+          <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+          <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+          <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+        </span>
+      </div>
+    </div>
+  );
+});
+
+TypingIndicator.displayName = 'TypingIndicator';
+
 const VirtualizedMessageList = memo(({
   messages,
   currentUserId,
   containerHeight,
   opponentColors,
+  isOpponentTyping = false,
+  opponentUsername,
 }: Props) => {
   const { isFarcasterFrame } = useViewport();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -210,40 +250,45 @@ const VirtualizedMessageList = memo(({
   return (
     <div
       ref={containerRef}
-      className={`${containerHeight} overflow-y-auto bg-slate-900/50 rounded-lg relative`}
+      className={`${containerHeight} overflow-y-auto bg-slate-900/50 rounded-lg relative px-2 md:px-3 lg:px-4`}
       style={{
         // Adjust height when virtual keyboard is open
         height: isKeyboardOpen ? 'calc(100% - 280px)' : undefined,
       }}
     >
-      {/* Virtual scrolling container */}
-      <div style={{ height: totalHeight, position: 'relative' }}>
+      {/* Virtual scrolling container with responsive top/bottom padding */}
+      <div style={{ height: totalHeight, position: 'relative', paddingTop: '0.5rem', paddingBottom: '0.5rem' }}>
         {renderedMessages}
       </div>
 
-      {/* Empty state */}
-      {messages.length === 0 && (
-        <div className="flex items-center justify-center h-full">
-          <p className="text-gray-500 text-center">
-            Say hello! Your conversation starts now.
-          </p>
+      {/* Typing indicator */}
+      {isOpponentTyping && (
+        <div className="py-1.5">
+          <TypingIndicator
+            opponentColors={opponentColors}
+            isFarcasterFrame={isFarcasterFrame}
+          />
         </div>
       )}
-    </div>
-  );
-}, (prevProps, nextProps) => {
+
+      {/* Empty state */}
+       {messages.length === 0 && !isOpponentTyping && (
+         <div className="flex items-center justify-center h-full">
+           <p className="text-gray-500 text-center">
+             Say hello! Your conversation starts now.
+           </p>
+         </div>
+       )}
+      </div>
+      );
+      }, (prevProps, nextProps) => {
   // Custom comparison to prevent re-renders if messages content hasn't changed
   if (prevProps.messages.length !== nextProps.messages.length) return false;
   if (prevProps.containerHeight !== nextProps.containerHeight) return false;
   if (prevProps.currentUserId !== nextProps.currentUserId) return false;
+  if (prevProps.isOpponentTyping !== nextProps.isOpponentTyping) return false;
 
-  // Deep compare messages if lengths are same (optimization)
-  // Just check IDs of last message and first message as heuristic?
-  // Or check all IDs?
-  // For chat, checking last message ID is usually enough to detect new messages.
-  // But if messages are edited or loaded from history?
-
-  // Let's check all IDs joined string
+  // Check message IDs
   const prevIds = prevProps.messages.map(m => m.id).join(',');
   const nextIds = nextProps.messages.map(m => m.id).join(',');
 

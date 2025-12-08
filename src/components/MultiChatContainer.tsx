@@ -534,15 +534,15 @@ export default function MultiChatContainer({ fid }: Props) {
   // for real new message detection - currently not implemented
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 lg:space-y-4">
       {/* Round indicator - more compact on mobile */}
-      <div className="text-center mb-2 lg:mb-4">
-        <span className="bg-slate-700 px-3 py-1 rounded-full text-xs lg:text-sm text-blue-300">
+      <div className="text-center mb-3 lg:mb-4">
+        <span className="bg-slate-700 px-3 py-1.5 rounded-full text-xs lg:text-sm text-blue-300">
           Round {Math.min(currentRound, totalRounds)} of {totalRounds}
         </span>
         {/* Hide player pool info on mobile to save space */}
         {matchData.playerPool && (
-          <p className="hidden lg:block text-xs text-gray-500 mt-2">
+          <p className="hidden lg:block text-xs text-gray-500 mt-3">
             {matchData.playerPool.totalPlayers} players •{" "}
             {matchData.playerPool.totalBots} bots in pool
           </p>
@@ -550,7 +550,7 @@ export default function MultiChatContainer({ fid }: Props) {
       </div>
 
       {/* Single responsive layout - grid on desktop, stack on mobile */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5">
         {[1, 2].map((slotNumber) => {
           const match = stableSlots[slotNumber];
 
