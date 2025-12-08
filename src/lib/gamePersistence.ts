@@ -228,7 +228,7 @@ export async function loadAllSessions(): Promise<Map<number, PlayerGameSession>>
             activeMatches: new Map(sessionData.activeMatches || []),
             completedMatchIds: new Set(sessionData.completedMatchIds || []),
             facedOpponents: new Map(sessionData.facedOpponents || []),
-            currentRound: 0, // Reset for new game cycle (synchronized to game timer)
+            currentRound: sessionData.currentRound || 0,
           };
           sessions.set(parseInt(fid, 10), session);
         } catch (e) {
