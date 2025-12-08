@@ -5,8 +5,24 @@
  * All state synchronization logic in one place.
  * Version-based consistency prevents stale caches across serverless instances.
  * 
+ * CRITICAL PATTERN - Separate "Collection Changes" from "State Transitions":
+ * 
+ * PHASE TRANSITIONS (increment version):
+ * - REGISTRATION → LIVE (countdown expires)
+ * - LIVE → FINISHED (game timer expires)
+ * - FINISHED → REGISTRATION (auto-cycle)
+ * Use case: Only when game state fundamentally changes
+ * Effect: Triggers full reloads on all instances (expensive)
+ * 
+ * COLLECTION MUTATIONS (do NOT increment version):
+ * - Player joins (registerPlayer)
+ * - Player ready status changes (setPlayerReady)
+ * - Match voting/messages (updateMatchVote, addMessageToMatch)
+ * Use case: Frequent changes that don't need sync across instances
+ * Effect: Each instance reloads only collections it needs, on demand
+ * 
  * How it works:
- * - Redis stores stateVersion (incremented on every state change)
+ * - Redis stores stateVersion (incremented ONLY on phase transitions)
  * - In-memory cache tracks lastLoadedVersion
  * - Before using cached data, validate version matches
  * - If version differs, reload from Redis

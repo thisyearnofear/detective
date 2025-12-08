@@ -41,13 +41,10 @@ export async function GET(request: Request) {
     let phaseEndTime = gameState.registrationEnds;
     let reason = "";
 
-    // Use fresh player count from rawState to ensure consistency
-    const freshPlayerCount = players.length;
-
     if (gameState.state === "REGISTRATION") {
        phase = "REGISTRATION";
        phaseEndTime = gameState.registrationEnds;
-       reason = `Waiting for players... (${freshPlayerCount}/8)`;
+       reason = `Waiting for players... (${gameState.playerCount}/8)`;
      } else if (gameState.state === "LIVE") {
        phase = "LIVE";
        phaseEndTime = gameState.gameEnds;
@@ -63,7 +60,7 @@ export async function GET(request: Request) {
        // Game state (original)
        cycleId: gameState.cycleId,
        state: gameState.state,
-       playerCount: freshPlayerCount,
+       playerCount: gameState.playerCount,
       registrationEnds: gameState.registrationEnds,
       gameEnds: gameState.gameEnds,
       finishedAt: gameState.finishedAt, // For calculating next cycle countdown
