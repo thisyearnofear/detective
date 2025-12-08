@@ -39,7 +39,10 @@ export async function POST(request: Request) {
 
     // If the opponent is a bot, generate and deliver response INLINE
     if (match.opponent.type === "BOT") {
-      const bot = match.opponent as Bot;
+      // Ensure we have fresh bot data (in case another instance registered it)
+      // This is needed because bot personalities may have been inferred after we loaded bots
+      const freshBots = await gameManager.loadFreshBots();
+      const bot = freshBots.get(match.opponent.fid) as Bot || match.opponent;
 
       console.log(`[chat/send] User FID ${senderFid} sent message to match ${matchId}, opponent is bot FID ${bot.fid}`);
 

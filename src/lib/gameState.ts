@@ -165,31 +165,22 @@ class GameManager {
   /**
    * Get the current game state, updating cycle state as needed.
    * 
-   * PHASE-AWARE RELOADING:
-   * - REGISTRATION: reload players only (new registrations need visibility)
-   * - LIVE: reload matches + sessions (bots need fresh messages to respond)
-   * - FINISHED: reload leaderboard
+   * IMPORTANT: Does NOT reload collections - those are loaded on-demand by specific methods
+   * that need fresh data (getActiveMatches, getLeaderboard, etc).
+   * This keeps getGameState() lightweight while ensuring methods that care about consistency
+   * explicitly reload before use.
    */
   async getGameState() {
     await this.ensureInitialized();
     
-    // Phase-aware reload strategy: only reload what this phase needs
-    if (USE_REDIS) {
-      if (this.state!.state === "REGISTRATION") {
-        // During registration, only need fresh player count
-        const players = await persistence.loadAllPlayers();
-        this.state!.players.clear();
-        players.forEach(p => this.state!.players.set(p.fid, p));
-      } else if (this.state!.state === "LIVE") {
-        // During live game, need fresh matches for bot responses and session state for round tracking
-        const matches = await persistence.loadAllMatches();
-        this.state!.matches.clear();
-        matches.forEach(m => this.state!.matches.set(m.id, m));
-
-        const sessions = await persistence.loadAllSessions();
-        this.state!.playerSessions.clear();
-        sessions.forEach(s => this.state!.playerSessions.set(s.fid, s));
-      }
+    // Only reload metadata (state transitions, timers)
+    // Collections are loaded on-demand by methods that use them
+    const stateMeta = await persistence.loadGameStateMeta();
+    if (stateMeta) {
+      this.state!.state = stateMeta.state;
+      this.state!.registrationEnds = stateMeta.registrationEnds;
+      this.state!.gameEnds = stateMeta.gameEnds;
+      this.state!.finishedAt = stateMeta.finishedAt;
     }
     
     // Update state based on timers every time it's requested
@@ -206,6 +197,67 @@ class GameManager {
       isRegistered: false, // Will be set by routes if needed
       finishedAt: this.state!.finishedAt, // For calculating next cycle time
     };
+  }
+
+  /**
+   * Reload all players from Redis.
+   * Called by methods that need fresh player data (status endpoint, leaderboard, etc).
+   */
+  private async reloadPlayers(): Promise<void> {
+    if (!USE_REDIS) return;
+    const players = await persistence.loadAllPlayers();
+    this.state!.players.clear();
+    players.forEach(p => this.state!.players.set(p.fid, p));
+  }
+
+  /**
+   * Reload all bots from Redis.
+   * Called when bot responses needed and instance may have missed registrations.
+   */
+  private async reloadBots(): Promise<void> {
+    if (!USE_REDIS) return;
+    const bots = await persistence.loadAllBots();
+    this.state!.bots.clear();
+    bots.forEach(b => this.state!.bots.set(b.fid, b));
+  }
+
+  /**
+   * Reload all matches from Redis.
+   * Called by match operations (getActiveMatches, chat/send, etc) to ensure fresh match state.
+   */
+  private async reloadMatches(): Promise<void> {
+    if (!USE_REDIS) return;
+    const matches = await persistence.loadAllMatches();
+    this.state!.matches.clear();
+    matches.forEach(m => this.state!.matches.set(m.id, m));
+  }
+
+  /**
+   * Reload all sessions from Redis.
+   * Called by match/round operations to ensure fresh session state.
+   */
+  private async reloadSessions(): Promise<void> {
+    if (!USE_REDIS) return;
+    const sessions = await persistence.loadAllSessions();
+    this.state!.playerSessions.clear();
+    sessions.forEach(s => this.state!.playerSessions.set(s.fid, s));
+  }
+
+  /**
+   * Public method to load fresh bots (for bot response generation).
+   * Returns the bots map after reloading from Redis.
+   */
+  async loadFreshBots(): Promise<Map<number, Bot>> {
+    await this.reloadBots();
+    return this.state!.bots;
+  }
+
+  /**
+   * Public method to reload players for status endpoint.
+   * Used to ensure fresh player count during REGISTRATION phase.
+   */
+  async reloadPlayersForStatus(): Promise<void> {
+    await this.reloadPlayers();
   }
 
   /**
@@ -315,9 +367,15 @@ class GameManager {
    * Get active matches for a player, creating new ones as needed.
    * DETERMINISTIC: Rounds advance immediately when all matches are voted.
    * No grace periods, no time-based transitions.
+   * 
+   * Reloads fresh match and session data to ensure bot responses and round state are current.
    */
   async getActiveMatches(fid: number): Promise<Match[]> {
     await this.ensureInitialized();
+
+    // Reload fresh matches and sessions for this request
+    await this.reloadMatches();
+    await this.reloadSessions();
 
     const player = this.state!.players.get(fid);
     if (!player || this.state!.state !== "LIVE") {
@@ -542,6 +600,9 @@ class GameManager {
    */
   async getLeaderboard(): Promise<LeaderboardEntry[]> {
     await this.ensureInitialized();
+
+    // Reload fresh players to ensure vote history is current
+    await this.reloadPlayers();
 
     const leaderboard: LeaderboardEntry[] = Array.from(this.state!.players.values()).map(player => {
       const correctVotes = player.voteHistory.filter(v => v.correct && !v.forfeit);
