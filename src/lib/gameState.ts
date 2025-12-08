@@ -869,6 +869,16 @@ class GameManager {
 
       // Start countdown once minimum players join
       if (!this.state!.countdownStarted && playerCount >= MIN_PLAYERS) {
+        // Try to atomically start countdown (only one instance succeeds)
+        const didIncrement = await stateConsistency.tryIncrementStateVersion();
+        
+        if (!didIncrement) {
+          // Another instance started countdown first, reload their state
+          await this.reloadFromRedis();
+          console.log(`[GameManager] Another instance started countdown, reloaded state`);
+          return;
+        }
+
         console.log(`[GameManager] Minimum ${MIN_PLAYERS} players reached, starting ${REGISTRATION_COUNTDOWN / 1000}s countdown`);
         this.state!.countdownStarted = true;
         this.state!.registrationEnds = now + REGISTRATION_COUNTDOWN;
