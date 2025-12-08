@@ -17,7 +17,7 @@ export default function Home() {
   const [sdkUser, setSdkUser] = useState<any>(null);
   const [isSdkLoading, setIsSdkLoading] = useState(true);
   const [introComplete, setIntroComplete] = useState(false);
-  const [isLeaderboardView, setIsLeaderboardView] = useState(false);
+  const [justFinishedCycle, setJustFinishedCycle] = useState(false);
 
   useEffect(() => {
     // Auto-advance intro after 2 seconds
@@ -38,6 +38,22 @@ export default function Home() {
       revalidateOnFocus: false,
     },
   );
+
+  // Track when we transition from FINISHED to REGISTRATION to show recent games
+  useEffect(() => {
+    if (gameState?.state === 'REGISTRATION' && justFinishedCycle) {
+      // Reset flag after a short delay so Leaderboard can render
+      const timer = setTimeout(() => {
+        setJustFinishedCycle(false);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+    
+    // Set flag when entering FINISHED state (user just completed a game)
+    if (gameState?.state === 'FINISHED') {
+      setJustFinishedCycle(true);
+    }
+  }, [gameState?.state]);
 
   const handleLogout = () => {
     setSdkUser(null);
@@ -293,12 +309,6 @@ export default function Home() {
                   </div>
                   <div className="flex gap-2">
                      <button
-                       onClick={() => setIsLeaderboardView(!isLeaderboardView)}
-                       className="text-xs text-gray-400 hover:text-white transition-colors"
-                     >
-                       {isLeaderboardView ? '← Game' : '🏆 Leaderboard'}
-                     </button>
-                     <button
                        onClick={handleLogout}
                        className="text-xs text-gray-400 hover:text-white transition-colors"
                      >
@@ -308,28 +318,29 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Toggle View: Game vs Leaderboard */}
-              {isLeaderboardView ? (
-                // Leaderboard View
+              {/* Live Game Status */}
+              {gameState && (
+                <GameStatusCard
+                  gameState={{
+                    state: gameState.state,
+                    playerCount: gameState.playerCount,
+                    registrationEnds: gameState.registrationEnds,
+                    gameEnds: gameState.gameEnds,
+                  }}
+                />
+              )}
+
+              {/* Show recent games/leaderboard if we just finished a cycle */}
+              {gameState?.state === "REGISTRATION" && justFinishedCycle && sdkUser ? (
                 <div className="w-full space-y-4">
-                  <div className="text-xs text-gray-500 uppercase tracking-widest px-4">Global Leaderboard</div>
-                  <Leaderboard />
+                  <div className="text-xs text-gray-500 uppercase tracking-widest px-4">Your Recent Games</div>
+                  <Leaderboard
+                    fid={sdkUser.fid}
+                    mode="career"
+                  />
                 </div>
               ) : (
-                // Game View
                 <>
-                  {/* Live Game Status */}
-                  {gameState && (
-                    <GameStatusCard
-                      gameState={{
-                        state: gameState.state,
-                        playerCount: gameState.playerCount,
-                        registrationEnds: gameState.registrationEnds,
-                        gameEnds: gameState.gameEnds,
-                      }}
-                    />
-                  )}
-
                   {/* Game Phase View (Registration/Live only, not FINISHED) */}
                   {gameState?.state !== "FINISHED" && renderGameState()}
                 </>
