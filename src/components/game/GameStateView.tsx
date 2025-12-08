@@ -21,7 +21,6 @@ type Props = {
     gameEnds: number;
     isRegistered: boolean;
   };
-  onLogout: () => void;
 };
 
 /**
@@ -39,7 +38,6 @@ export default function GameStateView({
   displayName,
   pfpUrl,
   gameState,
-  onLogout,
 }: Props) {
   const currentPlayer = { fid, username, displayName, pfpUrl };
 
@@ -83,13 +81,7 @@ export default function GameStateView({
       );
 
     case 'FINISHED':
-      return (
-        <GameFinishedView
-          fid={fid}
-          gameState={gameState}
-          onLogout={onLogout}
-        />
-      );
+      return <GameFinishedView />;
 
     default:
       return null;

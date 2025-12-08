@@ -81,16 +81,24 @@ export async function GET(request: NextRequest) {
 
 async function getChainStats(chain: Chain) {
   try {
-    // This would query actual chain data
-    // For now, return mock data structure
+    // Since the game is still in development and not live yet,
+    // we return zero stats to avoid showing misleading fake data.
+    // In production, this would query actual blockchain data for:
+    // - NFT holder counts from Arbitrum contract
+    // - Token holder counts from Monad contract  
+    // - Player statistics from the database
+    // - Game completion metrics
+    
+    // TODO: Implement real blockchain queries when game launches
+    // For now, return honest empty stats to set proper expectations
     return {
       chain,
-      totalPlayers: Math.floor(Math.random() * 1000) + 500,
-      totalGames: Math.floor(Math.random() * 5000) + 1000,
-      nftHolders: Math.floor(Math.random() * 200) + 50,
-      tokenHolders: chain === 'monad' ? Math.floor(Math.random() * 800) + 200 : undefined,
-      topAccuracy: 95.5 + Math.random() * 4,
-      avgAccuracy: 65.0 + Math.random() * 15,
+      totalPlayers: 0,
+      totalGames: 0,
+      nftHolders: 0,
+      tokenHolders: chain === 'monad' ? 0 : undefined,
+      topAccuracy: 0,
+      avgAccuracy: 0,
     };
   } catch (error) {
     console.error(`[ChainStats] Error getting stats for ${chain}:`, error);
