@@ -278,13 +278,6 @@ class GameManager {
    */
   async getActiveMatches(fid: number): Promise<Match[]> {
     await this.ensureInitialized();
-    
-    // Check if another instance made a state change (version mismatch)
-    const isConsistent = await stateConsistency.validateStateConsistency();
-    if (!isConsistent) {
-      // Reload state from Redis if another instance changed it
-      await this.reloadFromRedis();
-    }
 
     const player = this.state!.players.get(fid);
     if (!player || this.state!.state !== "LIVE") {
