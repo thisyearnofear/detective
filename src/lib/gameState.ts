@@ -93,7 +93,7 @@ class GameManager {
           matches,
           playerSessions: sessions,
           leaderboard: [],
-          countdownStarted: false, // Will be set when minimum players join
+          countdownStarted: stateMeta.countdownStarted || false,
           config: {
             gameDurationMs: GAME_DURATION,
             matchDurationMs: MATCH_DURATION,
@@ -116,6 +116,7 @@ class GameManager {
           state: this.state.state,
           registrationEnds: this.state.registrationEnds,
           gameEnds: this.state.gameEnds,
+          countdownStarted: false,
         });
         console.log(`[GameManager] Created new cycle ${this.state.cycleId}`);
         
