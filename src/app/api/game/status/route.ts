@@ -12,12 +12,18 @@ import { NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
 
 export async function GET(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const fidParam = searchParams.get("fid");
+   try {
+     const { searchParams } = new URL(request.url);
+     const fidParam = searchParams.get("fid");
 
-    const gameState = await gameManager.getGameState();
-    const rawState = await gameManager.getRawState();
+     const gameState = await gameManager.getGameState();
+     
+     // For REGISTRATION phase, load fresh players to see new registrations
+     if (gameState.state === "REGISTRATION") {
+       await gameManager.reloadPlayersForStatus();
+     }
+     
+     const rawState = await gameManager.getRawState();
 
     let isRegistered = false;
     if (fidParam) {
