@@ -656,3 +656,15 @@ Detective becomes the standard for **synthetic identity verification** across we
 - **Social Infrastructure**: Detective as proof-of-humanity for social platforms
 
 This roadmap balances **immediate user value** with **long-term ecosystem vision**, ensuring Detective remains at the forefront of synthetic identity innovation while delivering compelling gameplay today.
+
+---
+
+## Recent Updates
+
+### Career Stats Pagination & Filtering (Dec 8)
+- Enhanced `/api/stats/career` with pagination (10 games/page) and time filtering (week/month/all)
+- Updated `Leaderboard` career mode: time filter tabs + pagination controls
+- Aggregate stats always show all-time performance; games list filters by period
+- Scalable design supports 1000+ games without bloat
+- Removed `/api/game/rounds` endpoint (consolidation)
+- Maintains minimal aesthetic and compact UI

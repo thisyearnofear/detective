@@ -17,10 +17,25 @@ type Props = {
   onLogout: () => void;
 };
 
+type RoundResult = {
+  roundNumber: number;
+  correct: boolean;
+  opponentUsername: string;
+  opponentType: "REAL" | "BOT";
+  opponentFid: number;
+};
+
 export default function GameFinishedView({ fid, onLogout }: Props) {
   // Fetch player stats
   const { data: statsData } = useSWR(
     fid ? `/api/stats/player/${fid}` : null,
+    fetcher,
+    { revalidateOnFocus: false }
+  );
+
+  // Fetch match data to get round results from voteHistory
+  const { data: matchData } = useSWR(
+    fid ? `/api/match/active?fid=${fid}` : null,
     fetcher,
     { revalidateOnFocus: false }
   );
@@ -30,6 +45,24 @@ export default function GameFinishedView({ fid, onLogout }: Props) {
     accuracy: 0,
     avg_speed_ms: 0,
   };
+
+  // Extract round results from voteHistory
+  const roundResults: RoundResult[] = matchData?.voteHistory
+    ? matchData.voteHistory.map((h: any) => ({
+        roundNumber: h.roundNumber || 1,
+        correct: h.correct,
+        opponentUsername: h.opponentUsername || "Unknown",
+        opponentType: h.opponentType || "BOT",
+        opponentFid: 0,
+      }))
+    : [];
+
+  const accuracy = roundResults.length > 0
+    ? (roundResults.filter((r) => r.correct).length / roundResults.length) * 100
+    : 0;
+
+  const playerRank = matchData?.playerRank || 1;
+  const totalPlayers = matchData?.playerPool?.totalPlayers || 0;
 
   return (
     <div className="space-y-8">
@@ -46,7 +79,15 @@ export default function GameFinishedView({ fid, onLogout }: Props) {
       {/* Leaderboard */}
       <div className="space-y-4">
         <div className="text-xs text-gray-500 uppercase tracking-widest px-4">Results</div>
-        <Leaderboard />
+        <Leaderboard
+          fid={fid}
+          isGameEnd={true}
+          accuracy={accuracy}
+          roundResults={roundResults}
+          playerRank={playerRank}
+          totalPlayers={totalPlayers}
+          onPlayAgain={onLogout}
+        />
       </div>
 
       {/* Next Steps */}
