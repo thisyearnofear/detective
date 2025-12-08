@@ -148,25 +148,6 @@ const LeaderboardTable = ({ entries, showStatus = false }: {
   );
 };
 
-interface CareerStats {
-  totalGames: number;
-  overallAccuracy: number;
-  totalVotes: number;
-  totalCorrect: number;
-  bestAccuracy: number;
-  worstAccuracy: number;
-  avgSpeed: number;
-  leaderboardHistory: Array<{
-    gameId: string;
-    timestamp: number;
-    rank: number;
-    totalPlayers: number;
-    accuracy: number;
-  }>;
-}
-
-
-
 interface GameResultsProps {
   isGameEnd?: boolean;
   accuracy?: number;
@@ -230,6 +211,9 @@ export default function Leaderboard({
   const [selectedChain, setSelectedChain] = useState<Chain>(chain);
   const [leaderboardType, setLeaderboardType] = useState<LeaderboardType>('current-game');
   const [timeFrame, setTimeFrame] = useState<TimeFrame>('7d');
+  // Career stats pagination and filtering
+  const [careerTimeFilter, setCareerTimeFilter] = useState<'week' | 'month' | 'all'>('all');
+  const [careerOffset, setCareerOffset] = useState(0);
   
   const { data: leaderboard, error } = useSWR<LeaderboardEntry[]>(
     (mode as string) === 'current' ? '/api/leaderboard/current' : null,
@@ -239,11 +223,13 @@ export default function Leaderboard({
     }
   );
 
-  const { data: careerStats } = useSWR<CareerStats>(
-    (mode as string) === 'career' && fid ? `/api/stats/career?fid=${fid}` : null,
+  const { data: careerStats } = useSWR<any>(
+    (mode as string) === 'career' && fid 
+      ? `/api/stats/career?fid=${fid}&timeFilter=${careerTimeFilter}&offset=${careerOffset}&limit=10` 
+      : null,
     fetcher,
     {
-      revalidateOnFocus: true,
+      revalidateOnFocus: false,
       dedupingInterval: 5000,
     }
   );
@@ -663,7 +649,6 @@ export default function Leaderboard({
     return <div className="bg-slate-800 rounded-lg p-6 mt-8 text-center text-gray-400">Loading Leaderboard...</div>;
   }
 
-  // Career stats mode
   if ((mode as string) === 'career') {
     if (!careerStats) {
       return (
@@ -740,50 +725,97 @@ export default function Leaderboard({
           </div>
         </div>
 
-        {/* Game history */}
-        {careerStats.leaderboardHistory.length > 0 && (
-          <div className="mt-6">
-            <h3 className="font-bold text-white mb-3">Game History</h3>
-            <div className="space-y-2">
-              {careerStats.leaderboardHistory.map((entry, idx) => {
-                const date = new Date(entry.timestamp).toLocaleDateString();
-                const percentile = Math.round(
-                  ((entry.totalPlayers - entry.rank) / entry.totalPlayers) * 100
-                );
+        {/* Time filter tabs */}
+        <div className="flex gap-2 mb-4 border-b border-slate-700">
+          {(['all', 'month', 'week'] as const).map((filter) => (
+            <button
+              key={filter}
+              onClick={() => {
+                setCareerTimeFilter(filter);
+                setCareerOffset(0);
+              }}
+              className={`px-3 py-2 text-sm font-medium transition-colors ${
+                careerTimeFilter === filter
+                  ? 'border-b-2 border-blue-500 text-white'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              {filter === 'all' ? 'All Time' : filter === 'month' ? 'This Month' : 'This Week'}
+            </button>
+          ))}
+        </div>
 
-                return (
-                  <div
-                    key={entry.gameId}
-                    className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg border border-slate-700/50"
-                  >
-                    <div>
-                      <div className="text-sm font-medium text-white">
-                        Game #{careerStats.totalGames - idx}
+        {/* Game history */}
+        {careerStats.games && careerStats.games.length > 0 ? (
+          <div className="space-y-3">
+            {careerStats.games.map((game: any) => {
+              const date = new Date(game.timestamp).toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+              });
+              const percentile = Math.round(
+                ((game.totalPlayers - game.rank) / game.totalPlayers) * 100
+              );
+
+              return (
+                <div
+                  key={game.gameId}
+                  className="flex items-center justify-between p-3 bg-slate-900/50 rounded border border-slate-700/50 hover:bg-slate-900/80 transition-colors text-sm"
+                >
+                  <div className="flex-1">
+                    <div className="text-gray-300 font-medium">
+                      Game #{game.displayNumber}
+                    </div>
+                    <div className="text-xs text-gray-500">{date}</div>
+                  </div>
+
+                  <div className="flex items-center gap-4 text-xs">
+                    <div className="text-right">
+                      <div className="text-purple-300 font-bold">
+                        {game.accuracy.toFixed(0)}%
                       </div>
-                      <div className="text-xs text-gray-500">{date}</div>
+                      <div className="text-gray-500">accuracy</div>
                     </div>
 
-                    <div className="flex items-center gap-6">
-                      <div className="text-right">
-                        <div className="text-sm font-bold text-purple-300">
-                          {entry.accuracy.toFixed(0)}%
-                        </div>
-                        <div className="text-xs text-gray-500">accuracy</div>
+                    <div className="text-right">
+                      <div className="text-blue-300 font-bold">
+                        #{game.rank}
                       </div>
-
-                      <div className="text-right">
-                        <div className="text-sm font-bold text-blue-300">
-                          #{entry.rank}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          top {percentile}%
-                        </div>
+                      <div className="text-gray-500">
+                        top {percentile}%
                       </div>
                     </div>
                   </div>
-                );
-              })}
+                </div>
+              );
+            })}
+
+            {/* Pagination */}
+            <div className="flex gap-2 justify-center pt-2">
+              <button
+                onClick={() => setCareerOffset(Math.max(0, careerOffset - 10))}
+                disabled={careerOffset === 0}
+                className="px-3 py-1 text-xs bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded transition-colors"
+              >
+                ← Previous
+              </button>
+              
+              <div className="text-xs text-gray-400 flex items-center px-2">
+                {careerOffset + 1}–{Math.min(careerOffset + 10, careerStats.pagination.total)} of {careerStats.pagination.total}
+              </div>
+
+              <button
+                onClick={() => setCareerOffset(careerOffset + 10)}
+                disabled={!careerStats.pagination.hasMore}
+                className="px-3 py-1 text-xs bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded transition-colors"
+              >
+                Next →
+              </button>
             </div>
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-400">
+            No games found for this period
           </div>
         )}
 
