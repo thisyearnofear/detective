@@ -33,6 +33,7 @@ import * as persistence from "./gamePersistence";
 
 let stateVersion = 0;
 let lastLoadedVersion = -1;
+let lastReadVersion = -1; // For detecting version changes
 
 /**
  * Load state version from Redis
@@ -114,9 +115,26 @@ export async function tryIncrementStateVersion(): Promise<boolean> {
 }
 
 /**
+ * Check if version has changed since last read
+ * Used by repository cache invalidation
+ */
+export async function hasVersionChanged(): Promise<boolean> {
+  const currentVersion = await loadStateVersion();
+  return currentVersion !== lastReadVersion;
+}
+
+/**
+ * Mark version as read (for cache invalidation tracking)
+ */
+export function markVersionAsRead(): void {
+  lastReadVersion = stateVersion;
+}
+
+/**
  * Reset version (for testing or hard reset)
  */
 export function resetVersion(): void {
   stateVersion = 0;
   lastLoadedVersion = -1;
+  lastReadVersion = -1;
 }

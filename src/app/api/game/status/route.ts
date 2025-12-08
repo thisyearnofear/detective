@@ -18,11 +18,7 @@ export async function GET(request: Request) {
 
      const gameState = await gameManager.getGameState();
      
-     // For REGISTRATION phase, load fresh players to see new registrations
-     if (gameState.state === "REGISTRATION") {
-       await gameManager.reloadPlayersForStatus();
-     }
-     
+     // gameState() already loads players via repository, so we have fresh player count
      const rawState = await gameManager.getRawState();
 
     let isRegistered = false;

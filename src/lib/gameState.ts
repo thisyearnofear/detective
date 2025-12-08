@@ -39,6 +39,7 @@ import * as persistence from "./gamePersistence";
 import * as stateConsistency from "./stateConsistency";
 import { database } from "./database";
 import { inferPersonality } from "./botProactive";
+import { getRepository } from "./gameRepository";
 
 // Game configuration constants
 const MATCH_DURATION = 60 * 1000; // 1 minute per match
@@ -165,16 +166,18 @@ class GameManager {
   /**
    * Get the current game state, updating cycle state as needed.
    * 
-   * IMPORTANT: Does NOT reload collections - those are loaded on-demand by specific methods
-   * that need fresh data (getActiveMatches, getLeaderboard, etc).
-   * This keeps getGameState() lightweight while ensuring methods that care about consistency
-   * explicitly reload before use.
+   * ARCHITECTURE:
+   * - Metadata (state, timers) reloaded from Redis every call
+   * - Collections (players, bots, matches) loaded on-demand via repository
+   * - Repository handles caching with TTL + version invalidation
+   * 
+   * This keeps getGameState() lightweight and ensures fresh metadata
+   * while repository provides efficient collection access.
    */
   async getGameState() {
     await this.ensureInitialized();
     
-    // Only reload metadata (state transitions, timers)
-    // Collections are loaded on-demand by methods that use them
+    // Always reload metadata (lightweight, tells us about phase transitions)
     const stateMeta = await persistence.loadGameStateMeta();
     if (stateMeta) {
       this.state!.state = stateMeta.state;
@@ -182,10 +185,19 @@ class GameManager {
       this.state!.gameEnds = stateMeta.gameEnds;
       this.state!.finishedAt = stateMeta.finishedAt;
     }
+
+    // Check for version bump and invalidate repository cache if needed
+    if (await stateConsistency.hasVersionChanged()) {
+      getRepository().invalidateAll();
+    }
     
     // Update state based on timers every time it's requested
     await this.updateCycleState();
     await this.cleanupOldMatches();
+
+    // Get player count from repository (may be cached)
+    const players = await getRepository().getPlayers();
+    this.state!.players = players;
 
     return {
       cycleId: this.state!.cycleId,
@@ -197,67 +209,6 @@ class GameManager {
       isRegistered: false, // Will be set by routes if needed
       finishedAt: this.state!.finishedAt, // For calculating next cycle time
     };
-  }
-
-  /**
-   * Reload all players from Redis.
-   * Called by methods that need fresh player data (status endpoint, leaderboard, etc).
-   */
-  private async reloadPlayers(): Promise<void> {
-    if (!USE_REDIS) return;
-    const players = await persistence.loadAllPlayers();
-    this.state!.players.clear();
-    players.forEach(p => this.state!.players.set(p.fid, p));
-  }
-
-  /**
-   * Reload all bots from Redis.
-   * Called when bot responses needed and instance may have missed registrations.
-   */
-  private async reloadBots(): Promise<void> {
-    if (!USE_REDIS) return;
-    const bots = await persistence.loadAllBots();
-    this.state!.bots.clear();
-    bots.forEach(b => this.state!.bots.set(b.fid, b));
-  }
-
-  /**
-   * Reload all matches from Redis.
-   * Called by match operations (getActiveMatches, chat/send, etc) to ensure fresh match state.
-   */
-  private async reloadMatches(): Promise<void> {
-    if (!USE_REDIS) return;
-    const matches = await persistence.loadAllMatches();
-    this.state!.matches.clear();
-    matches.forEach(m => this.state!.matches.set(m.id, m));
-  }
-
-  /**
-   * Reload all sessions from Redis.
-   * Called by match/round operations to ensure fresh session state.
-   */
-  private async reloadSessions(): Promise<void> {
-    if (!USE_REDIS) return;
-    const sessions = await persistence.loadAllSessions();
-    this.state!.playerSessions.clear();
-    sessions.forEach(s => this.state!.playerSessions.set(s.fid, s));
-  }
-
-  /**
-   * Public method to load fresh bots (for bot response generation).
-   * Returns the bots map after reloading from Redis.
-   */
-  async loadFreshBots(): Promise<Map<number, Bot>> {
-    await this.reloadBots();
-    return this.state!.bots;
-  }
-
-  /**
-   * Public method to reload players for status endpoint.
-   * Used to ensure fresh player count during REGISTRATION phase.
-   */
-  async reloadPlayersForStatus(): Promise<void> {
-    await this.reloadPlayers();
   }
 
   /**
@@ -315,10 +266,13 @@ class GameManager {
     await persistence.savePlayer(player);
     await persistence.saveBot(bot);
 
+    // Invalidate player and bot caches so other methods see the new player
+    getRepository().invalidateCache('players');
+    getRepository().invalidateCache('bots');
+
     // Note: We do NOT increment state version here
     // Player registration is a collection change, not a phase transition
-    // The next getGameState() call will reload metadata and see the new playerCount
-    // The countdown timer (not event count) drives phase transitions
+    // Repository TTL cache and version tracking handle consistency
 
     return player;
   }
@@ -367,15 +321,16 @@ class GameManager {
    * Get active matches for a player, creating new ones as needed.
    * DETERMINISTIC: Rounds advance immediately when all matches are voted.
    * No grace periods, no time-based transitions.
-   * 
-   * Reloads fresh match and session data to ensure bot responses and round state are current.
    */
   async getActiveMatches(fid: number): Promise<Match[]> {
     await this.ensureInitialized();
 
-    // Reload fresh matches and sessions for this request
-    await this.reloadMatches();
-    await this.reloadSessions();
+    // Load fresh matches and sessions via repository (may use cache)
+    const matchesMap = await getRepository().getMatches();
+    this.state!.matches = matchesMap;
+
+    const sessions = await getRepository().getSessions();
+    this.state!.playerSessions = sessions;
 
     const player = this.state!.players.get(fid);
     if (!player || this.state!.state !== "LIVE") {
@@ -384,7 +339,7 @@ class GameManager {
 
     const session = this.getOrCreateSession(fid);
     const now = Date.now();
-    const matches: Match[] = [];
+    const activeMatches: Match[] = [];
 
     // Use fixed rounds for predictable experience
     const maxRounds = FIXED_ROUNDS;
@@ -430,11 +385,11 @@ class GameManager {
         session.activeMatches.delete(slotNum);
       } else {
         // Still active and not expired
-        matches.push(match);
+        activeMatches.push(match);
       }
-    }
+      }
 
-    if (!session.currentRound || session.currentRound === 0) {
+      if (!session.currentRound || session.currentRound === 0) {
       // Initialize round 1
       console.log(`[GameManager] Initializing round 1 for FID ${fid}`);
       session.currentRound = 1;
@@ -447,10 +402,10 @@ class GameManager {
         if (match) {
           selectedThisRound.add(match.opponent.fid);
           session.activeMatches.set(slotNum, match.id);
-          matches.push(match);
+          activeMatches.push(match);
         }
       }
-    } else if (session.activeMatches.size === 0 && session.currentRound <= maxRounds) {
+      } else if (session.activeMatches.size === 0 && session.currentRound <= maxRounds) {
       // Matches were all locked/removed from this round, create next round's matches
       console.log(`[GameManager] Creating new matches for round ${session.currentRound} for FID ${fid}`);
       
@@ -461,15 +416,15 @@ class GameManager {
         if (match) {
           selectedThisRound.add(match.opponent.fid);
           session.activeMatches.set(slotNum, match.id);
-          matches.push(match);
+          activeMatches.push(match);
         } else {
           console.warn(`[GameManager] Failed to create match for FID ${fid} round ${session.currentRound} slot ${slotNum}`);
         }
       }
-    }
+      }
 
-    await persistence.saveSession(session);
-    return matches;
+      await persistence.saveSession(session);
+      return activeMatches;
   }
 
   /**
@@ -601,8 +556,9 @@ class GameManager {
   async getLeaderboard(): Promise<LeaderboardEntry[]> {
     await this.ensureInitialized();
 
-    // Reload fresh players to ensure vote history is current
-    await this.reloadPlayers();
+    // Load fresh players via repository to ensure vote history is current
+    const players = await getRepository().getPlayers();
+    this.state!.players = players;
 
     const leaderboard: LeaderboardEntry[] = Array.from(this.state!.players.values()).map(player => {
       const correctVotes = player.voteHistory.filter(v => v.correct && !v.forfeit);
@@ -897,7 +853,7 @@ class GameManager {
   /**
    * Reload all game data from Redis.
    * Called when version mismatch detected (another instance changed state).
-   * DRY: Single reload method used by all state transitions.
+   * Uses repository to reload collections.
    */
   private async reloadFromRedis(): Promise<void> {
     console.log("[GameManager] Reloading state from Redis due to version change");
@@ -911,22 +867,14 @@ class GameManager {
       this.state!.finishedAt = stateMeta.finishedAt;
     }
 
-    // Reload all collections from Redis
-    const players = await persistence.loadAllPlayers();
-    this.state!.players.clear();
-    players.forEach(p => this.state!.players.set(p.fid, p));
+    // Invalidate repository cache to force fresh load
+    getRepository().invalidateAll();
 
-    const bots = await persistence.loadAllBots();
-    this.state!.bots.clear();
-    bots.forEach(b => this.state!.bots.set(b.fid, b));
-
-    const sessions = await persistence.loadAllSessions();
-    this.state!.playerSessions.clear();
-    sessions.forEach(s => this.state!.playerSessions.set(s.fid, s));
-
-    const matches = await persistence.loadAllMatches();
-    this.state!.matches.clear();
-    matches.forEach(m => this.state!.matches.set(m.id, m));
+    // Reload all collections via repository
+    this.state!.players = await getRepository().getPlayers();
+    this.state!.bots = await getRepository().getBots();
+    this.state!.playerSessions = await getRepository().getSessions();
+    this.state!.matches = await getRepository().getMatches();
 
     // Mark cache as fresh at the new version
     const version = await stateConsistency.loadStateVersion();

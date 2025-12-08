@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
 import { generateBotResponse } from "@/lib/inference";
 import { Bot } from "@/lib/types";
+import { getRepository } from "@/lib/gameRepository";
 
 /**
  * API route to send a message in a match.
@@ -40,8 +41,8 @@ export async function POST(request: Request) {
     // If the opponent is a bot, generate and deliver response INLINE
     if (match.opponent.type === "BOT") {
       // Ensure we have fresh bot data (in case another instance registered it)
-      // This is needed because bot personalities may have been inferred after we loaded bots
-      const freshBots = await gameManager.loadFreshBots();
+      // Repository handles caching with TTL + version invalidation
+      const freshBots = await getRepository().getBots();
       const bot = freshBots.get(match.opponent.fid) as Bot || match.opponent;
 
       console.log(`[chat/send] User FID ${senderFid} sent message to match ${matchId}, opponent is bot FID ${bot.fid}`);
