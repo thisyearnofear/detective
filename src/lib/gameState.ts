@@ -165,18 +165,31 @@ class GameManager {
   /**
    * Get the current game state, updating cycle state as needed.
    * 
-   * IMPORTANT: Reloads player count from Redis each call to ensure new registrations
-   * are visible across all instances, without causing expensive full-collection reloads.
+   * PHASE-AWARE RELOADING:
+   * - REGISTRATION: reload players only (new registrations need visibility)
+   * - LIVE: reload matches + sessions (bots need fresh messages to respond)
+   * - FINISHED: reload leaderboard
    */
   async getGameState() {
     await this.ensureInitialized();
     
-    // Reload ONLY player count from Redis (lightweight, done every call)
-    // This ensures new registrations are visible without triggering phase-transition reloads
+    // Phase-aware reload strategy: only reload what this phase needs
     if (USE_REDIS) {
-      const players = await persistence.loadAllPlayers();
-      this.state!.players.clear();
-      players.forEach(p => this.state!.players.set(p.fid, p));
+      if (this.state!.state === "REGISTRATION") {
+        // During registration, only need fresh player count
+        const players = await persistence.loadAllPlayers();
+        this.state!.players.clear();
+        players.forEach(p => this.state!.players.set(p.fid, p));
+      } else if (this.state!.state === "LIVE") {
+        // During live game, need fresh matches for bot responses and session state for round tracking
+        const matches = await persistence.loadAllMatches();
+        this.state!.matches.clear();
+        matches.forEach(m => this.state!.matches.set(m.id, m));
+
+        const sessions = await persistence.loadAllSessions();
+        this.state!.playerSessions.clear();
+        sessions.forEach(s => this.state!.playerSessions.set(s.fid, s));
+      }
     }
     
     // Update state based on timers every time it's requested
