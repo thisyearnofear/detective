@@ -67,7 +67,7 @@ export default function GameStateView({
             <div className="space-y-2">
               <h2 className="text-xl font-bold text-white">Game in Progress</h2>
               <p className="text-gray-400 text-sm">
-                A game is currently running. Join the next one!
+                Registration opens when this game ends
               </p>
             </div>
           </div>
