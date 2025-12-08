@@ -239,6 +239,9 @@ class GameManager {
     await persistence.savePlayer(player);
     await persistence.saveBot(bot);
 
+    // Notify other instances that player count changed (critical for state consistency)
+    await stateConsistency.tryIncrementStateVersion();
+
     return player;
   }
 

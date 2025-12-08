@@ -41,26 +41,29 @@ export async function GET(request: Request) {
     let phaseEndTime = gameState.registrationEnds;
     let reason = "";
 
-    if (gameState.state === "REGISTRATION") {
-      phase = "REGISTRATION";
-      phaseEndTime = gameState.registrationEnds;
-      reason = `Waiting for players... (${gameState.playerCount}/8)`;
-    } else if (gameState.state === "LIVE") {
-      phase = "LIVE";
-      phaseEndTime = gameState.gameEnds;
-      reason = "Game is live";
-    } else if (gameState.state === "FINISHED") {
-      phase = "FINISHED";
-      phaseEndTime = gameState.gameEnds;
-      reason = "Game finished";
-    }
+    // Use fresh player count from rawState to ensure consistency
+    const freshPlayerCount = players.length;
 
-    // Return consolidated state: game info + phase + players
-    const clientState = {
-      // Game state (original)
-      cycleId: gameState.cycleId,
-      state: gameState.state,
-      playerCount: gameState.playerCount,
+    if (gameState.state === "REGISTRATION") {
+       phase = "REGISTRATION";
+       phaseEndTime = gameState.registrationEnds;
+       reason = `Waiting for players... (${freshPlayerCount}/8)`;
+     } else if (gameState.state === "LIVE") {
+       phase = "LIVE";
+       phaseEndTime = gameState.gameEnds;
+       reason = "Game is live";
+     } else if (gameState.state === "FINISHED") {
+       phase = "FINISHED";
+       phaseEndTime = gameState.gameEnds;
+       reason = "Game finished";
+     }
+
+     // Return consolidated state: game info + phase + players
+     const clientState = {
+       // Game state (original)
+       cycleId: gameState.cycleId,
+       state: gameState.state,
+       playerCount: freshPlayerCount,
       registrationEnds: gameState.registrationEnds,
       gameEnds: gameState.gameEnds,
       finishedAt: gameState.finishedAt, // For calculating next cycle countdown
