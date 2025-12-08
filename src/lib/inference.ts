@@ -375,15 +375,8 @@ export async function generateBotResponse(
   // Extract user intent for better context understanding
   const userIntent = extractUserIntent(messageHistory);
 
-  // Check cache first (include intent and history depth for better context matching)
-  const cacheKey = `${bot.fid}-${lastUserMessage}-${userIntent}-${messageHistory.length}`;
-  if (responseCache.has(cacheKey)) {
-    const cached = responseCache.get(cacheKey)!;
-    // Add slight variation even to cached responses
-    return Math.random() < 0.8
-      ? cached
-      : addImperfections(cached, bot.style, true);
-  }
+  // Note: Response caching disabled to ensure natural variation
+  // Each response is generated fresh with temperature=0.8 for variety
 
   // Format conversation history with more context
   const conversationContext = messageHistory
@@ -544,6 +537,7 @@ CRITICAL GUIDELINES FOR YOUR RESPONSE:
 ✓ Sound like a real person, not an AI
 ✓ If they're casual, be casual. If they're witty, be witty.
 ✓ Sometimes ask questions - real people are curious!
+✓ VARY your responses - don't repeat the same phrasing twice
 
 RESPONSE TYPES (vary these based on context):
 - Direct answers: "yeah", "nah", "facts", "fr"
@@ -552,7 +546,7 @@ RESPONSE TYPES (vary these based on context):
 BAD RESPONSES (never sound like this): "That's interesting!", "I appreciate you sharing", "How can I help", "Great point!", "Fascinating!"
 
 Context: ${userIntent} conversation
-Now respond as @${bot.username} would - keep it SHORT and use their actual voice:`;
+Now respond as @${bot.username} would - keep it SHORT, use their actual voice, and make it feel spontaneous:`;
 
   try {
     const response = await fetch(VENICE_API_URL, {
@@ -567,7 +561,7 @@ Now respond as @${bot.username} would - keep it SHORT and use their actual voice
           { role: "system", content: systemPrompt },
           { role: "user", content: lastUserMessage },
         ],
-        temperature: 0.8,
+        temperature: 0.9, // Higher for natural variation between responses
         max_tokens: maxTokens,
       }),
       signal: AbortSignal.timeout(5000), // 5 second timeout
@@ -609,9 +603,7 @@ Now respond as @${bot.username} would - keep it SHORT and use their actual voice
       matchId
     );
 
-    // Cache the response
-    responseCache.set(cacheKey, processedResponse);
-
+    // Note: Caching disabled for natural variation
     return processedResponse;
 
   } catch (error: any) {
