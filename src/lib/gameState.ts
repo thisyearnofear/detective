@@ -807,6 +807,7 @@ class GameManager {
       this.state!.registrationEnds = stateMeta.registrationEnds;
       this.state!.gameEnds = stateMeta.gameEnds;
       this.state!.finishedAt = stateMeta.finishedAt;
+      this.state!.countdownStarted = stateMeta.countdownStarted || false;
     }
 
     // Reload all collections from Redis
@@ -841,6 +842,7 @@ class GameManager {
       this.state!.registrationEnds = stateMeta.registrationEnds;
       this.state!.gameEnds = stateMeta.gameEnds;
       this.state!.finishedAt = stateMeta.finishedAt;
+      this.state!.countdownStarted = stateMeta.countdownStarted || false;
     }
 
     // Reload players, sessions, and matches from Redis to prevent stale in-memory cache issues
@@ -874,6 +876,7 @@ class GameManager {
           state: this.state!.state,
           registrationEnds: this.state!.registrationEnds,
           gameEnds: this.state!.gameEnds,
+          countdownStarted: true,
         });
       }
 
@@ -933,21 +936,23 @@ class GameManager {
         this.state!.countdownStarted = false;
         this.state!.finishedAt = undefined;
 
-        // Atomically save new state to Redis
-        await persistence.saveGameStateMeta({
-          cycleId: this.state!.cycleId,
-          state: this.state!.state,
-          registrationEnds: this.state!.registrationEnds,
-          gameEnds: this.state!.gameEnds,
-        });
-
-        // Clear all player data from Redis
+        // Clear all player data from Redis FIRST (before state meta update)
+        // This prevents race condition where other instances load old data
         if (USE_REDIS) {
           await persistence.clearAllPlayers();
           await persistence.clearAllBots();
           await persistence.clearAllSessions();
           await persistence.clearAllMatches();
         }
+
+        // Then atomically save new state to Redis
+        await persistence.saveGameStateMeta({
+          cycleId: this.state!.cycleId,
+          state: this.state!.state,
+          registrationEnds: this.state!.registrationEnds,
+          gameEnds: this.state!.gameEnds,
+          countdownStarted: false,
+        });
       }
       return;
     }
