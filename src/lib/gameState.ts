@@ -670,6 +670,17 @@ class GameManager {
     const opponent = this.selectOpponent(fid, session, excludeFids);
     if (!opponent) return null;
 
+    // Check if match already exists for this opponent in this round
+    const existingMatch = Array.from(this.state!.matches.values()).find(
+      m => m.roundNumber === session.currentRound && 
+           m.slotNumber === slotNumber &&
+           m.player.fid === fid
+    );
+    
+    if (existingMatch) {
+      return existingMatch;
+    }
+
     const now = Date.now();
     
     // SYNCHRONIZED ROUND TIMING: All matches in a round end at the same absolute time
