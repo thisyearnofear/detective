@@ -56,6 +56,7 @@ export async function GET(request: NextRequest) {
       currentVote: match.currentVote,
       voteLocked: match.voteLocked,
       messages: match.messages,
+      isOpponentTyping: match.typingIndicator?.isTyping ?? false,
     }));
 
     // Organize by slot for easier client consumption

@@ -19,6 +19,12 @@ export default function Home() {
   const [introComplete, setIntroComplete] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [lastGameState, setLastGameState] = useState<string>('');
+  const [gameResults, setGameResults] = useState<{
+    accuracy: number;
+    roundResults: Array<{ roundNumber: number; correct: boolean; opponentUsername: string; opponentType: "REAL" | "BOT" }>;
+    playerRank: number;
+    totalPlayers: number;
+  } | null>(null);
 
   useEffect(() => {
     // Auto-advance intro after 2 seconds
@@ -134,6 +140,7 @@ export default function Home() {
         displayName={sdkUser.displayName}
         pfpUrl={sdkUser.pfpUrl}
         gameState={gameState}
+        onGameFinish={(results) => setGameResults(results)}
       />
     );
   };
@@ -355,7 +362,12 @@ export default function Home() {
                   {/* Leaderboard */}
                   <Leaderboard
                     fid={sdkUser.fid}
-                    mode="career"
+                    mode={lastGameState === 'FINISHED' && gameResults ? 'career' : 'career'}
+                    isGameEnd={lastGameState === 'FINISHED' && gameResults ? true : false}
+                    accuracy={gameResults?.accuracy}
+                    roundResults={gameResults?.roundResults}
+                    playerRank={gameResults?.playerRank}
+                    totalPlayers={gameResults?.totalPlayers}
                   />
                 </div>
               ) : (
