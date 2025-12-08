@@ -76,10 +76,10 @@ export default function MultiChatContainer({ fid }: Props) {
     mutate,
   } = useSWR(`/api/match/active?fid=${fid}`, fetcherWithGameNotLive, {
     refreshInterval,
-    refreshWhenHidden: false,
-    revalidateOnFocus: false,
+    refreshWhenHidden: true, // Mobile: Keep polling when app backgrounded
+    revalidateOnFocus: true, // Mobile: Refresh when user returns
     keepPreviousData: true,
-    shouldRetryOnError: true, // Keep retrying even post-game to detect state change
+    shouldRetryOnError: true,
     errorRetryCount: 3,
     errorRetryInterval: 1000,
   });
