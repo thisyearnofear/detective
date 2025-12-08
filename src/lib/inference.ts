@@ -17,9 +17,6 @@ const VENICE_API_KEY = process.env.VENICE_API_KEY;
 const VENICE_API_URL = "https://api.venice.ai/api/v1/chat/completions";
 const VENICE_MODEL = "llama-3.3-70b";
 
-// In-memory cache for bot responses to save API calls during development
-const responseCache = new Map<string, string>();
-
 // Conversation state tracking per match (matchId -> ConversationState)
 const conversationStateCache = new Map<string, ConversationState>();
 
