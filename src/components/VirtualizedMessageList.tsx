@@ -28,7 +28,6 @@ interface Props {
     secondary: [number, number, number];
   };
   isOpponentTyping?: boolean;
-  opponentUsername?: string;
 }
 
 // Dynamic item heights - messages vary in length
@@ -126,7 +125,6 @@ const VirtualizedMessageList = memo(({
   containerHeight,
   opponentColors,
   isOpponentTyping = false,
-  opponentUsername,
 }: Props) => {
   const { isFarcasterFrame } = useViewport();
   const containerRef = useRef<HTMLDivElement>(null);

@@ -39,6 +39,9 @@ export async function POST(request: Request) {
       );
     }
 
+    // Track typing indicator to return to client
+    let typingIndicator = null;
+
     // If the opponent is a bot, generate and deliver response INLINE
     if (match.opponent.type === "BOT") {
       // Ensure we have fresh bot data (in case another instance registered it)
@@ -58,18 +61,50 @@ export async function POST(request: Request) {
         const typingDelay = calculateTypingDelay(botResponse);
         console.log(`[chat/send] Delaying bot response by ${typingDelay}ms (message: ${botResponse.length} chars, estimated typing time)`);
 
+        // Set typing indicator before delay
+        const startTime = Date.now();
+        const endTime = startTime + typingDelay;
+        match.typingIndicator = {
+          isTyping: true,
+          startTime,
+          endTime,
+          hasPauses: false,
+        };
+
+        // Return typing indicator to client immediately so it can show typing animation
+        typingIndicator = {
+          isTyping: true,
+          startTime,
+          endTime,
+          duration: typingDelay,
+        };
+
         await new Promise(resolve => setTimeout(resolve, typingDelay));
 
-        // Deliver the bot response immediately
+        // Clear typing indicator and deliver the bot response
+        match.typingIndicator = {
+          isTyping: false,
+          startTime,
+          endTime,
+          hasPauses: false,
+        };
+        
         await gameManager.addMessageToMatch(matchId, botResponse, bot.fid);
         console.log(`[chat/send] ✓ Bot response delivered successfully`);
       } catch (err) {
         console.error(`[chat/send] ✗ FAILED to generate/deliver bot response for match ${matchId}:`, err);
+        // Clear typing indicator on error
+        match.typingIndicator = {
+          isTyping: false,
+          startTime: Date.now(),
+          endTime: Date.now(),
+          hasPauses: false,
+        };
         // Don't fail the user's message if the bot response fails
       }
     }
 
-    return NextResponse.json({ success: true, message });
+    return NextResponse.json({ success: true, message, typingIndicator });
   } catch (error) {
     console.error("Error sending message:", error);
     return NextResponse.json(

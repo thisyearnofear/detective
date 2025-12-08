@@ -7,6 +7,13 @@ import GameLobby from './GameLobby';
 import GameActiveView from './GameActiveView';
 import GameFinishedView from './GameFinishedView';
 
+type GameResults = {
+  accuracy: number;
+  roundResults: Array<{ roundNumber: number; correct: boolean; opponentUsername: string; opponentType: "REAL" | "BOT" }>;
+  playerRank: number;
+  totalPlayers: number;
+};
+
 type Props = {
   fid: number;
   username: string;
@@ -20,6 +27,7 @@ type Props = {
     gameEnds: number;
     isRegistered: boolean;
   };
+  onGameFinish?: (results: GameResults) => void;
 };
 
 /**
@@ -37,6 +45,7 @@ export default function GameStateView({
   displayName,
   pfpUrl,
   gameState,
+  onGameFinish,
 }: Props) {
   const currentPlayer = { fid, username, displayName, pfpUrl };
 
@@ -77,6 +86,7 @@ export default function GameStateView({
         <GameActiveView
           fid={fid}
           cycleId={gameState.cycleId}
+          onGameFinish={onGameFinish}
         />
       );
 

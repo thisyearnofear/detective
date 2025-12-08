@@ -17,8 +17,16 @@ const POLLING_INTERVALS = {
   POST_GAME_WAIT: 1000,   // Minimal polling while waiting for next cycle (detects cycleId change)
 } as const;
 
+type GameResults = {
+  accuracy: number;
+  roundResults: Array<{ roundNumber: number; correct: boolean; opponentUsername: string; opponentType: "REAL" | "BOT" }>;
+  playerRank: number;
+  totalPlayers: number;
+};
+
 type Props = {
   fid: number;
+  onGameFinish?: (results: GameResults) => void;
 };
 
 type VoteState = Record<string, "REAL" | "BOT">;
@@ -31,7 +39,7 @@ type RoundResult = {
   opponentFid: number;
 };
 
-export default function MultiChatContainer({ fid }: Props) {
+export default function MultiChatContainer({ fid, onGameFinish }: Props) {
   const { show: showModal } = useModal();
   const [votes, setVotes] = useState<VoteState>({});
   const [newMatchIds, setNewMatchIds] = useState<Set<string>>(new Set());
@@ -140,8 +148,19 @@ export default function MultiChatContainer({ fid }: Props) {
     ) {
       console.log(`[MultiChatContainer] Game finished. Round ${matchData.currentRound}/${matchData.totalRounds}, Results: ${roundResults.length}`);
       setGameFinished(true);
+
+      // Call game finish callback with final results
+      if (onGameFinish && matchData.playerRank !== undefined && matchData.playerPool?.totalPlayers) {
+        const accuracy = (roundResults.filter((r) => r.correct).length / roundResults.length) * 100;
+        onGameFinish({
+          accuracy,
+          roundResults,
+          playerRank: matchData.playerRank,
+          totalPlayers: matchData.playerPool.totalPlayers,
+        });
+      }
     }
-  }, [matchData?.currentRound, matchData?.totalRounds, matchData?.matches?.length, gameFinished, roundResults.length]);
+  }, [matchData?.currentRound, matchData?.totalRounds, matchData?.matches?.length, matchData?.playerRank, matchData?.playerPool?.totalPlayers, gameFinished, roundResults.length, onGameFinish]);
 
   // Track round transitions for loading state
   useEffect(() => {

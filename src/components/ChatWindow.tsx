@@ -65,6 +65,8 @@ export default function ChatWindow({
     primary: [number, number, number];
     secondary: [number, number, number];
   } | null>(null);
+  const [isOpponentTyping, setIsOpponentTyping] = useState(false);
+  const typingTimeoutRef = useRef<NodeJS.Timeout>();
 
   // Countdown timer for vote lock warning
   // IMPORTANT: endTime is already synced by server (includes timeOffset)
@@ -157,6 +159,15 @@ export default function ChatWindow({
     return () => clearInterval(checkActivity);
   }, [lastMessageTime]);
 
+  // Cleanup typing timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // OPTIMIZED MESSAGE SENDING with haptic feedback
   const handleSend = useCallback(async () => {
     if (!input.trim()) return;
@@ -172,7 +183,7 @@ export default function ChatWindow({
     setIsUserScrolling(false);
 
     try {
-      await requestCache.fetch(
+      const response = await requestCache.fetch(
         `send_${match.id}_${Date.now()}`,
         () => fetch("/api/chat/send", {
           method: "POST",
@@ -181,6 +192,21 @@ export default function ChatWindow({
         }).then(res => res.json()),
         0 // No caching for sends
       );
+
+      // Handle typing indicator from bot response
+      if (response.typingIndicator && response.typingIndicator.isTyping) {
+        setIsOpponentTyping(true);
+
+        // Clear any existing timeout
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+        }
+
+        // Hide typing indicator after the calculated duration
+        typingTimeoutRef.current = setTimeout(() => {
+          setIsOpponentTyping(false);
+        }, response.typingIndicator.duration);
+      }
 
       // Trigger parent refresh to get updated messages
       if (onRefresh) {
@@ -331,8 +357,7 @@ export default function ChatWindow({
              currentUserId={fid}
              containerHeight={styles.chatHeight}
              opponentColors={opponentColors || undefined}
-             isOpponentTyping={match.isOpponentTyping}
-             opponentUsername={match.opponent.username}
+             isOpponentTyping={isOpponentTyping}
            />
          )}
       </div>

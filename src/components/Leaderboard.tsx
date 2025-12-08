@@ -214,6 +214,8 @@ export default function Leaderboard({
   // Career stats pagination and filtering
   const [careerTimeFilter, setCareerTimeFilter] = useState<'week' | 'month' | 'all'>('all');
   const [careerOffset, setCareerOffset] = useState(0);
+  // Track whether to show game end results or career stats (when both available)
+  const [showGameEnd, setShowGameEnd] = useState(isGameEnd);
   
   const { data: leaderboard, error } = useSWR<LeaderboardEntry[]>(
     (mode as string) === 'current' ? '/api/leaderboard/current' : null,
@@ -247,7 +249,7 @@ export default function Leaderboard({
   );
 
   // Game end mode - show results with current leaderboard
-  if (isGameEnd) {
+  if (isGameEnd && showGameEnd) {
     const percentile = totalPlayers > 0 ? Math.round(((totalPlayers - playerRank) / totalPlayers) * 100) : 0;
     
     return (
@@ -311,12 +313,18 @@ export default function Leaderboard({
           )}
 
           {/* Action Buttons */}
-          <div className="flex gap-4 justify-center">
+          <div className="flex gap-4 justify-center flex-wrap">
             <button
               onClick={onPlayAgain}
               className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors"
             >
               Register for Next Game
+            </button>
+            <button
+              onClick={() => setShowGameEnd(false)}
+              className="px-8 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition-colors"
+            >
+              View Career Stats
             </button>
             <a
               href="/"
@@ -674,28 +682,40 @@ export default function Leaderboard({
     return (
       <div className="bg-slate-800 rounded-lg p-6 mt-8">
         {/* Tab switcher */}
-        <div className="flex gap-2 mb-6 border-b border-slate-700">
-          <button
-            onClick={() => setMode('current' as LeaderboardMode)}
-            className={`px-4 py-2 font-medium transition-colors ${
-              (mode as string) === 'current'
-                ? 'border-b-2 border-blue-500 text-white'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            Current Game
-          </button>
-          <button
-            onClick={() => setMode('career' as LeaderboardMode)}
-            className={`px-4 py-2 font-medium transition-colors ${
-              (mode as string) === 'career'
-                ? 'border-b-2 border-blue-500 text-white'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            Career Stats
-          </button>
-        </div>
+         <div className="flex gap-2 mb-6 border-b border-slate-700">
+           {isGameEnd && (
+             <button
+               onClick={() => setShowGameEnd(true)}
+               className={`px-4 py-2 font-medium transition-colors ${
+                 showGameEnd
+                   ? 'border-b-2 border-blue-500 text-white'
+                   : 'text-gray-400 hover:text-white'
+               }`}
+             >
+               Latest Results
+             </button>
+           )}
+           <button
+             onClick={() => setMode('current' as LeaderboardMode)}
+             className={`px-4 py-2 font-medium transition-colors ${
+               (mode as string) === 'current'
+                 ? 'border-b-2 border-blue-500 text-white'
+                 : 'text-gray-400 hover:text-white'
+             }`}
+           >
+             Current Game
+           </button>
+           <button
+             onClick={() => setMode('career' as LeaderboardMode)}
+             className={`px-4 py-2 font-medium transition-colors ${
+               (mode as string) === 'career'
+                 ? 'border-b-2 border-blue-500 text-white'
+                 : 'text-gray-400 hover:text-white'
+             }`}
+           >
+             Career Stats
+           </button>
+         </div>
 
         <h2 className="text-2xl font-bold mb-6 text-center">Career Stats</h2>
 
