@@ -5,10 +5,23 @@
  * Unified async interface for all game operations.
  * Works with both Redis (production) and in-memory (development).
  * 
+ * ARCHITECTURE:
+ * - Singleton pattern with lazy initialization
+ * - Three state phases: REGISTRATION → LIVE → FINISHED (auto-cycles)
+ * - Version-based locking prevents concurrent state transitions across serverless instances
+ * - Minimal Redis reads: only load metadata, full collections loaded only on version mismatch
+ * 
+ * PHASE HANDLERS (each handles one-way transitions):
+ * - handleRegistrationPhase(): Countdown start + REGISTRATION→LIVE
+ * - handleLiveToFinished(): LIVE→FINISHED when timer expires
+ * - handleFinishedPhase(): FINISHED→REGISTRATION with cleanup (auto-cycle)
+ * 
  * Core Principles:
  * - All methods are async (Promise-based)
  * - Single initialization pattern
  * - Clear state lifecycle management
+ * - DRY: Consolidated atomic transition pattern across all phase handlers
+ * - CLEAN: Separated concerns into phase-specific handlers
  */
 
 import {
@@ -93,7 +106,6 @@ class GameManager {
           matches,
           playerSessions: sessions,
           leaderboard: [],
-          countdownStarted: stateMeta.countdownStarted || false,
           config: {
             gameDurationMs: GAME_DURATION,
             matchDurationMs: MATCH_DURATION,
@@ -116,7 +128,6 @@ class GameManager {
           state: this.state.state,
           registrationEnds: this.state.registrationEnds,
           gameEnds: this.state.gameEnds,
-          countdownStarted: false,
         });
         console.log(`[GameManager] Created new cycle ${this.state.cycleId}`);
         
@@ -134,13 +145,12 @@ class GameManager {
       cycleId: `cycle-${now}`,
       state: "REGISTRATION",
       registrationEnds: now + 999999999, // Far future - countdown starts when MIN_PLAYERS join
-      gameEnds: now + GAME_DURATION,
+      gameEnds: now + 999999999, // Also far future during registration
       players: new Map(),
       bots: new Map(),
       matches: new Map(),
       playerSessions: new Map(),
       leaderboard: [],
-      countdownStarted: false, // Will be set to true when MIN_PLAYERS join
       config: {
         gameDurationMs: GAME_DURATION,
         matchDurationMs: MATCH_DURATION,
@@ -795,8 +805,9 @@ class GameManager {
   }
 
   /**
-   * Reload all game data from Redis
-   * Called when version mismatch detected (another instance changed state)
+   * Reload all game data from Redis.
+   * Called when version mismatch detected (another instance changed state).
+   * DRY: Single reload method used by all state transitions.
    */
   private async reloadFromRedis(): Promise<void> {
     console.log("[GameManager] Reloading state from Redis due to version change");
@@ -808,7 +819,6 @@ class GameManager {
       this.state!.registrationEnds = stateMeta.registrationEnds;
       this.state!.gameEnds = stateMeta.gameEnds;
       this.state!.finishedAt = stateMeta.finishedAt;
-      this.state!.countdownStarted = stateMeta.countdownStarted || false;
     }
 
     // Reload all collections from Redis
@@ -835,177 +845,180 @@ class GameManager {
     }
   }
 
-  private async updateCycleState(): Promise<void> {
-    // Reload state metadata and players from Redis to ensure consistency across serverless instances
-    const stateMeta = await persistence.loadGameStateMeta();
-    if (stateMeta) {
-      this.state!.state = stateMeta.state;
-      this.state!.registrationEnds = stateMeta.registrationEnds;
-      this.state!.gameEnds = stateMeta.gameEnds;
-      this.state!.finishedAt = stateMeta.finishedAt;
-      this.state!.countdownStarted = stateMeta.countdownStarted || false;
+  /**
+   * Attempt atomic state transition (version-based locking).
+   * Pattern: Try increment → reload on loss → perform transition
+   * Returns true if this instance won the race and should complete the transition.
+   * CLEAN: Consolidates the atomic transition pattern used by all state changes.
+   */
+  private async attemptAtomicTransition(description: string): Promise<boolean> {
+    const didIncrement = await stateConsistency.tryIncrementStateVersion();
+    
+    if (!didIncrement) {
+      // Another instance won the race, reload their state and bail
+      await this.reloadFromRedis();
+      console.log(`[GameManager] Another instance is handling ${description}, reloaded state`);
+      return false;
     }
 
-    // Reload players, sessions, and matches from Redis to prevent stale in-memory cache issues
-    if (USE_REDIS) {
-      const freshPlayers = await persistence.loadAllPlayers();
-      this.state!.players.clear();
-      freshPlayers.forEach(p => this.state!.players.set(p.fid, p));
+    console.log(`[GameManager] Won race for ${description}`);
+    return true;
+  }
 
-      const freshSessions = await persistence.loadAllSessions();
-      this.state!.playerSessions.clear();
-      freshSessions.forEach(s => this.state!.playerSessions.set(s.fid, s));
+  /**
+   * Handle REGISTRATION phase: start countdown when MIN_PLAYERS reached, transition to LIVE when countdown expires.
+   * CLEAN: Encapsulates all registration state logic in one place.
+   */
+  private async handleRegistrationPhase(now: number): Promise<void> {
+    const playerCount = this.state!.players.size;
+    const countdownHasStarted = this.state!.registrationEnds < now + 60000; // Not at far-future value
 
-      const freshMatches = await persistence.loadAllMatches();
-      this.state!.matches.clear();
-      freshMatches.forEach(m => this.state!.matches.set(m.id, m));
-    }
-
-    const now = Date.now();
-
-    // REGISTRATION -> LIVE
-    if (this.state!.state === "REGISTRATION") {
-      const playerCount = this.state!.players.size;
-
-      // Start countdown once minimum players join
-      if (!this.state!.countdownStarted && playerCount >= MIN_PLAYERS) {
-        // Try to atomically start countdown (only one instance succeeds)
-        const didIncrement = await stateConsistency.tryIncrementStateVersion();
-        
-        if (!didIncrement) {
-          // Another instance started countdown first, reload their state
-          await this.reloadFromRedis();
-          console.log(`[GameManager] Another instance started countdown, reloaded state`);
-          return;
-        }
-
-        console.log(`[GameManager] Minimum ${MIN_PLAYERS} players reached, starting ${REGISTRATION_COUNTDOWN / 1000}s countdown`);
-        this.state!.countdownStarted = true;
-        this.state!.registrationEnds = now + REGISTRATION_COUNTDOWN;
-        await persistence.saveGameStateMeta({
-          cycleId: this.state!.cycleId,
-          state: this.state!.state,
-          registrationEnds: this.state!.registrationEnds,
-          gameEnds: this.state!.gameEnds,
-          countdownStarted: true,
-        });
+    // Start countdown once minimum players join
+    if (!countdownHasStarted && playerCount >= MIN_PLAYERS) {
+      if (!await this.attemptAtomicTransition("starting countdown")) {
+        return;
       }
 
-      // Only check timer if countdown has started
-      if (this.state!.countdownStarted && now > this.state!.registrationEnds) {
-        console.log(`[GameManager] Registration countdown complete, starting game with ${playerCount} players`);
-        this.state!.state = "LIVE";
-        this.state!.gameStartTime = now; // Record when game actually started for synchronized round timing
-        this.state!.gameEnds = now + GAME_DURATION;
-
-        // Persist state transition to Redis so all instances see LIVE state
-        await persistence.saveGameStateMeta({
-          cycleId: this.state!.cycleId,
-          state: this.state!.state,
-          registrationEnds: this.state!.registrationEnds,
-          gameEnds: this.state!.gameEnds,
-        });
-        
-        // Increment version to notify other instances of state change
-        await stateConsistency.tryIncrementStateVersion();
-      }
-    }
-
-    // FINISHED -> REGISTRATION (auto-cycle with version-based atomicity)
-    if (this.state!.state === "FINISHED") {
-      const CLEANUP_GRACE_PERIOD = 5000;
-      if (this.state!.finishedAt && now - this.state!.finishedAt > CLEANUP_GRACE_PERIOD) {
-        // Deterministic cycleId based on finishedAt
-        const newCycleId = `cycle-${this.state!.finishedAt}`;
-        
-        // Try to atomically increment version (only one instance succeeds)
-        const didIncrement = await stateConsistency.tryIncrementStateVersion();
-        
-        if (!didIncrement) {
-          // Another instance incremented first, they're doing the transition
-          // Reload their new cycle state
-          await this.reloadFromRedis();
-          console.log(`[GameManager] Another instance is cycling, reloaded state`);
-          return;
-        }
-
-        // This instance won the race, perform the cycle transition
-        console.log(`[GameManager] Version incremented, performing cycle transition to ${newCycleId}`);
-
-        // Clear in-memory game data
-        this.state!.players.clear();
-        this.state!.bots.clear();
-        this.state!.playerSessions.clear();
-        this.state!.matches.clear();
-        this.state!.leaderboard = [];
-
-        // Start new cycle with deterministic ID
-        this.state!.cycleId = newCycleId;
-        this.state!.state = "REGISTRATION";
-        this.state!.registrationEnds = now + REGISTRATION_COUNTDOWN;
-        this.state!.gameEnds = now + GAME_DURATION;
-        this.state!.countdownStarted = false;
-        this.state!.finishedAt = undefined;
-
-        // Clear all player data from Redis FIRST (before state meta update)
-        // This prevents race condition where other instances load old data
-        if (USE_REDIS) {
-          await persistence.clearAllPlayers();
-          await persistence.clearAllBots();
-          await persistence.clearAllSessions();
-          await persistence.clearAllMatches();
-        }
-
-        // Then atomically save new state to Redis
-        await persistence.saveGameStateMeta({
-          cycleId: this.state!.cycleId,
-          state: this.state!.state,
-          registrationEnds: this.state!.registrationEnds,
-          gameEnds: this.state!.gameEnds,
-          countdownStarted: false,
-        });
-      }
-      return;
-    }
-
-    // LIVE -> FINISHED: Timer expired = game over
-    if (this.state!.state === "LIVE" && now > this.state!.gameEnds) {
-      const totalPlayers = this.state!.players.size;
-      const completedPlayers = Array.from(this.state!.playerSessions.values()).filter(
-        s => s.currentRound > FIXED_ROUNDS
-      ).length;
-
-      console.log(`[GameManager] LIVE -> FINISHED: ${completedPlayers}/${totalPlayers} players completed`);
-      
-      this.state!.state = "FINISHED";
-      this.state!.finishedAt = now;
-      this.state!.leaderboard = await this.getLeaderboard();
-      
-      // Persist state transition to Redis immediately
+      console.log(`[GameManager] Minimum ${MIN_PLAYERS} players reached, starting ${REGISTRATION_COUNTDOWN / 1000}s countdown`);
+      this.state!.registrationEnds = now + REGISTRATION_COUNTDOWN;
       await persistence.saveGameStateMeta({
         cycleId: this.state!.cycleId,
         state: this.state!.state,
         registrationEnds: this.state!.registrationEnds,
         gameEnds: this.state!.gameEnds,
-        finishedAt: this.state!.finishedAt,
       });
-      
-      // Increment version to notify other instances of state change
-      await stateConsistency.tryIncrementStateVersion();
-      
-      // Save results async (non-blocking)
-      this.saveGameResultsToDatabase().catch(console.error);
-      return;
     }
 
+    // Transition to LIVE when countdown expires
+    if (countdownHasStarted && now > this.state!.registrationEnds) {
+      if (!await this.attemptAtomicTransition("REGISTRATION → LIVE")) {
+        return;
+      }
+
+      console.log(`[GameManager] Registration countdown complete, starting game with ${playerCount} players`);
+      this.state!.state = "LIVE";
+      this.state!.gameStartTime = now;
+      this.state!.gameEnds = now + GAME_DURATION;
+
       await persistence.saveGameStateMeta({
+        cycleId: this.state!.cycleId,
+        state: this.state!.state,
+        registrationEnds: this.state!.registrationEnds,
+        gameEnds: this.state!.gameEnds,
+      });
+    }
+  }
+
+  /**
+   * Handle LIVE → FINISHED transition: occurs when game timer expires.
+   * CLEAN: Encapsulates game end logic.
+   */
+  private async handleLiveToFinished(now: number): Promise<void> {
+    const totalPlayers = this.state!.players.size;
+    const completedPlayers = Array.from(this.state!.playerSessions.values()).filter(
+      s => s.currentRound > FIXED_ROUNDS
+    ).length;
+
+    console.log(`[GameManager] LIVE → FINISHED: ${completedPlayers}/${totalPlayers} players completed`);
+    
+    this.state!.state = "FINISHED";
+    this.state!.finishedAt = now;
+    this.state!.leaderboard = await this.getLeaderboard();
+    
+    // Persist state transition and increment version atomically
+    await persistence.saveGameStateMeta({
       cycleId: this.state!.cycleId,
       state: this.state!.state,
       registrationEnds: this.state!.registrationEnds,
       gameEnds: this.state!.gameEnds,
       finishedAt: this.state!.finishedAt,
-      });
+    });
+    
+    await stateConsistency.tryIncrementStateVersion();
+    
+    // Save results async (non-blocking)
+    this.saveGameResultsToDatabase().catch(console.error);
   }
+
+  /**
+   * Handle FINISHED → REGISTRATION transition: auto-cycle after cleanup grace period.
+   * CLEAN: Encapsulates cycle reset logic.
+   */
+  private async handleFinishedPhase(now: number): Promise<void> {
+    const CLEANUP_GRACE_PERIOD = 5000;
+    if (!this.state!.finishedAt || now - this.state!.finishedAt <= CLEANUP_GRACE_PERIOD) {
+      return; // Not ready to cycle yet
+    }
+
+    if (!await this.attemptAtomicTransition("FINISHED → REGISTRATION")) {
+      return;
+    }
+
+    // This instance won the race, perform the cycle transition
+    const newCycleId = `cycle-${this.state!.finishedAt}`;
+    console.log(`[GameManager] Performing cycle transition to ${newCycleId}`);
+
+    // Clear in-memory game data
+    this.state!.players.clear();
+    this.state!.bots.clear();
+    this.state!.playerSessions.clear();
+    this.state!.matches.clear();
+    this.state!.leaderboard = [];
+
+    // Start new cycle with deterministic ID
+    this.state!.cycleId = newCycleId;
+    this.state!.state = "REGISTRATION";
+    this.state!.registrationEnds = now + 999999999;
+    this.state!.gameEnds = now + 999999999;
+    this.state!.finishedAt = undefined;
+
+    // Clear all player data from Redis FIRST (before state meta update)
+    // This prevents race condition where other instances load old data
+    if (USE_REDIS) {
+      await persistence.clearAllPlayers();
+      await persistence.clearAllBots();
+      await persistence.clearAllSessions();
+      await persistence.clearAllMatches();
+    }
+
+    // Then atomically save new state to Redis
+    await persistence.saveGameStateMeta({
+      cycleId: this.state!.cycleId,
+      state: this.state!.state,
+      registrationEnds: this.state!.registrationEnds,
+      gameEnds: this.state!.gameEnds,
+    });
+  }
+
+  private async updateCycleState(): Promise<void> {
+   // Load latest metadata from Redis (minimal read, not full collections yet)
+   const stateMeta = await persistence.loadGameStateMeta();
+   if (stateMeta) {
+     this.state!.state = stateMeta.state;
+     this.state!.registrationEnds = stateMeta.registrationEnds;
+     this.state!.gameEnds = stateMeta.gameEnds;
+     this.state!.finishedAt = stateMeta.finishedAt;
+   }
+
+   const now = Date.now();
+
+    // REGISTRATION -> LIVE (two-phase: countdown start, then transition)
+    if (this.state!.state === "REGISTRATION") {
+      await this.handleRegistrationPhase(now);
+    }
+
+    // FINISHED -> REGISTRATION (auto-cycle with version-based atomicity)
+    if (this.state!.state === "FINISHED") {
+      await this.handleFinishedPhase(now);
+      return;
+    }
+
+    // LIVE -> FINISHED: Timer expired = game over
+    if (this.state!.state === "LIVE" && now > this.state!.gameEnds) {
+      await this.handleLiveToFinished(now);
+      return;
+    }
+    }
 
   private async cleanupOldMatches(): Promise<void> {
     const now = Date.now();

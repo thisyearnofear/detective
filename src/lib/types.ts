@@ -119,9 +119,6 @@ export interface GameState {
   leaderboard: LeaderboardEntry[];
   finishedAt?: number; // Timestamp when game finished
 
-  // Smart registration countdown
-  countdownStarted: boolean; // True once minimum players join and countdown begins
-
   // Game configuration
   config: GameConfig;
 }
