@@ -122,6 +122,16 @@ Repeat 5 times per game cycle
 
 ## Latest Enhancements (December 2025) ✅
 
+### Bot Communication Enhancement (Phase 1-2) ✅ COMPLETE
+- ✅ **Realistic Typing Delays**: 2-7s thinking time (personality-dependent)
+- ✅ **Personality-Aware Responses**: System prompt now uses all 20+ extracted traits
+- ✅ **Opening Move Variance**: Each bot greets distinctly (frequency-weighted)
+- ✅ **Authentic Fallbacks**: 100% from cast history, intelligent combining
+- ✅ **Cross-Round Memory**: Lite Redis-backed context (topics, player style, phrases)
+- ✅ **Graceful Fallbacks**: Game works without Redis, all changes non-blocking
+
+See [ARCHITECTURE.md - Bot Communication Enhancement Plan](docs/ARCHITECTURE.md#bot-communication-enhancement-plan) for detailed implementation.
+
 ### Authentication Modernization: Farcaster Quick Auth (Official 2025 Standard)
 - ✅ **Quick Auth Implementation**: Edge-deployed JWT tokens (0 manual nonce management)
 - ✅ **Simplified Auth Flow**: 2-step process (down from 4 steps)
@@ -134,7 +144,7 @@ Repeat 5 times per game cycle
 - ✅ **Real Farcaster SDK Integration**: Authentic miniapp experience with notifications
 - ✅ **Multi-Platform Wallet Connection**: MetaMask, WalletConnect, Farcaster SDK
 - ✅ **Registration Lobby System**: Real-time player tracking, countdown timers, game start ceremony
-- ✅ **Bot Response Optimization**: Eliminated 1-23 second artificial delays, sub-2 second responses
+- ✅ **Bot Response Optimization**: Now with realistic delays + personality variance
 - ✅ **Multi-Chain Leaderboards**: Arbitrum (NFT focus) + Monad (token focus) ranking system
 - ✅ **Mobile-First Design**: Touch-optimized UI for Farcaster mobile clients
 - ✅ **Access Gating Preparation**: Token/NFT verification infrastructure

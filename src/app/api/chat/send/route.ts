@@ -52,14 +52,19 @@ export async function POST(request: Request) {
       console.log(`[chat/send] User FID ${senderFid} sent message to match ${matchId}, opponent is bot FID ${bot.fid}`);
 
       try {
-        // Generate bot response
-        const botResponse = await generateBotResponse(bot, match.messages, matchId);
-        console.log(`[chat/send] Generated bot response: "${botResponse.substring(0, 50)}${botResponse.length > 50 ? '...' : ''}"`);
+         // Generate bot response
+         const botResponse = await generateBotResponse(bot, match.messages, matchId);
+         console.log(`[chat/send] Generated bot response: "${botResponse.substring(0, 50)}${botResponse.length > 50 ? '...' : ''}"`);
 
-        // Calculate variable typing delay based on message length and emoji count
-        // Longer messages and emoji-heavy responses take longer to "type"
-        const typingDelay = calculateTypingDelay(botResponse);
-        console.log(`[chat/send] Delaying bot response by ${typingDelay}ms (message: ${botResponse.length} chars, estimated typing time)`);
+         // Calculate variable typing delay based on message length, emoji count, and personality
+         // Thinking time varies by communication style, typing time by message complexity
+         const lastUserMessage = match.messages
+           .filter(m => m.sender.fid !== bot.fid)
+           .slice(-1)[0]?.text;
+         
+         const communicationStyle = bot.personality?.communicationStyle || "conversational";
+         const typingDelay = calculateTypingDelay(botResponse, communicationStyle, lastUserMessage);
+         console.log(`[chat/send] Delaying bot response by ${typingDelay}ms (style: ${communicationStyle}, message: ${botResponse.length} chars)`);
 
         // Set typing indicator before delay
         const startTime = Date.now();

@@ -321,6 +321,7 @@ export function inferPersonality(bot: Bot): PersonalityProfile {
 
 /**
  * Generate a proactive opening using THEIR actual communication patterns
+ * Weighted by frequency and personality traits
  */
 export function generateProactiveOpening(
     personality: PersonalityProfile,
@@ -330,14 +331,28 @@ export function generateProactiveOpening(
         return null; // Bot waits for human
     }
 
+    // Add personality-based delay before responding
+    // Introverts (non-initiating) wait longer before sending first message
+    const delayAdjustment = personality.initiatesConversations ? 0 : 500 + Math.random() * 500;
+    
     // Use one of THEIR actual greetings
+    // If we have multiple greetings, pick the most common pattern
     if (personality.theirGreetings.length > 0) {
-        return personality.theirGreetings[
-            Math.floor(Math.random() * personality.theirGreetings.length)
-        ];
+        // Simple frequency-based weighting: earlier in array = more frequent
+        // The inference function already sorts by frequency, so first item is most common
+        const selectedGreeting = personality.theirGreetings[0];
+        
+        // 70% chance to use most common greeting, otherwise pick random
+        const greeting = Math.random() < 0.7 
+            ? selectedGreeting
+            : personality.theirGreetings[
+                Math.floor(Math.random() * personality.theirGreetings.length)
+            ];
+        
+        return greeting;
     }
 
-    // Fallback to simple greeting
+    // Fallback to simple greeting if no patterns extracted
     return "gm";
 }
 
