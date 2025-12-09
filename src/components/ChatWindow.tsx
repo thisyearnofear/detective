@@ -28,7 +28,6 @@ type Props = {
     slotNumber?: number;
     messages?: any[];
     voteLocked?: boolean;
-    isOpponentTyping?: boolean;
   };
   currentVote?: "REAL" | "BOT";
   isNewMatch?: boolean;
@@ -37,6 +36,8 @@ type Props = {
   showVoteToggle?: boolean;
   variant?: "full" | "compact" | "minimal"; // Replaces isCompact + isMobileStacked
   onRefresh?: () => Promise<void>; // Callback to refresh match data
+  isOpponentTyping?: boolean; // Typing indicator state from parent
+  onTypingStart?: (matchId: string, duration: number) => void; // Callback to start typing indicator
 };
 
 export default function ChatWindow({
@@ -49,6 +50,8 @@ export default function ChatWindow({
   isNewMatch = false,
   variant = "full",
   onRefresh,
+  isOpponentTyping = false,
+  onTypingStart,
 }: Props) {
   const { isFarcasterFrame } = useViewport();
   const { safeSetState } = useMemoryOptimization();
@@ -65,8 +68,6 @@ export default function ChatWindow({
     primary: [number, number, number];
     secondary: [number, number, number];
   } | null>(null);
-  const [isOpponentTyping, setIsOpponentTyping] = useState(false);
-  const typingTimeoutRef = useRef<NodeJS.Timeout>();
 
   // Countdown timer for vote lock warning
   // IMPORTANT: endTime is already synced by server (includes timeOffset)
@@ -159,15 +160,6 @@ export default function ChatWindow({
     return () => clearInterval(checkActivity);
   }, [lastMessageTime]);
 
-  // Cleanup typing timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-    };
-  }, []);
-
   // OPTIMIZED MESSAGE SENDING with haptic feedback
   const handleSend = useCallback(async () => {
     if (!input.trim()) return;
@@ -193,19 +185,9 @@ export default function ChatWindow({
         0 // No caching for sends
       );
 
-      // Handle typing indicator from bot response
-      if (response.typingIndicator && response.typingIndicator.isTyping) {
-        setIsOpponentTyping(true);
-
-        // Clear any existing timeout
-        if (typingTimeoutRef.current) {
-          clearTimeout(typingTimeoutRef.current);
-        }
-
-        // Hide typing indicator after the calculated duration
-        typingTimeoutRef.current = setTimeout(() => {
-          setIsOpponentTyping(false);
-        }, response.typingIndicator.duration);
+      // Handle typing indicator from bot response via parent callback
+      if (response.typingIndicator && response.typingIndicator.isTyping && onTypingStart) {
+        onTypingStart(match.id, response.typingIndicator.duration);
       }
 
       // Trigger parent refresh to get updated messages

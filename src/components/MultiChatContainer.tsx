@@ -66,6 +66,11 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
   // Track cycleId to detect new game cycle (FINISHED → REGISTRATION transition)
   const lastCycleIdRef = useRef<string>("");
 
+  // Typing indicator state - managed at container level to persist through polling cycles
+  const typingStateRef = useRef<Record<string, { expiresAt: number }>>({}); // matchId -> { expiresAt }
+  const [typingIndicators, setTypingIndicators] = useState<Record<string, boolean>>({}); // matchId -> isTyping
+  const typingCleanupRef = useRef<NodeJS.Timeout | null>(null);
+
   // Time synchronization - now centralized in timeSynchronization.ts
   // Remove local state; use module exports instead
 
@@ -289,7 +294,34 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
     }
   }, [batchReveals.length, matchData?.matches?.length, matchData?.currentRound, matchData?.playerRank, matchData?.playerPool?.totalPlayers, roundResults.length, showModal]);
 
+  // Handle typing indicator - persists across polling cycles via ref
+  const handleTypingStart = useCallback((matchId: string, duration: number) => {
+    const expiresAt = Date.now() + duration;
+    typingStateRef.current[matchId] = { expiresAt };
+    
+    // Update display state
+    setTypingIndicators((prev) => ({ ...prev, [matchId]: true }));
 
+    // Clear existing timeout for this match
+    if (typingCleanupRef.current) clearTimeout(typingCleanupRef.current);
+
+    // Set new timeout to hide typing indicator at expiration
+    typingCleanupRef.current = setTimeout(() => {
+      setTypingIndicators((prev) => {
+        const updated = { ...prev };
+        delete updated[matchId];
+        return updated;
+      });
+      delete typingStateRef.current[matchId];
+    }, duration);
+  }, []);
+
+  // Cleanup typing timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (typingCleanupRef.current) clearTimeout(typingCleanupRef.current);
+    };
+  }, []);
 
   // Handle vote toggle
   const handleVoteToggle = useCallback(
@@ -617,6 +649,8 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
                 onRefresh={async () => {
                   await mutate();
                 }}
+                isOpponentTyping={typingIndicators[match.id] || false}
+                onTypingStart={handleTypingStart}
               />
             </div>
           );
