@@ -1123,6 +1123,8 @@ class GameManager {
       const leaderboard = this.state!.leaderboard;
       const totalPlayers = leaderboard.length;
 
+      console.log(`[saveGameResultsToDatabase] Starting to save results for cycle ${this.state!.cycleId} with ${totalPlayers} players`);
+
       await database.saveGameCycle({
         id: this.state!.cycleId,
         chain: "local",
@@ -1134,13 +1136,20 @@ class GameManager {
         prize_pool_wei: null,
       });
 
+      console.log(`[saveGameResultsToDatabase] Saved game cycle, now saving ${leaderboard.length} player results`);
+
       for (let i = 0; i < leaderboard.length; i++) {
         const entry = leaderboard[i];
         const player = this.state!.players.get(entry.player.fid);
-        if (!player) continue;
+        if (!player) {
+          console.warn(`[saveGameResultsToDatabase] Player ${entry.player.fid} not found in state`);
+          continue;
+        }
 
         const correctVotes = player.voteHistory.filter(v => v.correct && !v.forfeit).length;
         const totalVotes = player.voteHistory.length;
+
+        console.log(`[saveGameResultsToDatabase] Saving result for FID ${entry.player.fid}: rank ${i + 1}, accuracy ${entry.accuracy.toFixed(1)}%, ${correctVotes}/${totalVotes} votes`);
 
         await database.saveGameResult({
           cycle_id: this.state!.cycleId,
@@ -1156,6 +1165,8 @@ class GameManager {
 
         await database.incrementPlayerGames(entry.player.fid);
       }
+
+      console.log(`[saveGameResultsToDatabase] ✓ Successfully saved all results for cycle ${this.state!.cycleId}`);
     } catch (error) {
       console.error("[saveGameResultsToDatabase] Failed to save game results:", error);
     }

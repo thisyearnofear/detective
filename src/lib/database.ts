@@ -16,6 +16,13 @@
 const DATABASE_URL = process.env.DATABASE_URL;
 const USE_DATABASE = process.env.USE_DATABASE === "true" && DATABASE_URL;
 
+// Log startup configuration
+console.log(`[Database] Configuration check:`, {
+  DATABASE_URL: DATABASE_URL ? `${DATABASE_URL.substring(0, 60)}...` : "NOT SET",
+  USE_DATABASE: process.env.USE_DATABASE,
+  willUsePostgres: USE_DATABASE,
+});
+
 // Helper to convert PostgreSQL DECIMAL strings to numbers
 function convertAccuracy(entry: any): any {
   if (entry && typeof entry.accuracy === 'string') {

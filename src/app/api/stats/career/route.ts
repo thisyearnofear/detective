@@ -35,7 +35,10 @@ export async function GET(request: NextRequest) {
     // Fetch all game results (we'll filter in-memory for time periods)
     const allGameResults = await database.getGameResultsByPlayer(playerFid, 200);
 
+    console.log(`[/api/stats/career] FID ${playerFid}: Found ${allGameResults.length} game results`);
+
     if (!allGameResults || allGameResults.length === 0) {
+      console.log(`[/api/stats/career] No games found for FID ${playerFid}, returning empty response`);
       return NextResponse.json(
         {
           totalGames: 0,
