@@ -46,15 +46,20 @@ export default function Home() {
     },
   );
 
-  // Auto-show stats when transitioning from FINISHED to REGISTRATION
+  // Auto-show stats when game finishes or when transitioning from FINISHED to REGISTRATION
   useEffect(() => {
-    if (lastGameState === 'FINISHED' && gameState?.state === 'REGISTRATION') {
+    // Show stats immediately if we have game results (game just finished)
+    if (gameResults) {
+      setShowLeaderboard(true);
+    }
+    // Also show stats if transitioning from FINISHED to REGISTRATION
+    if (lastGameState === 'FINISHED' && gameState?.state === 'REGISTRATION' && gameResults) {
       setShowLeaderboard(true);
     }
     if (gameState?.state) {
       setLastGameState(gameState.state);
     }
-  }, [gameState?.state, lastGameState]);
+  }, [gameState?.state, lastGameState, gameResults]);
 
   // Reset leaderboard view when starting a new game
   useEffect(() => {
@@ -140,7 +145,10 @@ export default function Home() {
         displayName={sdkUser.displayName}
         pfpUrl={sdkUser.pfpUrl}
         gameState={gameState}
-        onGameFinish={(results) => setGameResults(results)}
+        onGameFinish={(results) => {
+          console.log('[page.tsx] onGameFinish callback received:', results);
+          setGameResults(results);
+        }}
       />
     );
   };

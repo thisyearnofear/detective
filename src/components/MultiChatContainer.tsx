@@ -155,17 +155,29 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
       setGameFinished(true);
 
       // Call game finish callback with final results
-      if (onGameFinish && matchData.playerRank !== undefined && matchData.playerPool?.totalPlayers) {
+      if (onGameFinish && matchData.playerRank !== undefined && matchData.totalPlayers) {
         const accuracy = (roundResults.filter((r) => r.correct).length / roundResults.length) * 100;
+        console.log(`[MultiChatContainer] Game finished - calling onGameFinish callback with results:`, {
+          accuracy: accuracy.toFixed(1) + '%',
+          roundsCompleted: roundResults.length,
+          playerRank: matchData.playerRank,
+          totalPlayers: matchData.totalPlayers,
+        });
         onGameFinish({
           accuracy,
           roundResults,
           playerRank: matchData.playerRank,
-          totalPlayers: matchData.playerPool.totalPlayers,
+          totalPlayers: matchData.totalPlayers,
+        });
+      } else {
+        console.warn(`[MultiChatContainer] Game finished but cannot call callback:`, {
+          hasCallback: !!onGameFinish,
+          playerRank: matchData.playerRank,
+          totalPlayers: matchData.totalPlayers,
         });
       }
     }
-  }, [matchData?.currentRound, matchData?.totalRounds, matchData?.matches?.length, matchData?.playerRank, matchData?.playerPool?.totalPlayers, gameFinished, roundResults.length, onGameFinish]);
+  }, [matchData?.currentRound, matchData?.totalRounds, matchData?.matches?.length, matchData?.playerRank, matchData?.totalPlayers, gameFinished, roundResults.length, onGameFinish]);
 
   // Track round transitions for loading state
   useEffect(() => {
@@ -282,7 +294,7 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
             correct: roundResults.filter((r) => r.correct).length,
             total: roundResults.length,
             playerRank: matchData?.playerRank,
-            totalPlayers: matchData?.playerPool?.totalPlayers,
+            totalPlayers: matchData?.totalPlayers,
           },
           nextRoundNumber: matchData.currentRound,
         },
@@ -292,7 +304,7 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
         }
       );
     }
-  }, [batchReveals.length, matchData?.matches?.length, matchData?.currentRound, matchData?.playerRank, matchData?.playerPool?.totalPlayers, roundResults.length, showModal]);
+  }, [batchReveals.length, matchData?.matches?.length, matchData?.currentRound, matchData?.playerRank, matchData?.totalPlayers, roundResults.length, showModal]);
 
   // Handle typing indicator - persists across polling cycles via ref
   const handleTypingStart = useCallback((matchId: string, duration: number) => {
@@ -553,14 +565,14 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
         accuracy={accuracy}
         roundResults={roundResults}
         playerRank={matchData?.playerRank || 1}
-        totalPlayers={matchData?.playerPool?.totalPlayers || 0}
+        totalPlayers={matchData?.totalPlayers || 0}
         onPlayAgain={() => {
           setGameFinished(false);
           setRoundResults([]);
           setVotes({});
           mutate();
         }}
-      />
+        />
     );
   }
 
@@ -592,10 +604,9 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
           Round {Math.min(currentRound, totalRounds)} of {totalRounds}
         </span>
         {/* Hide player pool info on mobile to save space */}
-        {matchData.playerPool && (
+        {matchData?.totalPlayers && (
           <p className="hidden lg:block text-xs text-gray-500 mt-3">
-            {matchData.playerPool.totalPlayers} players •{" "}
-            {matchData.playerPool.totalBots} bots in pool
+            {matchData.totalPlayers} players in this game
           </p>
         )}
       </div>

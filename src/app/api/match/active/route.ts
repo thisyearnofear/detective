@@ -86,6 +86,7 @@ export async function GET(request: NextRequest) {
       currentRound: rawState.playerSessions.get(playerFid)?.currentRound || 1,
       totalRounds,
       playerRank,
+      totalPlayers: gameState.playerCount,
       gameState: gameState.state,
       // Include cycleId for shared channel optimization
       cycleId: gameState.cycleId,
