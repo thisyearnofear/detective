@@ -12,6 +12,11 @@ import {
   validateCoherence,
   recordBotClaim,
 } from "./botBehavior";
+import {
+  loadConversationContext,
+  saveConversationContext,
+  formatContextForPrompt,
+} from "./conversationContext";
 
 const VENICE_API_KEY = process.env.VENICE_API_KEY;
 const VENICE_API_URL = "https://api.venice.ai/api/v1/chat/completions";
@@ -125,7 +130,7 @@ function extractActualResponses(
 
 /**
  * Generate a fallback response using ONLY the user's actual cast history
- * No generic phrases - only real words they've said
+ * No generic phrases - synthesizes authentic responses from real words/patterns
  */
 function generateFallbackResponse(
   lengthDistribution: {
@@ -144,6 +149,28 @@ function generateFallbackResponse(
 
   // If we have actual responses from their history, use one
   if (actualResponses.length > 0) {
+    // Occasionally combine 2 related-length casts for variety (30% chance)
+    if (Math.random() < 0.3 && actualResponses.length > 1) {
+      // Pick 2 random responses and intelligently combine them
+      const first = actualResponses[Math.floor(Math.random() * actualResponses.length)];
+      const second = actualResponses[Math.floor(Math.random() * actualResponses.length)];
+      
+      // Combine them in a natural way (if they're short enough)
+      if ((first.length + second.length) < 150) {
+        // Try to combine - split by sentences and take first of one, last of another
+        const firstSentences = first.split(/[.!?]+/).filter(s => s.trim());
+        const secondSentences = second.split(/[.!?]+/).filter(s => s.trim());
+        
+        if (firstSentences.length > 0 && secondSentences.length > 0) {
+          const combined = `${firstSentences[0].trim()}. ${secondSentences[secondSentences.length - 1].trim()}`;
+          if (combined.length < 150 && combined.length > 10) {
+            return combined;
+          }
+        }
+      }
+    }
+    
+    // Default: just pick a random actual response
     return actualResponses[Math.floor(Math.random() * actualResponses.length)];
   }
 
@@ -159,7 +186,7 @@ function generateFallbackResponse(
     }
   }
 
-  // Last resort: return their shortest cast
+  // Last resort: return their shortest cast (authentically theirs)
   if (recentCasts.length > 0) {
     const shortest = recentCasts.reduce((prev, curr) =>
       curr.text.length < prev.text.length ? curr : prev
@@ -167,8 +194,9 @@ function generateFallbackResponse(
     return shortest.text;
   }
 
-  // Ultimate fallback if no casts available
-  return "...";
+  // Ultimate fallback if no casts available (rare)
+  // Use a simple reactive response rather than "..."
+  return "hmm";
 }
 
 /**
@@ -354,6 +382,25 @@ export async function generateBotResponse(
     .map((msg) => msg.text);
 
   const lastUserMessage = userMessages[userMessages.length - 1] || "hello";
+  
+  // PHASE 2: Load conversation context from previous rounds (non-blocking)
+  // This is informational only - doesn't affect response determinism
+  let conversationContextString = "";
+  if (messageHistory.length > 0) {
+    const humanFid = messageHistory.find(m => m.sender.fid !== bot.fid)?.sender.fid;
+    if (humanFid) {
+      try {
+        const previousContext = await loadConversationContext(humanFid, bot.fid);
+        if (previousContext) {
+          conversationContextString = formatContextForPrompt(previousContext);
+          console.log(`[generateBotResponse] Loaded context for round ${previousContext.roundNumber}`);
+        }
+      } catch (error) {
+        // Graceful fallback - continue without context
+        console.warn(`[generateBotResponse] Failed to load context:`, error);
+      }
+    }
+  }
 
   // Extract user intent FIRST to understand context
   const userIntent = extractUserIntent(messageHistory);
@@ -454,35 +501,80 @@ export async function generateBotResponse(
   }
 
   // Add personality-based casting patterns context
-  let castingContext = "";
-  if (bot.personality) {
-    const personality = bot.personality;
-    const contextLines = [];
+   let castingContext = "";
+   let responseStyleGuidance = "";
+   
+   if (bot.personality) {
+     const personality = bot.personality;
+     const contextLines = [];
 
-    if (personality.frequentPhrases?.length > 0) {
-      contextLines.push(`- Favorite phrases: ${personality.frequentPhrases.slice(0, 5).join(", ")}`);
-    }
+     if (personality.frequentPhrases?.length > 0) {
+       contextLines.push(`- Favorite phrases: ${personality.frequentPhrases.slice(0, 5).join(", ")}`);
+     }
 
-    if (personality.opinionMarkers?.length > 0) {
-      contextLines.push(`- Uses opinion words: ${personality.opinionMarkers.slice(0, 5).join(", ")}`);
-    }
+     if (personality.opinionMarkers?.length > 0) {
+       contextLines.push(`- Uses opinion words: ${personality.opinionMarkers.slice(0, 5).join(", ")}`);
+     }
 
-    if (personality.theirGreetings?.length > 0) {
-      contextLines.push(`- Greets with: ${personality.theirGreetings.join(", ")}`);
-    }
+     if (personality.theirGreetings?.length > 0) {
+       contextLines.push(`- Greets with: ${personality.theirGreetings.slice(0, 3).join(", ")}`);
+     }
 
-    if (personality.emotionalTone && personality.emotionalTone !== "neutral") {
-      contextLines.push(`- Emotional tone: ${personality.emotionalTone} (${Math.round(personality.toneConfidence * 100)}% confident)`);
-    }
+     if (personality.emotionalTone && personality.emotionalTone !== "neutral") {
+       contextLines.push(`- Emotional tone: ${personality.emotionalTone} (${Math.round(personality.toneConfidence * 100)}% confident)`);
+     }
 
-    if (personality.usesCasuallang) {
-      contextLines.push(`- Uses casual language and slang`);
-    }
+     if (personality.usesCasuallang) {
+       contextLines.push(`- Uses casual language and slang`);
+     }
 
-    if (contextLines.length > 0) {
-      castingContext = "\n\nCAST-DERIVED COMMUNICATION PATTERNS:\n" + contextLines.join("\n");
-    }
-  }
+     if (contextLines.length > 0) {
+       castingContext = "\n\nCAST-DERIVED COMMUNICATION PATTERNS:\n" + contextLines.join("\n");
+     }
+
+     // Add response style guidance based on personality traits
+     const styleHints = [];
+     
+     // Communication style guidance
+     switch (personality.communicationStyle) {
+       case "terse":
+         styleHints.push("KEEP RESPONSES VERY SHORT - They typically respond in 1-3 words");
+         break;
+       case "verbose":
+         styleHints.push("Can write longer responses - They often explain their thoughts fully");
+         break;
+       case "conversational":
+         styleHints.push("Medium-length responses - Natural back-and-forth style");
+         break;
+     }
+
+     // Emotional tone guidance
+     if (personality.emotionalTone === "sarcastic") {
+       styleHints.push("⚡ Use subtle sarcasm or wit when appropriate");
+     } else if (personality.emotionalTone === "critical") {
+       styleHints.push("Can be direct or challenging - They're opinionated");
+     } else if (personality.emotionalTone === "positive") {
+       styleHints.push("✨ Be enthusiastic and encouraging - They have a positive tone");
+     }
+
+     // Debate tendency
+     if (personality.isDebater) {
+       styleHints.push("💭 If there's disagreement, they engage thoughtfully");
+     }
+
+     // Response pattern guidance
+     if (personality.responseStarters?.length > 0) {
+       styleHints.push(`Start with patterns like: "${personality.responseStarters.slice(0, 2).join('", "')}" when appropriate`);
+     }
+
+     if (personality.topicKeywords?.length > 0) {
+       styleHints.push(`They care about: ${personality.topicKeywords.slice(0, 4).join(", ")} - Reference these when relevant`);
+     }
+
+     if (styleHints.length > 0) {
+       responseStyleGuidance = "\n\nRESPONSE STYLE GUIDANCE:\n" + styleHints.join("\n");
+     }
+   }
 
   // Build adaptive instructions based on conversation state (convContext already analyzed above)
   let adaptiveInstructions = "";
@@ -511,44 +603,46 @@ export async function generateBotResponse(
 
   const systemPrompt = `You are @${bot.username}. Respond EXACTLY as they actually do based on their real posts.
 
-THEIR ACTUAL POSTS (study these - this is their REAL voice):
-${recentPosts.slice(0, 10).map((p) => `"${p}"`).join("\n")}
+  THEIR ACTUAL POSTS (study these - this is their REAL voice):
+  ${recentPosts.slice(0, 10).map((p) => `"${p}"`).join("\n")}
 
-KEY TRAITS:
-- Tone: ${baseStyle}
-- Emoji user: ${metadata.emojis === "true" ? "yes" : "no"}
-- Style: ${metadata.caps === "true" ? "proper caps" : "casual caps"}
-- Common phrases: ${commonPhrases.length > 0 ? commonPhrases.join(", ") : "varied"}
-- Posting pattern: Typically writes ${lengthGuidance}${personalityContext}${castingContext}
+  KEY TRAITS:
+  - Tone: ${baseStyle}
+  - Emoji user: ${metadata.emojis === "true" ? "yes" : "no"}
+  - Style: ${metadata.caps === "true" ? "proper caps" : "casual caps"}
+  - Common phrases: ${commonPhrases.length > 0 ? commonPhrases.join(", ") : "varied"}
+  - Posting pattern: Typically writes ${lengthGuidance}${personalityContext}${castingContext}${responseStyleGuidance}
 
-RESPONSE LENGTH GUIDANCE:
-- They typically write ${lengthDistribution.dominantPattern} posts (${lengthDistribution.avgLength} chars average)
-- Keep your response ${lengthGuidance}
-- Match their typical message length, not longer
+  RESPONSE LENGTH GUIDANCE:
+  - They typically write ${lengthDistribution.dominantPattern} posts (${lengthDistribution.avgLength} chars average)
+  - Keep your response ${lengthGuidance}
+  - Match their typical message length, not longer
 
-CURRENT CONVERSATION:
-${conversationContext || "[conversation starting]"}
-${adaptiveInstructions}
+  CURRENT CONVERSATION:
+  ${conversationContext || "[conversation starting]"}
+  ${adaptiveInstructions}
 
-CRITICAL GUIDELINES FOR YOUR RESPONSE:
-✓ COHERENCE FIRST: Answer what they asked, in their style
-✓ Use THEIR phrases and speech patterns from above
-✓ Match THEIR exact tone and style
-✓ Keep it SHORT and natural - no corporate language
-✓ Sound like a real person, not an AI
-✓ If they're casual, be casual. If they're witty, be witty.
-✓ Sometimes ask questions - real people are curious!
-✓ VARY your responses - don't repeat the same phrasing twice
-✓ NEVER go off-topic or pivot to random subjects
+  ${conversationContextString ? "\n" + conversationContextString : ""}
 
-RESPONSE TYPES (vary these based on context):
-- Direct answers: "yeah", "nah", "facts", "fr"
-- Questions: "wdym?", "why?", "you?", "fr?", "how so?"
-- Reactions: "haha", "lol", "oof", "nice", "damn"
-BAD RESPONSES (never sound like this): "That's interesting!", "I appreciate you sharing", "How can I help", "Great point!", "Fascinating!" Also avoid off-topic responses that ignore what was asked.
+  CRITICAL GUIDELINES FOR YOUR RESPONSE:
+  ✓ COHERENCE FIRST: Answer what they asked, in their style
+  ✓ Use THEIR phrases and speech patterns from above
+  ✓ Match THEIR exact tone and style
+  ✓ Keep it SHORT and natural - no corporate language
+  ✓ Sound like a real person, not an AI
+  ✓ If they're casual, be casual. If they're witty, be witty.
+  ✓ Sometimes ask questions - real people are curious!
+  ✓ VARY your responses - don't repeat the same phrasing twice
+  ✓ NEVER go off-topic or pivot to random subjects
 
-Context: ${userIntent} conversation
-Now respond as @${bot.username} would - ANSWER THEIR ACTUAL QUESTION in your voice, keep it SHORT, and make it feel spontaneous:`;
+  RESPONSE TYPES (vary these based on context):
+  - Direct answers: "yeah", "nah", "facts", "fr"
+  - Questions: "wdym?", "why?", "you?", "fr?", "how so?"
+  - Reactions: "haha", "lol", "oof", "nice", "damn"
+  BAD RESPONSES (never sound like this): "That's interesting!", "I appreciate you sharing", "How can I help", "Great point!", "Fascinating!" Also avoid off-topic responses that ignore what was asked.
+
+  Context: ${userIntent} conversation
+  Now respond as @${bot.username} would - ANSWER THEIR ACTUAL QUESTION in your voice, keep it SHORT, and make it feel spontaneous:`;
 
   try {
     const response = await fetch(VENICE_API_URL, {

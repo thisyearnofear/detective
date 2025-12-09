@@ -40,6 +40,7 @@ import * as stateConsistency from "./stateConsistency";
 import { database } from "./database";
 import { inferPersonality } from "./botProactive";
 import { getRepository } from "./gameRepository";
+import { saveConversationContext, clearAllConversationContexts } from "./conversationContext";
 
 // Game configuration constants
 const MATCH_DURATION = 60 * 1000; // 1 minute per match
@@ -544,6 +545,18 @@ class GameManager {
     await persistence.saveMatch(match);
     await persistence.savePlayer(player);
 
+    // PHASE 2: Save conversation context for future rounds (async, non-blocking)
+    // Only if opponent is a bot (we track context between player and bot)
+    if (match.opponent.type === "BOT") {
+      saveConversationContext(
+        player.fid,
+        match.opponent.fid,
+        match.roundNumber,
+        this.state!.cycleId,
+        match.messages
+      ).catch(err => console.warn(`[lockMatchVote] Failed to save context:`, err));
+    }
+
     // Save to database (async, non-blocking)
     this.saveMatchToDatabase(match, isCorrect, voteSpeed).catch(console.error);
 
@@ -696,6 +709,8 @@ class GameManager {
    */
   async resetGame(): Promise<void> {
     await persistence.clearAll();
+    // Also clear conversation contexts on full reset
+    await clearAllConversationContexts();
     this.state = null;
     this.initializing = false;
     console.log("[GameManager] Game reset complete");
