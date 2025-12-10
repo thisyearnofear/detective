@@ -1,7 +1,7 @@
 // src/lib/botProactive.ts
 
 import { Bot, ChatMessage } from "./types";
-import { RESPONSE_STYLES } from "./botBehavior";
+import { RESPONSE_STYLES, ConversationState } from "./botBehavior";
 
 /**
  * Cast-derived personality profile based on actual communication patterns
@@ -331,10 +331,6 @@ export function generateProactiveOpening(
         return null; // Bot waits for human
     }
 
-    // Add personality-based delay before responding
-    // Introverts (non-initiating) wait longer before sending first message
-    const delayAdjustment = personality.initiatesConversations ? 0 : 500 + Math.random() * 500;
-    
     // Use one of THEIR actual greetings
     // If we have multiple greetings, pick the most common pattern
     if (personality.theirGreetings.length > 0) {
@@ -354,6 +350,80 @@ export function generateProactiveOpening(
 
     // Fallback to simple greeting if no patterns extracted
     return "gm";
+}
+
+/**
+ * Personality as a decision engine: select response type based on traits + context
+ * ENHANCEMENT: Moves personality from "list in prompt" to "gate response generation"
+ */
+export function selectResponseType(
+  personality: PersonalityProfile,
+  userLastMessage: string,
+  conversationState?: ConversationState,
+): {
+  type: 'direct' | 'question' | 'reaction' | 'engaged';
+  confidence: number;
+  weightedPhrases: string[];
+} {
+  // If user asked a question and bot is a debater → engage on the topic
+  if (
+    personality.isDebater &&
+    userLastMessage.includes("?") &&
+    conversationState &&
+    conversationState.botClaims.length > 0
+  ) {
+    return {
+      type: 'engaged',
+      confidence: 0.9,
+      weightedPhrases: personality.opinionMarkers || [],
+    };
+  }
+
+  // If user asked a question and bot asks questions → ask back (or answer first)
+  if (personality.asksQuestions && userLastMessage.includes("?")) {
+    return {
+      type: 'question',
+      confidence: 0.8,
+      weightedPhrases: personality.theirQuestions || [],
+    };
+  }
+
+  // If bot uses reaction emojis and message is casual → react
+  if (
+    personality.reactionEmojis.length > 0 &&
+    userLastMessage.length < 50
+  ) {
+    return {
+      type: 'reaction',
+      confidence: 0.6,
+      weightedPhrases: personality.frequentPhrases || [],
+    };
+  }
+
+  // Terse communicators default to direct responses
+  if (personality.communicationStyle === "terse") {
+    return {
+      type: 'direct',
+      confidence: 0.85,
+      weightedPhrases: personality.opinionMarkers || [],
+    };
+  }
+
+  // Verbose communicators often ask questions
+  if (personality.communicationStyle === "verbose" && personality.asksQuestions) {
+    return {
+      type: 'question',
+      confidence: 0.75,
+      weightedPhrases: personality.theirQuestions || [],
+    };
+  }
+
+  // Default: conversational direct response
+  return {
+    type: 'direct',
+    confidence: 0.7,
+    weightedPhrases: personality.frequentPhrases || [],
+  };
 }
 
 /**

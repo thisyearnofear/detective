@@ -9,13 +9,15 @@ import {
   extractUserIntent,
   ConversationState,
   initializeConversationState,
-  validateCoherence,
+  scoreCoherence,
   recordBotClaim,
+  recordCoherenceScore,
 } from "./botBehavior";
 import {
   loadConversationContext,
-  saveConversationContext,
   formatContextForPrompt,
+  loadConversationMemory,
+  enrichPromptWithMemory,
 } from "./conversationContext";
 
 const VENICE_API_KEY = process.env.VENICE_API_KEY;
@@ -32,6 +34,24 @@ export function getOrInitializeConversationState(
     conversationStateCache.set(matchId, initializeConversationState());
   }
   return conversationStateCache.get(matchId)!;
+}
+
+/**
+ * Extract coherence scores from a completed match for memory saving
+ */
+export function extractCoherenceScoresFromMatch(matchId: string): Array<{ type: string; score: number }> {
+  const state = conversationStateCache.get(matchId);
+  if (!state || !state.coherenceScores) {
+    return [];
+  }
+  return state.coherenceScores.map(({ type, score }) => ({ type, score }));
+}
+
+/**
+ * Clear conversation state for a match (cleanup after round complete)
+ */
+export function clearConversationState(matchId: string): void {
+  conversationStateCache.delete(matchId);
 }
 
 /**
@@ -363,6 +383,212 @@ function analyzeConversationContext(messageHistory: ChatMessage[], botFid: numbe
 }
 
 /**
+ * Build a comprehensive system prompt based on bot personality, coherence requirements, and conversation context.
+ * SINGLE SOURCE OF TRUTH for prompt construction - centralizes all guidance into one place.
+ * Returns both prompt and metadata for downstream processing.
+ */
+function buildSystemPrompt(
+  bot: Bot,
+  messageHistory: ChatMessage[],
+  lengthDistribution: ReturnType<typeof analyzePostLengthDistribution>,
+  recentPosts: string[],
+  commonPhrases: string[],
+  conversationContextString: string,
+): {
+  prompt: string;
+  metadata: Record<string, string>;
+  baseStyle: string;
+} {
+  // Extract style metadata
+  const styleData = bot.style.split(" | ");
+  const baseStyle = styleData[0];
+  const metadata = styleData.slice(1).reduce(
+    (acc, item) => {
+      const [key, value] = item.split(":");
+      if (key && value) {
+        acc[key] = value;
+      }
+      return acc;
+    },
+    {} as Record<string, string>,
+  );
+
+  // Format conversation history
+  const conversationContext = messageHistory
+    .slice(-12)
+    .map((msg) => `${msg.sender.username}: ${msg.text}`)
+    .join("\n");
+
+  // Extract user intent
+  const userIntent = extractUserIntent(messageHistory);
+  const convContext = analyzeConversationContext(messageHistory, bot.fid);
+
+  // Determine length guidance
+  let lengthGuidance = "under 50 characters";
+  if (lengthDistribution.dominantPattern === "short") {
+    lengthGuidance = "very short (under 50 chars), like they usually write";
+  } else if (lengthDistribution.dominantPattern === "long") {
+    lengthGuidance = "longer (100-150 chars), matching their typical style";
+  } else if (lengthDistribution.dominantPattern === "medium") {
+    lengthGuidance = "medium length (50-150 chars)";
+  } else {
+    const patterns = ["short (under 50 chars)", "medium (50-150 chars)", "longer (100-200 chars)"];
+    lengthGuidance = patterns[Math.floor(Math.random() * patterns.length)];
+  }
+
+  // Build personality context sections
+  let personalityContext = "";
+  if (bot.personality) {
+    const traits = [];
+    if (bot.personality.initiatesConversations) traits.push("often starts conversations");
+    if (bot.personality.asksQuestions) traits.push("asks questions frequently");
+    if (bot.personality.isDebater) traits.push("opinionated/debater");
+    if (traits.length > 0) {
+      personalityContext = `\nCOMMUNICATION TRAITS: ${traits.join(", ")}`;
+    }
+  }
+
+  // Build cast-derived patterns context
+  let castingContext = "";
+  if (bot.personality) {
+    const personality = bot.personality;
+    const contextLines = [];
+
+    if (personality.frequentPhrases?.length > 0) {
+      contextLines.push(`- Favorite phrases: ${personality.frequentPhrases.slice(0, 5).join(", ")}`);
+    }
+    if (personality.opinionMarkers?.length > 0) {
+      contextLines.push(`- Uses opinion words: ${personality.opinionMarkers.slice(0, 5).join(", ")}`);
+    }
+    if (personality.theirGreetings?.length > 0) {
+      contextLines.push(`- Greets with: ${personality.theirGreetings.slice(0, 3).join(", ")}`);
+    }
+    if (personality.emotionalTone && personality.emotionalTone !== "neutral") {
+      contextLines.push(`- Emotional tone: ${personality.emotionalTone} (${Math.round(personality.toneConfidence * 100)}% confident)`);
+    }
+    if (personality.usesCasuallang) {
+      contextLines.push(`- Uses casual language and slang`);
+    }
+
+    if (contextLines.length > 0) {
+      castingContext = "\n\nCAST-DERIVED COMMUNICATION PATTERNS:\n" + contextLines.join("\n");
+    }
+  }
+
+  // Build response style guidance based on personality
+  let responseStyleGuidance = "";
+  if (bot.personality) {
+    const personality = bot.personality;
+    const styleHints = [];
+
+    switch (personality.communicationStyle) {
+      case "terse":
+        styleHints.push("KEEP RESPONSES VERY SHORT - They typically respond in 1-3 words");
+        break;
+      case "verbose":
+        styleHints.push("Can write longer responses - They often explain their thoughts fully");
+        break;
+      case "conversational":
+        styleHints.push("Medium-length responses - Natural back-and-forth style");
+        break;
+    }
+
+    if (personality.emotionalTone === "sarcastic") {
+      styleHints.push("⚡ Use subtle sarcasm or wit when appropriate");
+    } else if (personality.emotionalTone === "critical") {
+      styleHints.push("Can be direct or challenging - They're opinionated");
+    } else if (personality.emotionalTone === "positive") {
+      styleHints.push("✨ Be enthusiastic and encouraging - They have a positive tone");
+    }
+
+    if (personality.isDebater) {
+      styleHints.push("💭 If there's disagreement, they engage thoughtfully");
+    }
+
+    if (personality.responseStarters?.length > 0) {
+      styleHints.push(`Start with patterns like: "${personality.responseStarters.slice(0, 2).join('", "')}" when appropriate`);
+    }
+
+    if (personality.topicKeywords?.length > 0) {
+      styleHints.push(`They care about: ${personality.topicKeywords.slice(0, 4).join(", ")} - Reference these when relevant`);
+    }
+
+    if (styleHints.length > 0) {
+      responseStyleGuidance = "\n\nRESPONSE STYLE GUIDANCE:\n" + styleHints.join("\n");
+    }
+  }
+
+  // Build adaptive instructions based on conversation state
+  let adaptiveInstructions = "";
+  if (convContext.hasUserAskedQuestion) {
+    adaptiveInstructions += "\n🔥 USER ASKED A QUESTION - Answer it directly and naturally in your style.";
+  }
+  if (convContext.hasRepeatedPhrase && convContext.repeatedPhrase) {
+    adaptiveInstructions += `\n⚠️ AVOID REPETITION - You just said "${convContext.repeatedPhrase}" twice. Say something different this time.`;
+  }
+  if (convContext.messagesSinceBotSpoke > 1) {
+    adaptiveInstructions += "\n💬 BE ENGAGING - User sent multiple messages. Show interest or ask a brief question.";
+  }
+  if (convContext.conversationDominatedByUser) {
+    adaptiveInstructions += "\n🎯 ASK SOMETHING - User is doing all the talking. Ask them a short question to balance the conversation.";
+  }
+
+  const shouldAskQuestion = Math.random() < 0.3 && messageHistory.length > 2;
+  if (shouldAskQuestion && !convContext.hasUserAskedQuestion) {
+    adaptiveInstructions += "\n❓ SHOW CURIOSITY - Ask them a brief, casual question about what they said.";
+  }
+
+  const prompt = `You are @${bot.username}. Respond EXACTLY as they actually do based on their real posts.
+
+THEIR ACTUAL POSTS (study these - this is their REAL voice):
+${recentPosts.slice(0, 10).map((p) => `"${p}"`).join("\n")}
+
+KEY TRAITS:
+- Tone: ${baseStyle}
+- Emoji user: ${metadata.emojis === "true" ? "yes" : "no"}
+- Style: ${metadata.caps === "true" ? "proper caps" : "casual caps"}
+- Common phrases: ${commonPhrases.length > 0 ? commonPhrases.join(", ") : "varied"}
+- Posting pattern: Typically writes ${lengthGuidance}${personalityContext}${castingContext}${responseStyleGuidance}
+
+RESPONSE LENGTH GUIDANCE:
+- They typically write ${lengthDistribution.dominantPattern} posts (${lengthDistribution.avgLength} chars average)
+- Keep your response ${lengthGuidance}
+- Match their typical message length, not longer
+
+CURRENT CONVERSATION:
+${conversationContext || "[conversation starting]"}
+${adaptiveInstructions}
+
+${conversationContextString ? "\n" + conversationContextString : ""}
+
+CRITICAL GUIDELINES FOR YOUR RESPONSE:
+✓ COHERENCE FIRST: Answer what they asked, in their style
+✓ Use THEIR phrases and speech patterns from above
+✓ Match THEIR exact tone and style
+✓ Keep it SHORT and natural - no corporate language
+✓ Sound like a real person, not an AI
+✓ If they're casual, be casual. If they're witty, be witty.
+✓ Sometimes ask questions - real people are curious!
+✓ VARY your responses - don't repeat the same phrasing twice
+✓ NEVER go off-topic or pivot to random subjects
+
+RESPONSE TYPES (vary these based on context):
+- Direct answers: "yeah", "nah", "facts", "fr"
+- Questions: "wdym?", "why?", "you?", "fr?", "how so?"
+- Reactions: "haha", "lol", "oof", "nice", "damn"
+BAD RESPONSES (never sound like this): "That's interesting!", "I appreciate you sharing", "How can I help", "Great point!", "Fascinating!" Also avoid off-topic responses that ignore what was asked.
+
+Context: ${userIntent} conversation
+Now respond as @${bot.username} would - ANSWER THEIR ACTUAL QUESTION in your voice, keep it SHORT, and make it feel spontaneous:`;
+
+  return {
+    prompt,
+    metadata,
+    baseStyle,
+  };
+}
+
+/**
  * Generates a response for a bot based on its style and the conversation context.
  * Returns both the message and timing information for realistic delivery.
  * Now with coherence validation and conversation flow awareness.
@@ -383,266 +609,91 @@ export async function generateBotResponse(
 
   const lastUserMessage = userMessages[userMessages.length - 1] || "hello";
   
-  // PHASE 2: Load conversation context from previous rounds (non-blocking)
-  // This is informational only - doesn't affect response determinism
+  // Load both legacy context and temporal memory
   let conversationContextString = "";
+  let temporalMemoryString = "";
   if (messageHistory.length > 0) {
     const humanFid = messageHistory.find(m => m.sender.fid !== bot.fid)?.sender.fid;
     if (humanFid) {
       try {
+        // Load legacy context for backward compatibility
         const previousContext = await loadConversationContext(humanFid, bot.fid);
         if (previousContext) {
           conversationContextString = formatContextForPrompt(previousContext);
           console.log(`[generateBotResponse] Loaded context for round ${previousContext.roundNumber}`);
         }
+
+        // Load temporal memory for enhanced learning
+        const memory = await loadConversationMemory(humanFid, bot.fid);
+        if (memory) {
+          temporalMemoryString = enrichPromptWithMemory(memory);
+          console.log(`[generateBotResponse] Loaded temporal memory for ${humanFid}/${bot.fid}`);
+        }
       } catch (error) {
-        // Graceful fallback - continue without context
-        console.warn(`[generateBotResponse] Failed to load context:`, error);
+        console.warn(`[generateBotResponse] Failed to load context/memory:`, error);
       }
     }
   }
+  
+  // Combine both sources of context
+  const fullContextString = conversationContextString + temporalMemoryString;
 
-  // Extract user intent FIRST to understand context
-  const userIntent = extractUserIntent(messageHistory);
-  const convContext = analyzeConversationContext(messageHistory, bot.fid);
-
-  // Only use adaptive follow-up if it's contextually appropriate
-  // Don't use it when user asked a direct question - they need a coherent answer
+  // Only use adaptive follow-up if contextually appropriate
   if (
     bot.personality &&
-    messageHistory.length > 0 &&
-    !convContext.hasUserAskedQuestion
+    messageHistory.length > 0
   ) {
     const { generateAdaptiveFollowup } = require("./botProactive");
-    const adaptiveResponse = generateAdaptiveFollowup(
-      lastUserMessage,
-      bot.personality,
-    );
+    const convContext = analyzeConversationContext(messageHistory, bot.fid);
+    
+    if (!convContext.hasUserAskedQuestion) {
+      const adaptiveResponse = generateAdaptiveFollowup(
+        lastUserMessage,
+        bot.personality,
+      );
 
-    if (adaptiveResponse) {
-      console.log(`[generateBotResponse] Using adaptive response: "${adaptiveResponse}"`);
-      return adaptiveResponse;
+      if (adaptiveResponse) {
+        console.log(`[generateBotResponse] Using adaptive response: "${adaptiveResponse}"`);
+        return adaptiveResponse;
+      }
     }
   }
 
-  // Note: Response caching disabled to ensure natural variation
-  // Each response is generated fresh with temperature=0.8 for variety
-
-  // Format conversation history with more context
-  const conversationContext = messageHistory
-    .slice(-12) // Last 12 messages for deeper context
-    .map((msg) => `${msg.sender.username}: ${msg.text}`)
-    .join("\n");
-
-  // Extract style metadata
-  const styleData = bot.style.split(" | ");
-  const baseStyle = styleData[0];
-  const metadata = styleData.slice(1).reduce(
-    (acc, item) => {
-      const [key, value] = item.split(":");
-      if (key && value) {
-        acc[key] = value;
-      }
-      return acc;
-    },
-    {} as Record<string, string>,
-  );
-
-  // Note: conversation pattern detection could be used for adaptive responses
-  // For now, we rely purely on cast history for fallback responses
-  // const pattern = detectConversationPattern(messageHistory);
-
-  // Sample more casts for better context
+  // Prepare all data needed for prompt building
   const recentPosts = bot.recentCasts.slice(0, 30).map((c) => c.text);
-
-  // Analyze post length distribution
   const lengthDistribution = analyzePostLengthDistribution(recentPosts);
-
   const commonPhrases = extractCommonPhrases(recentPosts);
 
   // Dynamically set max_tokens based on posting patterns
   let maxTokens = 100;
-  let lengthGuidance = "under 50 characters";
-
   if (lengthDistribution.dominantPattern === "short") {
     maxTokens = 50;
-    lengthGuidance = "very short (under 50 chars), like they usually write";
   } else if (lengthDistribution.dominantPattern === "long") {
     maxTokens = 150;
-    lengthGuidance = "longer (100-150 chars), matching their typical style";
   } else if (lengthDistribution.dominantPattern === "medium") {
     maxTokens = 100;
-    lengthGuidance = "medium length (50-150 chars)";
   } else {
-    // Mixed pattern - randomly vary the length
     const rand = Math.random();
     if (rand < lengthDistribution.shortPercentage / 100) {
       maxTokens = 50;
-      lengthGuidance = "short (under 50 chars)";
     } else if (rand < (lengthDistribution.shortPercentage + lengthDistribution.mediumPercentage) / 100) {
       maxTokens = 100;
-      lengthGuidance = "medium (50-150 chars)";
     } else {
       maxTokens = 150;
-      lengthGuidance = "longer (100-200 chars)";
     }
   }
 
-  // Add personality context to system prompt if available
-  let personalityContext = "";
-  if (bot.personality) {
-    const traits = [];
-    if (bot.personality.initiatesConversations) traits.push("often starts conversations");
-    if (bot.personality.asksQuestions) traits.push("asks questions frequently");
-    if (bot.personality.isDebater) traits.push("opinionated/debater");
-    if (traits.length > 0) {
-      personalityContext = `\nCOMMUNICATION TRAITS: ${traits.join(", ")}`;
-    }
-  }
+  // Build system prompt using centralized function with combined context
+  const promptData = buildSystemPrompt(
+    bot,
+    messageHistory,
+    lengthDistribution,
+    recentPosts,
+    commonPhrases,
+    fullContextString,
+  );
 
-  // Add personality-based casting patterns context
-   let castingContext = "";
-   let responseStyleGuidance = "";
-   
-   if (bot.personality) {
-     const personality = bot.personality;
-     const contextLines = [];
-
-     if (personality.frequentPhrases?.length > 0) {
-       contextLines.push(`- Favorite phrases: ${personality.frequentPhrases.slice(0, 5).join(", ")}`);
-     }
-
-     if (personality.opinionMarkers?.length > 0) {
-       contextLines.push(`- Uses opinion words: ${personality.opinionMarkers.slice(0, 5).join(", ")}`);
-     }
-
-     if (personality.theirGreetings?.length > 0) {
-       contextLines.push(`- Greets with: ${personality.theirGreetings.slice(0, 3).join(", ")}`);
-     }
-
-     if (personality.emotionalTone && personality.emotionalTone !== "neutral") {
-       contextLines.push(`- Emotional tone: ${personality.emotionalTone} (${Math.round(personality.toneConfidence * 100)}% confident)`);
-     }
-
-     if (personality.usesCasuallang) {
-       contextLines.push(`- Uses casual language and slang`);
-     }
-
-     if (contextLines.length > 0) {
-       castingContext = "\n\nCAST-DERIVED COMMUNICATION PATTERNS:\n" + contextLines.join("\n");
-     }
-
-     // Add response style guidance based on personality traits
-     const styleHints = [];
-     
-     // Communication style guidance
-     switch (personality.communicationStyle) {
-       case "terse":
-         styleHints.push("KEEP RESPONSES VERY SHORT - They typically respond in 1-3 words");
-         break;
-       case "verbose":
-         styleHints.push("Can write longer responses - They often explain their thoughts fully");
-         break;
-       case "conversational":
-         styleHints.push("Medium-length responses - Natural back-and-forth style");
-         break;
-     }
-
-     // Emotional tone guidance
-     if (personality.emotionalTone === "sarcastic") {
-       styleHints.push("⚡ Use subtle sarcasm or wit when appropriate");
-     } else if (personality.emotionalTone === "critical") {
-       styleHints.push("Can be direct or challenging - They're opinionated");
-     } else if (personality.emotionalTone === "positive") {
-       styleHints.push("✨ Be enthusiastic and encouraging - They have a positive tone");
-     }
-
-     // Debate tendency
-     if (personality.isDebater) {
-       styleHints.push("💭 If there's disagreement, they engage thoughtfully");
-     }
-
-     // Response pattern guidance
-     if (personality.responseStarters?.length > 0) {
-       styleHints.push(`Start with patterns like: "${personality.responseStarters.slice(0, 2).join('", "')}" when appropriate`);
-     }
-
-     if (personality.topicKeywords?.length > 0) {
-       styleHints.push(`They care about: ${personality.topicKeywords.slice(0, 4).join(", ")} - Reference these when relevant`);
-     }
-
-     if (styleHints.length > 0) {
-       responseStyleGuidance = "\n\nRESPONSE STYLE GUIDANCE:\n" + styleHints.join("\n");
-     }
-   }
-
-  // Build adaptive instructions based on conversation state (convContext already analyzed above)
-  let adaptiveInstructions = "";
-
-  if (convContext.hasUserAskedQuestion) {
-    adaptiveInstructions += "\n🔥 USER ASKED A QUESTION - Answer it directly and naturally in your style.";
-  }
-
-  if (convContext.hasRepeatedPhrase && convContext.repeatedPhrase) {
-    adaptiveInstructions += `\n⚠️ AVOID REPETITION - You just said "${convContext.repeatedPhrase}" twice. Say something different this time.`;
-  }
-
-  if (convContext.messagesSinceBotSpoke > 1) {
-    adaptiveInstructions += "\n💬 BE ENGAGING - User sent multiple messages. Show interest or ask a brief question.";
-  }
-
-  if (convContext.conversationDominatedByUser) {
-    adaptiveInstructions += "\n🎯 ASK SOMETHING - User is doing all the talking. Ask them a short question to balance the conversation.";
-  }
-
-  // If no special context, occasionally ask questions anyway (30% chance)
-  const shouldAskQuestion = Math.random() < 0.3 && messageHistory.length > 2;
-  if (shouldAskQuestion && !convContext.hasUserAskedQuestion) {
-    adaptiveInstructions += "\n❓ SHOW CURIOSITY - Ask them a brief, casual question about what they said.";
-  }
-
-  const systemPrompt = `You are @${bot.username}. Respond EXACTLY as they actually do based on their real posts.
-
-  THEIR ACTUAL POSTS (study these - this is their REAL voice):
-  ${recentPosts.slice(0, 10).map((p) => `"${p}"`).join("\n")}
-
-  KEY TRAITS:
-  - Tone: ${baseStyle}
-  - Emoji user: ${metadata.emojis === "true" ? "yes" : "no"}
-  - Style: ${metadata.caps === "true" ? "proper caps" : "casual caps"}
-  - Common phrases: ${commonPhrases.length > 0 ? commonPhrases.join(", ") : "varied"}
-  - Posting pattern: Typically writes ${lengthGuidance}${personalityContext}${castingContext}${responseStyleGuidance}
-
-  RESPONSE LENGTH GUIDANCE:
-  - They typically write ${lengthDistribution.dominantPattern} posts (${lengthDistribution.avgLength} chars average)
-  - Keep your response ${lengthGuidance}
-  - Match their typical message length, not longer
-
-  CURRENT CONVERSATION:
-  ${conversationContext || "[conversation starting]"}
-  ${adaptiveInstructions}
-
-  ${conversationContextString ? "\n" + conversationContextString : ""}
-
-  CRITICAL GUIDELINES FOR YOUR RESPONSE:
-  ✓ COHERENCE FIRST: Answer what they asked, in their style
-  ✓ Use THEIR phrases and speech patterns from above
-  ✓ Match THEIR exact tone and style
-  ✓ Keep it SHORT and natural - no corporate language
-  ✓ Sound like a real person, not an AI
-  ✓ If they're casual, be casual. If they're witty, be witty.
-  ✓ Sometimes ask questions - real people are curious!
-  ✓ VARY your responses - don't repeat the same phrasing twice
-  ✓ NEVER go off-topic or pivot to random subjects
-
-  RESPONSE TYPES (vary these based on context):
-  - Direct answers: "yeah", "nah", "facts", "fr"
-  - Questions: "wdym?", "why?", "you?", "fr?", "how so?"
-  - Reactions: "haha", "lol", "oof", "nice", "damn"
-  BAD RESPONSES (never sound like this): "That's interesting!", "I appreciate you sharing", "How can I help", "Great point!", "Fascinating!" Also avoid off-topic responses that ignore what was asked.
-
-  Context: ${userIntent} conversation
-  Now respond as @${bot.username} would - ANSWER THEIR ACTUAL QUESTION in your voice, keep it SHORT, and make it feel spontaneous:`;
+  const { prompt: systemPrompt, metadata, baseStyle } = promptData;
 
   try {
     const response = await fetch(VENICE_API_URL, {
@@ -657,7 +708,7 @@ export async function generateBotResponse(
           { role: "system", content: systemPrompt },
           { role: "user", content: lastUserMessage },
         ],
-        temperature: 0.9, // Higher for natural variation between responses
+        temperature: 0.65, // Balanced: enough variation for natural responses without hallucinations
         max_tokens: maxTokens,
       }),
       signal: AbortSignal.timeout(5000), // 5 second timeout
@@ -676,41 +727,23 @@ export async function generateBotResponse(
       throw new Error("Empty response from AI");
     }
 
-    // Validate coherence if we have conversation state
+    // Validate coherence using enhanced scoring system
     if (matchId) {
       const state = getOrInitializeConversationState(matchId);
-      const coherenceCheck = validateCoherence(botResponse, messageHistory, state);
+      const coherenceScore = scoreCoherence(botResponse, messageHistory, state);
 
-      if (!coherenceCheck.isCoherent) {
-        console.log(`[coherenceCheck] Response rejected: ${coherenceCheck.reason}`);
-        // Try to regenerate or fallback
+      // Record score for memory building
+      recordCoherenceScore(state, coherenceScore.type, coherenceScore.score);
+
+      // Use score to make decisions - only reject very low scores
+      if (coherenceScore.score < 0.35) {
+        console.log(`[coherenceCheck] Response rejected [${coherenceScore.type}]: ${coherenceScore.reason} (score: ${coherenceScore.score})`);
         return generateFallbackResponse(lengthDistribution, bot.recentCasts);
       }
 
-      // Additional check: if user asked a question, response should acknowledge it
-      if (convContext.hasUserAskedQuestion) {
-        const questionKeywords = ["why", "how", "what", "when", "where", "who", "which"];
-        const lastUserMsg = lastUserMessage.toLowerCase();
-        const userAskedQuestion = questionKeywords.some(kw => lastUserMsg.includes(kw) && lastUserMsg.includes("?"));
-        
-        if (userAskedQuestion) {
-          const responseAcknowledges = 
-            botResponse.toLowerCase().includes("because") ||
-            botResponse.toLowerCase().includes("since") ||
-            botResponse.toLowerCase().includes("that's") ||
-            botResponse.toLowerCase().includes("it's") ||
-            botResponse.toLowerCase().includes("yeah") ||
-            botResponse.toLowerCase().includes("nah") ||
-            botResponse.toLowerCase().includes("idk") ||
-            botResponse.toLowerCase().includes("i don't") ||
-            botResponse.toLowerCase().includes("not sure");
-          
-          if (!responseAcknowledges && Math.random() < 0.3) {
-            // 30% of off-topic responses slip through - fallback instead
-            console.log(`[coherenceCheck] Question asked but response doesn't acknowledge: "${botResponse.substring(0, 50)}"`);
-            return generateFallbackResponse(lengthDistribution, bot.recentCasts);
-          }
-        }
+      // For moderate scores (0.35-0.5), log but allow
+      if (coherenceScore.score < 0.5) {
+        console.log(`[coherenceCheck] Response warning [${coherenceScore.type}]: ${coherenceScore.reason} (score: ${coherenceScore.score})`);
       }
     }
 

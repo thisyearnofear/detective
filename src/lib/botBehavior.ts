@@ -383,6 +383,8 @@ export interface ConversationState {
   botClaims: Array<{ claim: string; messageIndex: number; timestamp: number }>;
   topicsRaised: string[];
   stanceOnTopics: Record<string, string>;
+  // Track coherence scores for memory building
+  coherenceScores: Array<{ type: string; score: number; timestamp: number }>;
 }
 
 export function initializeConversationState(): ConversationState {
@@ -390,6 +392,7 @@ export function initializeConversationState(): ConversationState {
     botClaims: [],
     topicsRaised: [],
     stanceOnTopics: {},
+    coherenceScores: [],
   };
 }
 
@@ -412,15 +415,26 @@ export function extractConversationTopics(message: string): string[] {
   return topics;
 }
 
-export function validateCoherence(
+/**
+ * Score coherence of a bot response with detailed feedback
+ * Returns actionable score + type for learning and adaptation
+ */
+export function scoreCoherence(
   proposedResponse: string,
   messageHistory: ChatMessage[],
   state: ConversationState,
-): { isCoherent: boolean; reason?: string } {
+): {
+  score: number; // 0-1
+  type: 'on-topic' | 'evasive' | 'repetitive' | 'off-brand' | 'strong';
+  reason: string;
+} {
   const lower = proposedResponse.toLowerCase();
   
-  if (messageHistory.length === 0) return { isCoherent: true };
-  
+  if (messageHistory.length === 0) {
+    return { score: 1.0, type: 'strong', reason: 'First message - no context to contradict' };
+  }
+
+  // Check for internal contradictions
   for (const { claim } of state.botClaims) {
     const claimLower = claim.toLowerCase();
     
@@ -429,8 +443,9 @@ export function validateCoherence(
       lower.includes("not on mainnet")
     ) {
       return {
-        isCoherent: false,
-        reason: "contradicts earlier claim about mainnet status",
+        score: 0.1,
+        type: 'off-brand',
+        reason: 'contradicts earlier claim about mainnet status',
       };
     }
     
@@ -439,12 +454,14 @@ export function validateCoherence(
       lower.includes("never thought that")
     ) {
       return {
-        isCoherent: false,
-        reason: "directly contradicts stated opinion",
+        score: 0.2,
+        type: 'off-brand',
+        reason: 'directly contradicts stated opinion',
       };
     }
   }
   
+  // Check for immediate reversals
   const botMessages = messageHistory.filter((m) => m.sender.fid === messageHistory[0]?.sender.fid);
   if (botMessages.length > 0) {
     const lastBotMessage = botMessages[botMessages.length - 1]?.text.toLowerCase() || "";
@@ -455,13 +472,61 @@ export function validateCoherence(
       messageHistory.length < 4
     ) {
       return {
-        isCoherent: false,
-        reason: "immediate reversal of simple affirmation",
+        score: 0.3,
+        type: 'off-brand',
+        reason: 'immediate reversal of simple affirmation',
+      };
+    }
+  }
+
+  // Check if response is repetitive (exact duplicate)
+  const recentResponses = state.botClaims.slice(-3).map(c => c.claim.toLowerCase());
+  if (recentResponses.includes(lower)) {
+    return {
+      score: 0.2,
+      type: 'repetitive',
+      reason: 'exact same response was just sent',
+    };
+  }
+
+  // Check if user asked a question but response doesn't acknowledge
+  const lastUserMsg = messageHistory
+    .filter((m) => m.sender.fid !== messageHistory[0]?.sender.fid)
+    .slice(-1)[0]?.text.toLowerCase() || "";
+  
+  const userAskedQuestion = lastUserMsg.includes("?") ||
+    /^(why|how|what|when|where|who|which)\b/.test(lastUserMsg);
+
+  if (userAskedQuestion) {
+    const questionKeywords = ["because", "since", "that's", "it's", "yeah", "nah", "idk", "i don't", "not sure"];
+    const responseAcknowledgesQuestion = questionKeywords.some(kw => lower.includes(kw));
+    
+    if (!responseAcknowledgesQuestion) {
+      return {
+        score: 0.4,
+        type: 'evasive',
+        reason: 'question asked but response doesn\'t acknowledge it',
       };
     }
   }
   
-  return { isCoherent: true };
+  return { score: 0.9, type: 'strong', reason: 'coherent and on-topic' };
+}
+
+/**
+ * Legacy function kept for backward compatibility
+ * Converts scoreCoherence to boolean format
+ */
+export function validateCoherence(
+  proposedResponse: string,
+  messageHistory: ChatMessage[],
+  state: ConversationState,
+): { isCoherent: boolean; reason?: string } {
+  const scoreResult = scoreCoherence(proposedResponse, messageHistory, state);
+  return {
+    isCoherent: scoreResult.score >= 0.5,
+    reason: scoreResult.reason,
+  };
 }
 
 export function recordBotClaim(
@@ -486,4 +551,19 @@ export function recordBotClaim(
       state.stanceOnTopics[topic] = "neutral";
     }
   }
+}
+
+/**
+ * Record coherence score for memory building
+ */
+export function recordCoherenceScore(
+  state: ConversationState,
+  type: string,
+  score: number,
+): void {
+  state.coherenceScores.push({
+    type,
+    score,
+    timestamp: Date.now(),
+  });
 }

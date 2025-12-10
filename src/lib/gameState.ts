@@ -40,7 +40,8 @@ import * as stateConsistency from "./stateConsistency";
 import { database } from "./database";
 import { inferPersonality } from "./botProactive";
 import { getRepository } from "./gameRepository";
-import { saveConversationContext, clearAllConversationContexts } from "./conversationContext";
+import { saveConversationContext, saveConversationMemory, clearAllConversationContexts } from "./conversationContext";
+import { extractCoherenceScoresFromMatch, clearConversationState } from "./inference";
 
 // Game configuration constants
 const MATCH_DURATION = 60 * 1000; // 1 minute per match
@@ -555,6 +556,18 @@ class GameManager {
         this.state!.cycleId,
         match.messages
       ).catch(err => console.warn(`[lockMatchVote] Failed to save context:`, err));
+
+      // Also save temporal memory with coherence scores for enhanced learning
+      const coherenceScores = extractCoherenceScoresFromMatch(matchId);
+      saveConversationMemory(
+        player.fid,
+        match.opponent.fid,
+        match.messages,
+        coherenceScores.length > 0 ? coherenceScores : undefined
+      ).catch(err => console.warn(`[lockMatchVote] Failed to save memory:`, err));
+
+      // Cleanup conversation state cache
+      clearConversationState(matchId);
     }
 
     // Save to database (async, non-blocking)
