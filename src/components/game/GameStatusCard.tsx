@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { GameCycleState } from '@/lib/types';
 import { getServerTime } from '@/lib/timeSynchronization';
+import { GAME_CONSTANTS } from '@/lib/gameConstants';
 
 type Props = {
   gameState: {
@@ -57,10 +58,9 @@ export default function GameStatusCard({ gameState }: Props) {
 
   // REGISTRATION - Show countdown and opportunity to join
   if (gameState.state === 'REGISTRATION') {
-    const maxPlayers = 8;
-    const MIN_PLAYERS = 3;
-    const progress = Math.min(100, (gameState.playerCount / maxPlayers) * 100);
-    const hasMinPlayers = gameState.playerCount >= MIN_PLAYERS;
+    const maxPlayers = GAME_CONSTANTS.MAX_PLAYERS;
+     const progress = Math.min(100, (gameState.playerCount / maxPlayers) * 100);
+     const hasMinPlayers = gameState.playerCount >= GAME_CONSTANTS.MIN_PLAYERS;
     const countdownActive = hasMinPlayers && timeLeft < 999999999;
 
     return (
@@ -91,7 +91,7 @@ export default function GameStatusCard({ gameState }: Props) {
               <span className="text-2xl font-black text-white">{gameState.playerCount} <span className="text-base text-gray-400 font-normal">/ {maxPlayers}</span></span>
               {!hasMinPlayers && (
                 <span className="chip text-xs px-3 py-1 bg-gray-700/50 text-gray-300">
-                  {MIN_PLAYERS - gameState.playerCount} more needed
+                  {GAME_CONSTANTS.MIN_PLAYERS - gameState.playerCount} more needed
                 </span>
               )}
               {hasMinPlayers && countdownActive && (
@@ -107,7 +107,7 @@ export default function GameStatusCard({ gameState }: Props) {
               />
             </div>
             <p className="text-xs text-gray-300 font-medium">
-              {!hasMinPlayers ? `Need ${MIN_PLAYERS} players to start` : 'players registered'}
+              {!hasMinPlayers ? `Need ${GAME_CONSTANTS.MIN_PLAYERS} players to start` : 'players registered'}
             </p>
           </div>
         </div>
