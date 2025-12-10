@@ -479,14 +479,59 @@ export function scoreCoherence(
     }
   }
 
-  // Check if response is repetitive (exact duplicate)
-  const recentResponses = state.botClaims.slice(-3).map(c => c.claim.toLowerCase());
+  // Check if response is repetitive (exact or near-duplicate)
+  const recentResponses = state.botClaims.slice(-4).map(c => c.claim.toLowerCase());
   if (recentResponses.includes(lower)) {
     return {
-      score: 0.2,
+      score: 0.15,
       type: 'repetitive',
       reason: 'exact same response was just sent',
     };
+  }
+
+  // Check for semantic similarity (repeated key phrases)
+  const currentPhrases = lower.split(/[.!?]+/).filter(s => s.trim().length > 10);
+  for (const recent of recentResponses) {
+    const recentPhrases = recent.split(/[.!?]+/).filter(s => s.trim().length > 10);
+    const sharedPhrases = currentPhrases.filter(p => 
+      recentPhrases.some(rp => {
+        // Check if phrases are very similar (>70% overlap)
+        const currentWords = p.trim().split(/\s+/);
+        const recentWords = rp.trim().split(/\s+/);
+        const overlap = currentWords.filter(w => recentWords.includes(w)).length;
+        return overlap / Math.max(currentWords.length, recentWords.length) > 0.7;
+      })
+    );
+    if (sharedPhrases.length > 0) {
+      return {
+        score: 0.25,
+        type: 'repetitive',
+        reason: `repeated phrase: "${sharedPhrases[0].trim()}"`,
+      };
+    }
+  }
+
+  // Check for generic/template responses
+  const genericPatterns = [
+    /seems like a good time to/i,
+    /^new:/i,
+    /catching up/i,
+    /let me know/i,
+    /happy to help/i,
+    /feel free to/i,
+    /i appreciate/i,
+    /great point/i,
+    /interesting perspective/i,
+  ];
+
+  for (const pattern of genericPatterns) {
+    if (pattern.test(lower)) {
+      return {
+        score: 0.3,
+        type: 'off-brand',
+        reason: `generic template language detected: "${lower.match(pattern)?.[0]}"`,
+      };
+    }
   }
 
   // Check if user asked a question but response doesn't acknowledge

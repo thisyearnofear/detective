@@ -569,14 +569,21 @@ CRITICAL GUIDELINES FOR YOUR RESPONSE:
 ✓ Sound like a real person, not an AI
 ✓ If they're casual, be casual. If they're witty, be witty.
 ✓ Sometimes ask questions - real people are curious!
-✓ VARY your responses - don't repeat the same phrasing twice
+✓ VARY your responses - NEVER repeat the same phrase/sentence twice
+✓ NEVER use generic openers like "seems like a good time to", "New: ", "Catching Up"
 ✓ NEVER go off-topic or pivot to random subjects
+✓ NEVER sound like a template or form response
 
 RESPONSE TYPES (vary these based on context):
 - Direct answers: "yeah", "nah", "facts", "fr"
 - Questions: "wdym?", "why?", "you?", "fr?", "how so?"
 - Reactions: "haha", "lol", "oof", "nice", "damn"
-BAD RESPONSES (never sound like this): "That's interesting!", "I appreciate you sharing", "How can I help", "Great point!", "Fascinating!" Also avoid off-topic responses that ignore what was asked.
+
+BAD RESPONSES (NEVER sound like these):
+- "That's interesting!", "I appreciate you sharing", "How can I help", "Great point!", "Fascinating!"
+- "seems like a good time to", "New: Catching Up", "let me know"
+- Off-topic responses that ignore what was asked
+- Repeated sentences or phrases from moments ago
 
 Context: ${userIntent} conversation
 Now respond as @${bot.username} would - ANSWER THEIR ACTUAL QUESTION in your voice, keep it SHORT, and make it feel spontaneous:`;
@@ -735,15 +742,20 @@ export async function generateBotResponse(
       // Record score for memory building
       recordCoherenceScore(state, coherenceScore.type, coherenceScore.score);
 
-      // Use score to make decisions - only reject very low scores
-      if (coherenceScore.score < 0.35) {
+      // Use score to make decisions - reject low scores
+      if (coherenceScore.score < 0.4) {
         console.log(`[coherenceCheck] Response rejected [${coherenceScore.type}]: ${coherenceScore.reason} (score: ${coherenceScore.score})`);
         return generateFallbackResponse(lengthDistribution, bot.recentCasts);
       }
 
-      // For moderate scores (0.35-0.5), log but allow
-      if (coherenceScore.score < 0.5) {
+      // For moderate scores (0.4-0.6), warn and sometimes reject (stricter for repetition)
+      if (coherenceScore.score < 0.6) {
         console.log(`[coherenceCheck] Response warning [${coherenceScore.type}]: ${coherenceScore.reason} (score: ${coherenceScore.score})`);
+        // Reject repetitive responses more aggressively
+        if (coherenceScore.type === 'repetitive' && Math.random() < 0.7) {
+          console.log(`[coherenceCheck] Forcing fallback for repetitive response`);
+          return generateFallbackResponse(lengthDistribution, bot.recentCasts);
+        }
       }
     }
 
