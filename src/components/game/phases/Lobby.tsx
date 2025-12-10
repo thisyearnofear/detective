@@ -1,4 +1,5 @@
 import { Player, UserProfile } from '@/lib/types';
+import { GAME_CONSTANTS } from '@/lib/gameConstants';
 import LoadingOverlay from '@/components/LoadingOverlay';
 
 type Props = {
@@ -26,8 +27,7 @@ export default function Lobby({
 }: Props) {
     const spotsLeft = maxPlayers - registeredPlayers.length;
     const isFull = spotsLeft === 0;
-    const MIN_PLAYERS = 3;
-    const hasMinPlayers = registeredPlayers.length >= MIN_PLAYERS;
+    const hasMinPlayers = registeredPlayers.length >= GAME_CONSTANTS.MIN_PLAYERS;
     const countdownActive = hasMinPlayers && timeLeft < 999999999; // Countdown started
 
     const formatTimeLeft = (ms: number) => {
@@ -68,9 +68,9 @@ export default function Lobby({
                 <div className="bg-slate-900/50 border border-white/10 rounded-xl p-4 md:p-6 text-center backdrop-blur-sm">
                     <span className="text-xs text-gray-400 uppercase tracking-wide">Waiting for Players</span>
                     <div className="text-2xl md:text-3xl font-bold text-white mt-2">
-                        {MIN_PLAYERS - registeredPlayers.length} more needed
+                        {GAME_CONSTANTS.MIN_PLAYERS - registeredPlayers.length} more needed
                     </div>
-                    <p className="text-xs text-gray-500 mt-2">Game starts when {MIN_PLAYERS}+ players join</p>
+                    <p className="text-xs text-gray-500 mt-2">Game starts when {GAME_CONSTANTS.MIN_PLAYERS}+ players join</p>
                 </div>
             ) : countdownActive ? (
                 <div className="bg-gradient-to-br from-green-900/30 to-blue-900/30 border-2 border-green-500/30 rounded-xl p-4 md:p-6 text-center backdrop-blur-sm animate-pulse">

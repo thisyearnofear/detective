@@ -417,7 +417,7 @@ export function extractConversationTopics(message: string): string[] {
 
 /**
  * Score coherence of a bot response with detailed feedback
- * Returns actionable score + type for learning and adaptation
+ * Conservative: only flag critical issues, not minor ones
  */
 export function scoreCoherence(
   proposedResponse: string,
@@ -431,131 +431,52 @@ export function scoreCoherence(
   const lower = proposedResponse.toLowerCase();
   
   if (messageHistory.length === 0) {
-    return { score: 1.0, type: 'strong', reason: 'First message - no context to contradict' };
+    return { score: 1.0, type: 'strong', reason: 'First message' };
   }
 
-  // Check for internal contradictions
-  for (const { claim } of state.botClaims) {
-    const claimLower = claim.toLowerCase();
-    
-    if (
-      claimLower.includes("it's on mainnet") &&
-      lower.includes("not on mainnet")
-    ) {
-      return {
-        score: 0.1,
-        type: 'off-brand',
-        reason: 'contradicts earlier claim about mainnet status',
-      };
-    }
-    
-    if (
-      claimLower.includes("i think") &&
-      lower.includes("never thought that")
-    ) {
-      return {
-        score: 0.2,
-        type: 'off-brand',
-        reason: 'directly contradicts stated opinion',
-      };
-    }
-  }
-  
-  // Check for immediate reversals
-  const botMessages = messageHistory.filter((m) => m.sender.fid === messageHistory[0]?.sender.fid);
-  if (botMessages.length > 0) {
-    const lastBotMessage = botMessages[botMessages.length - 1]?.text.toLowerCase() || "";
-    
-    if (
-      lastBotMessage.includes("yes") &&
-      lower.includes("no, definitely not") &&
-      messageHistory.length < 4
-    ) {
-      return {
-        score: 0.3,
-        type: 'off-brand',
-        reason: 'immediate reversal of simple affirmation',
-      };
-    }
-  }
-
-  // Check if response is repetitive (exact or near-duplicate)
-  const recentResponses = state.botClaims.slice(-4).map(c => c.claim.toLowerCase());
+  // CRITICAL: Check for exact repetition (word-for-word)
+  const recentResponses = state.botClaims.slice(-3).map(c => c.claim.toLowerCase());
   if (recentResponses.includes(lower)) {
     return {
-      score: 0.15,
+      score: 0.1,
       type: 'repetitive',
-      reason: 'exact same response was just sent',
+      reason: 'exact duplicate sent moments ago',
     };
   }
 
-  // Check for semantic similarity (repeated key phrases)
-  const currentPhrases = lower.split(/[.!?]+/).filter(s => s.trim().length > 10);
-  for (const recent of recentResponses) {
-    const recentPhrases = recent.split(/[.!?]+/).filter(s => s.trim().length > 10);
-    const sharedPhrases = currentPhrases.filter(p => 
-      recentPhrases.some(rp => {
-        // Check if phrases are very similar (>70% overlap)
-        const currentWords = p.trim().split(/\s+/);
-        const recentWords = rp.trim().split(/\s+/);
-        const overlap = currentWords.filter(w => recentWords.includes(w)).length;
-        return overlap / Math.max(currentWords.length, recentWords.length) > 0.7;
-      })
-    );
-    if (sharedPhrases.length > 0) {
-      return {
-        score: 0.25,
-        type: 'repetitive',
-        reason: `repeated phrase: "${sharedPhrases[0].trim()}"`,
-      };
-    }
-  }
-
-  // Check for generic/template responses
-  const genericPatterns = [
-    /seems like a good time to/i,
+  // CRITICAL: Check for strong template language (patterns from coherence failures)
+  const strongTemplatePatterns = [
+    /^seems like a good time to/i,
     /^new:/i,
-    /catching up/i,
-    /let me know/i,
-    /happy to help/i,
-    /feel free to/i,
-    /i appreciate/i,
-    /great point/i,
-    /interesting perspective/i,
+    /^i appreciate.*sharing/i,
   ];
 
-  for (const pattern of genericPatterns) {
+  for (const pattern of strongTemplatePatterns) {
     if (pattern.test(lower)) {
       return {
-        score: 0.3,
+        score: 0.25,
         type: 'off-brand',
-        reason: `generic template language detected: "${lower.match(pattern)?.[0]}"`,
+        reason: `generic template: "${lower.match(pattern)?.[0]}"`,
       };
     }
   }
 
-  // Check if user asked a question but response doesn't acknowledge
+  // User asked question but response is evasive
   const lastUserMsg = messageHistory
     .filter((m) => m.sender.fid !== messageHistory[0]?.sender.fid)
     .slice(-1)[0]?.text.toLowerCase() || "";
   
-  const userAskedQuestion = lastUserMsg.includes("?") ||
-    /^(why|how|what|when|where|who|which)\b/.test(lastUserMsg);
-
-  if (userAskedQuestion) {
-    const questionKeywords = ["because", "since", "that's", "it's", "yeah", "nah", "idk", "i don't", "not sure"];
-    const responseAcknowledgesQuestion = questionKeywords.some(kw => lower.includes(kw));
-    
-    if (!responseAcknowledgesQuestion) {
-      return {
-        score: 0.4,
-        type: 'evasive',
-        reason: 'question asked but response doesn\'t acknowledge it',
-      };
-    }
+  const userAskedQuestion = lastUserMsg.includes("?");
+  if (userAskedQuestion && lower.length < 5) {
+    // Super short response to a question is evasive
+    return {
+      score: 0.3,
+      type: 'evasive',
+      reason: 'question asked but response too brief',
+    };
   }
   
-  return { score: 0.9, type: 'strong', reason: 'coherent and on-topic' };
+  return { score: 0.85, type: 'strong', reason: 'coherent' };
 }
 
 /**

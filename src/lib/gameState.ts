@@ -42,17 +42,19 @@ import { inferPersonality } from "./botProactive";
 import { getRepository } from "./gameRepository";
 import { saveConversationContext, saveConversationMemory, clearAllConversationContexts } from "./conversationContext";
 import { extractCoherenceScoresFromMatch, clearConversationState } from "./inference";
+import { GAME_CONSTANTS, GAME_DURATION } from "./gameConstants";
 
-// Game configuration constants
-const MATCH_DURATION = 60 * 1000; // 1 minute per match
+// Destructure from single source of truth
+const MATCH_DURATION = GAME_CONSTANTS.MATCH_DURATION;
+const FIXED_ROUNDS = GAME_CONSTANTS.FIXED_ROUNDS;
+const REGISTRATION_COUNTDOWN = GAME_CONSTANTS.REGISTRATION_COUNTDOWN;
+const MIN_PLAYERS = GAME_CONSTANTS.MIN_PLAYERS;
+const MAX_PLAYERS = GAME_CONSTANTS.MAX_PLAYERS;
+const INACTIVITY_WARNING = GAME_CONSTANTS.INACTIVITY_WARNING;
+const INACTIVITY_FORFEIT = GAME_CONSTANTS.INACTIVITY_FORFEIT;
+
+// Game-specific constant (not part of shared GAME_CONSTANTS)
 const SIMULTANEOUS_MATCHES = 2; // 2 concurrent chats
-const FIXED_ROUNDS = 5; // Fixed 5 rounds for predictable experience (10 total matches)
-const GAME_DURATION = FIXED_ROUNDS * MATCH_DURATION; // 5 minutes total
-const REGISTRATION_COUNTDOWN = 30 * 1000; // 30 second countdown once minimum players join
-const MIN_PLAYERS = 3; // Minimum players needed for a competitive game
-const MAX_PLAYERS = 50;
-const INACTIVITY_WARNING = 30 * 1000; // 30 seconds
-const INACTIVITY_FORFEIT = 45 * 1000; // 45 seconds
 const USE_REDIS = process.env.USE_REDIS === "true";
 
 /**

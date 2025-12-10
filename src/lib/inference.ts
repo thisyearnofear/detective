@@ -149,8 +149,9 @@ function extractActualResponses(
 }
 
 /**
- * Generate a fallback response using ONLY the user's actual cast history
- * No generic phrases - synthesizes authentic responses from real words/patterns
+ * Generate a fallback response from actual cast history
+ * This is the ground truth - real examples of how they talk
+ * ENHANCEMENT: Single source of truth for cast-based fallback
  */
 function generateFallbackResponse(
   lengthDistribution: {
@@ -169,28 +170,6 @@ function generateFallbackResponse(
 
   // If we have actual responses from their history, use one
   if (actualResponses.length > 0) {
-    // Occasionally combine 2 related-length casts for variety (30% chance)
-    if (Math.random() < 0.3 && actualResponses.length > 1) {
-      // Pick 2 random responses and intelligently combine them
-      const first = actualResponses[Math.floor(Math.random() * actualResponses.length)];
-      const second = actualResponses[Math.floor(Math.random() * actualResponses.length)];
-      
-      // Combine them in a natural way (if they're short enough)
-      if ((first.length + second.length) < 150) {
-        // Try to combine - split by sentences and take first of one, last of another
-        const firstSentences = first.split(/[.!?]+/).filter(s => s.trim());
-        const secondSentences = second.split(/[.!?]+/).filter(s => s.trim());
-        
-        if (firstSentences.length > 0 && secondSentences.length > 0) {
-          const combined = `${firstSentences[0].trim()}. ${secondSentences[secondSentences.length - 1].trim()}`;
-          if (combined.length < 150 && combined.length > 10) {
-            return combined;
-          }
-        }
-      }
-    }
-    
-    // Default: just pick a random actual response
     return actualResponses[Math.floor(Math.random() * actualResponses.length)];
   }
 
@@ -214,9 +193,95 @@ function generateFallbackResponse(
     return shortest.text;
   }
 
-  // Ultimate fallback if no casts available (rare)
-  // Use a simple reactive response rather than "..."
+  // Ultimate fallback if no casts available
   return "hmm";
+}
+
+/**
+ * Single source of truth for Venice API calls
+ * CLEAN: Encapsulates API interaction, temperature control, token limits
+ * DRY: Reusable for both initial generation and regeneration attempts
+ */
+async function callVeniceAPI(
+  systemPrompt: string,
+  userMessage: string,
+  maxTokens: number,
+  temperature: number = 0.55,
+): Promise<{ content: string; error?: string }> {
+  try {
+    const response = await fetch(VENICE_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${VENICE_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: VENICE_MODEL,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage },
+        ],
+        temperature,
+        max_tokens: maxTokens,
+      }),
+      signal: AbortSignal.timeout(5000), // 5 second timeout
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return { content: "", error: `API error ${response.status}: ${errorText}` };
+    }
+
+    const data = await response.json();
+    const content = data.choices[0]?.message?.content?.trim();
+
+    if (!content) {
+      return { content: "", error: "Empty response from API" };
+    }
+
+    return { content };
+  } catch (error: any) {
+    const errorMsg = error.name === 'TimeoutError' || error.name === 'AbortError'
+      ? "Request timeout"
+      : error.message;
+    return { content: "", error: errorMsg };
+  }
+}
+
+/**
+ * Regenerate response with tighter constraints after coherence failure
+ * MODULAR: Separate retry logic with stricter guidance
+ * Only used when initial generation fails coherence checks (0.3-0.5 range)
+ */
+async function regenerateWithTighterConstraints(
+  bot: Bot,
+  messageHistory: ChatMessage[],
+  lengthDistribution: ReturnType<typeof analyzePostLengthDistribution>,
+  recentPosts: string[],
+  maxTokens: number,
+): Promise<{ content: string; error?: string }> {
+  const lastUserMessage = messageHistory[messageHistory.length - 1]?.text || "hello";
+
+  // Build STRICT regeneration prompt - focus on cast authenticity
+  const tightPrompt = `You are @${bot.username}. CRITICAL: respond EXACTLY like their actual posts. NO GENERIC PHRASES.
+
+THEIR REAL VOICE (study these):
+${recentPosts.slice(0, 5).map((p) => `"${p}"`).join("\n")}
+
+RULES (STRICT):
+✓ Use ONLY phrases from their posts
+✓ NO AI language ("interesting", "appreciate", "seems like")
+✓ Match their typical length: ${lengthDistribution.dominantPattern}
+✓ Sound spontaneous and raw
+
+Answer naturally in their style:`;
+
+  return callVeniceAPI(
+    tightPrompt,
+    lastUserMessage,
+    Math.floor(maxTokens * 0.8), // Slightly smaller window for tighter response
+    0.45, // Lower temperature for more constrained generation
+  );
 }
 
 /**
@@ -538,12 +603,12 @@ function buildSystemPrompt(
     adaptiveInstructions += "\n❓ SHOW CURIOSITY - Ask them a brief, casual question about what they said.";
   }
 
-  const prompt = `You are @${bot.username}. Respond EXACTLY as they actually do based on their real posts.
+  const prompt = `You are @${bot.username}. Your goal: respond EXACTLY as they actually do - use their REAL voice and patterns, not generic templates.
 
-THEIR ACTUAL POSTS (study these - this is their REAL voice):
+CRITICAL: Analyze and mimic these ACTUAL POSTS (this is their REAL voice):
 ${recentPosts.slice(0, 10).map((p) => `"${p}"`).join("\n")}
 
-KEY TRAITS:
+YOUR CONSTRAINTS:
 - Tone: ${baseStyle}
 - Emoji user: ${metadata.emojis === "true" ? "yes" : "no"}
 - Style: ${metadata.caps === "true" ? "proper caps" : "casual caps"}
@@ -561,29 +626,24 @@ ${adaptiveInstructions}
 
 ${conversationContextString ? "\n" + conversationContextString : ""}
 
-CRITICAL GUIDELINES FOR YOUR RESPONSE:
-✓ COHERENCE FIRST: Answer what they asked, in their style
-✓ Use THEIR phrases and speech patterns from above
-✓ Match THEIR exact tone and style
-✓ Keep it SHORT and natural - no corporate language
-✓ Sound like a real person, not an AI
-✓ If they're casual, be casual. If they're witty, be witty.
-✓ Sometimes ask questions - real people are curious!
-✓ VARY your responses - NEVER repeat the same phrase/sentence twice
-✓ NEVER use generic openers like "seems like a good time to", "New: ", "Catching Up"
-✓ NEVER go off-topic or pivot to random subjects
-✓ NEVER sound like a template or form response
+CRITICAL GUIDELINES:
+✓ MIMIC THEIR ACTUAL VOICE: Use phrases and tone FROM THEIR POSTS above
+✓ STAY ON-TOPIC: Answer what they asked, in their style
+✓ BE CONCISE: Keep it SHORT - no corporate speak
+✓ BE AUTHENTIC: Sound like them, not an AI or chatbot
+✓ VARY RESPONSES: Never repeat the same phrase twice in 3 turns
+✓ AVOID TEMPLATES: No "seems like a good time to", "I appreciate", "Great point", "let me know"
+✓ NO HALLUCINATIONS: Don't make up facts or topics they didn't introduce
 
-RESPONSE TYPES (vary these based on context):
-- Direct answers: "yeah", "nah", "facts", "fr"
-- Questions: "wdym?", "why?", "you?", "fr?", "how so?"
-- Reactions: "haha", "lol", "oof", "nice", "damn"
+RESPONSE PATTERNS FROM THEIR POSTS:
+${recentPosts.slice(0, 3).map((p) => `- "${p}"`).join("\n")}
 
-BAD RESPONSES (NEVER sound like these):
-- "That's interesting!", "I appreciate you sharing", "How can I help", "Great point!", "Fascinating!"
-- "seems like a good time to", "New: Catching Up", "let me know"
-- Off-topic responses that ignore what was asked
-- Repeated sentences or phrases from moments ago
+These are REAL examples of how they talk. Stay in this style.
+
+AVOID (AI/Bot language):
+- "That's interesting!", "I can help with that", "How can I assist"
+- "seems like a good time to discuss", "New:", "Catching Up"
+- Generic agreement without substance
 
 Context: ${userIntent} conversation
 Now respond as @${bot.username} would - ANSWER THEIR ACTUAL QUESTION in your voice, keep it SHORT, and make it feel spontaneous:`;
@@ -702,86 +762,76 @@ export async function generateBotResponse(
 
   const { prompt: systemPrompt, metadata, baseStyle } = promptData;
 
-  try {
-    const response = await fetch(VENICE_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${VENICE_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: VENICE_MODEL,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: lastUserMessage },
-        ],
-        temperature: 0.65, // Balanced: enough variation for natural responses without hallucinations
-        max_tokens: maxTokens,
-      }),
-      signal: AbortSignal.timeout(5000), // 5 second timeout
-    });
+  // Single API call pipeline with coherence validation and retry logic
+  const apiResult = await callVeniceAPI(systemPrompt, lastUserMessage, maxTokens);
+  
+  if (apiResult.error) {
+    console.warn(`[generateBotResponse] API call failed: ${apiResult.error}`);
+    return generateFallbackResponse(lengthDistribution, bot.recentCasts);
+  }
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Venice API error:", response.status, errorText);
+  let botResponse = apiResult.content;
+
+  // Validate coherence using enhanced scoring system
+  if (matchId) {
+    const state = getOrInitializeConversationState(matchId);
+    const coherenceScore = scoreCoherence(botResponse, messageHistory, state);
+
+    // Record score for memory building
+    recordCoherenceScore(state, coherenceScore.type, coherenceScore.score);
+
+    // CRITICAL REJECTION: Score < 0.3 (severe issues) - skip to fallback
+    if (coherenceScore.score < 0.3) {
+      console.log(`[coherenceCheck] CRITICAL: Response rejected [${coherenceScore.type}]: ${coherenceScore.reason} (score: ${coherenceScore.score})`);
       return generateFallbackResponse(lengthDistribution, bot.recentCasts);
     }
 
-    const data = await response.json();
-    let botResponse = data.choices[0]?.message?.content?.trim();
+    // MODERATE FAILURE: 0.3-0.5 score - try regeneration before fallback
+    if (coherenceScore.score < 0.5) {
+      console.log(`[coherenceCheck] MODERATE: Attempting regeneration [${coherenceScore.type}]: ${coherenceScore.reason} (score: ${coherenceScore.score})`);
+      
+      const regenerationResult = await regenerateWithTighterConstraints(
+        bot,
+        messageHistory,
+        lengthDistribution,
+        recentPosts,
+        maxTokens,
+      );
 
-    if (!botResponse) {
-      throw new Error("Empty response from AI");
-    }
-
-    // Validate coherence using enhanced scoring system
-    if (matchId) {
-      const state = getOrInitializeConversationState(matchId);
-      const coherenceScore = scoreCoherence(botResponse, messageHistory, state);
-
-      // Record score for memory building
-      recordCoherenceScore(state, coherenceScore.type, coherenceScore.score);
-
-      // Use score to make decisions - reject low scores
-      if (coherenceScore.score < 0.4) {
-        console.log(`[coherenceCheck] Response rejected [${coherenceScore.type}]: ${coherenceScore.reason} (score: ${coherenceScore.score})`);
-        return generateFallbackResponse(lengthDistribution, bot.recentCasts);
-      }
-
-      // For moderate scores (0.4-0.6), warn and sometimes reject (stricter for repetition)
-      if (coherenceScore.score < 0.6) {
-        console.log(`[coherenceCheck] Response warning [${coherenceScore.type}]: ${coherenceScore.reason} (score: ${coherenceScore.score})`);
-        // Reject repetitive responses more aggressively
-        if (coherenceScore.type === 'repetitive' && Math.random() < 0.7) {
-          console.log(`[coherenceCheck] Forcing fallback for repetitive response`);
+      if (!regenerationResult.error && regenerationResult.content) {
+        // Re-validate regenerated response
+        const regeneratedScore = scoreCoherence(regenerationResult.content, messageHistory, state);
+        console.log(`[coherenceCheck] Regenerated response scored: ${regeneratedScore.score} (${regeneratedScore.type})`);
+        
+        if (regeneratedScore.score >= 0.5) {
+          // Regeneration succeeded - use it
+          botResponse = regenerationResult.content;
+          recordCoherenceScore(state, `regenerated_${regeneratedScore.type}`, regeneratedScore.score);
+        } else {
+          // Regeneration also failed - fall back to cast history
+          console.log(`[coherenceCheck] Regeneration also failed, using fallback`);
           return generateFallbackResponse(lengthDistribution, bot.recentCasts);
         }
+      } else {
+        // Regeneration API call failed - fall back to cast history
+        console.log(`[coherenceCheck] Regeneration API failed: ${regenerationResult.error}, using fallback`);
+        return generateFallbackResponse(lengthDistribution, bot.recentCasts);
       }
     }
-
-    // Process the response (add imperfections, emojis, etc.)
-    const processedResponse = processBotResponse(
-      botResponse,
-      bot,
-      metadata,
-      baseStyle,
-      lengthDistribution,
-      messageHistory,
-      matchId
-    );
-
-    // Note: Caching disabled for natural variation
-    return processedResponse;
-
-  } catch (error: any) {
-    if (error.name === 'TimeoutError' || error.name === 'AbortError') {
-      console.warn(`[generateBotResponse] AI request timed out after 5s for bot ${bot.username}`);
-    } else {
-      console.error("[generateBotResponse] Error generating response:", error);
-    }
-    // Always return a safe fallback on error
-    return generateFallbackResponse(lengthDistribution, bot.recentCasts);
   }
+
+  // Process the response (add imperfections, emojis, etc.)
+  const processedResponse = processBotResponse(
+    botResponse,
+    bot,
+    metadata,
+    baseStyle,
+    lengthDistribution,
+    messageHistory,
+    matchId
+  );
+
+  return processedResponse;
 }
 
 /**

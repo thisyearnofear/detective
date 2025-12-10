@@ -5,6 +5,7 @@ import useSWR from 'swr';
 import { Player, UserProfile } from '@/lib/types';
 import { useCountdown } from '@/hooks/useCountdown';
 import { fetcher } from '@/lib/fetcher';
+import { GAME_CONSTANTS } from '@/lib/gameConstants';
 import Lobby from './phases/Lobby';
 import ErrorCard from '../ErrorCard';
 
@@ -34,7 +35,7 @@ export default function GameLobby({ currentPlayer, isRegistrationOpen = true, ga
   );
 
   const registeredPlayers = (statusData?.players || []) as Player[];
-  const maxPlayers = 8;
+  const maxPlayers = GAME_CONSTANTS.MAX_PLAYERS;
 
   // Use countdown hook for timer (syncs with server)
   const countdownEndTime = statusData?.phaseEndTime || gameState?.registrationEnds || 0;
