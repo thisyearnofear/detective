@@ -21,33 +21,36 @@ function requiresThinking(message: string, userMessage?: string): boolean {
   if (userMessage?.includes("?")) {
     return true;
   }
-  
+
   // If response contains opinion markers, more thinking
   const opinionMarkers = /\b(think|believe|imo|tbh|honestly|actually|disagree|agree)\b/i;
   if (opinionMarkers.test(message)) {
     return true;
   }
-  
+
   // If response is longer (usually more thoughtful), needs thinking
   if (message.length > 100) {
     return true;
   }
-  
+
   return false;
 }
 
 /**
- * Calculate typing delay in milliseconds
+ * Calculate typing delay in milliseconds with significant variance
  * 
  * STRUCTURE:
- * 1. Thinking time: 1.5-4s (personality-dependent)
- *    - terse: 1.5-2.5s (quick decisions)
- *    - conversational: 2-3.5s (balanced)
- *    - verbose: 2.5-4s (thoughtful)
- * 2. Typing time: 50-400ms (message-dependent)
- *    - Base: 50ms
- *    - Characters: ~30ms per 50 chars (realistic typing speed ~100 WPM)
- *    - Emojis: +200ms per emoji (slower to select emojis)
+ * 1. "Reading" time: Variable pause before typing starts (1-4s)
+ *    - Simulates user reading the message before responding
+ * 2. Thinking time: 1.5-6s (personality-dependent, with random variance)
+ *    - terse: 1.5-3s (quick but varies)
+ *    - conversational: 2-5s (natural range)
+ *    - verbose: 3-6s (more thoughtful)
+ * 3. Typing time: 100-600ms (message-dependent)
+ *    - Base: 100ms 
+ *    - Characters: ~40ms per 50 chars (realistic typing ~80 WPM)
+ *    - Emojis: +300ms per emoji (takes time to find/select)
+ * 4. Random "distraction" delay: 0-2s (simulates multitasking)
  * 
  * @param message The message to be "typed"
  * @param communicationStyle The bot's style: "terse" | "conversational" | "verbose"
@@ -58,48 +61,62 @@ export function calculateTypingDelay(
   communicationStyle: "terse" | "conversational" | "verbose" = "conversational",
   userMessage?: string,
 ): number {
-  // THINKING TIME (varies by personality)
+  // READING TIME - simulate reading the user's message first
+  // Longer messages from user = longer reading time
+  const userMessageLength = userMessage?.length || 20;
+  const readingBase = 500 + Math.random() * 1000; // 500-1500ms base
+  const readingTime = readingBase + Math.min(userMessageLength * 15, 1500); // +15ms per char, max 1.5s
+
+  // THINKING TIME (varies by personality with HIGH variance)
   let thinkingTime: number;
   const shouldThink = requiresThinking(message, userMessage);
-  
+
+  // Add randomness multiplier (0.6 to 1.6 - significant variance)
+  const varianceMultiplier = 0.6 + Math.random() * 1.0;
+
   if (!shouldThink) {
-    // Quick reaction (emoji responses, short agreements) - minimal thinking
-    thinkingTime = 200 + Math.random() * 400; // 200-600ms
+    // Quick reaction - still has some variance
+    thinkingTime = (400 + Math.random() * 1200) * varianceMultiplier; // 240-960ms to 640-2560ms
   } else {
-    // Complex response - personality-dependent thinking time
+    // Complex response - personality-dependent with variance
     switch (communicationStyle) {
       case "terse":
-        // Fast thinker - quick decisions
-        thinkingTime = 1500 + Math.random() * 1000; // 1.5-2.5s
+        // Fast but not robotic
+        thinkingTime = (1500 + Math.random() * 1500) * varianceMultiplier; // 900-1800ms to 2400-4800ms  
         break;
       case "verbose":
-        // Thoughtful communicator - takes time to compose
-        thinkingTime = 2500 + Math.random() * 1500; // 2.5-4s
+        // Thoughtful - takes their time
+        thinkingTime = (3000 + Math.random() * 2000) * varianceMultiplier; // 1800-3000ms to 4800-8000ms
         break;
       case "conversational":
       default:
-        // Balanced - medium thinking time
-        thinkingTime = 2000 + Math.random() * 1500; // 2-3.5s
+        // Natural range
+        thinkingTime = (2000 + Math.random() * 2500) * varianceMultiplier; // 1200-2700ms to 3200-7200ms
     }
   }
-  
-  // TYPING TIME (how long to simulate the typing animation)
-  const CHAR_TYPING_SPEED = 30; // ms per 50 characters (~100 WPM)
-  const EMOJI_DELAY = 200; // ms per emoji (slower to select/type)
-  
+
+  // TYPING TIME (simulation of actual typing)
+  const CHAR_TYPING_SPEED = 40; // ms per 50 characters (~80 WPM, slightly slower)
+  const EMOJI_DELAY = 300; // ms per emoji
+
   const charTypingTime = Math.floor((message.length / 50) * CHAR_TYPING_SPEED);
   const emojiCount = countEmojis(message);
   const emojiTypingTime = emojiCount * EMOJI_DELAY;
-  
-  // Base typing simulation (minimum 50ms)
-  const baseTypingTime = 50;
-  const typingTime = baseTypingTime + charTypingTime + emojiTypingTime;
-  
-  // TOTAL DELAY
-  const totalDelay = thinkingTime + typingTime;
-  
-  // Cap at 7 seconds max (very long, emoji-heavy responses with verbose personality)
-  return Math.min(totalDelay, 7000);
+
+  // Base typing simulation (minimum 100ms)
+  const baseTypingTime = 100;
+  const typingTime = (baseTypingTime + charTypingTime + emojiTypingTime) * (0.8 + Math.random() * 0.4);
+
+  // DISTRACTION DELAY - random pause simulating multitasking
+  // 30% chance of a "distraction" adding 0-2 seconds
+  const distractionDelay = Math.random() < 0.3 ? Math.random() * 2000 : 0;
+
+  // TOTAL DELAY with all components
+  const totalDelay = readingTime + thinkingTime + typingTime + distractionDelay;
+
+  // Cap at 10 seconds max, but allow more variance than before
+  // Minimum 1.5 seconds to avoid seeming too robotic
+  return Math.max(1500, Math.min(totalDelay, 10000));
 }
 
 /**

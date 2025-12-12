@@ -5,7 +5,10 @@ import useSWR from "swr";
 import ChatWindow from "./ChatWindow";
 import Leaderboard from "./Leaderboard";
 import LoadingOverlay from "./LoadingOverlay";
+import MobileSwipeableChat from "./MobileSwipeableChat";
+import OnboardingModal, { useOnboarding } from "./OnboardingModal";
 import { useModal } from "@/hooks/useModal";
+import { useViewport } from "@/lib/viewport";
 import { fetcherWithGameNotLive } from "@/lib/fetcher";
 import { syncTimeOffset, resetTimeOffset } from "@/lib/timeSynchronization";
 import { UserProfile } from "@/lib/types";
@@ -41,6 +44,9 @@ type RoundResult = {
 
 export default function MultiChatContainer({ fid, onGameFinish }: Props) {
   const { show: showModal } = useModal();
+  const { isMobile } = useViewport();
+  const { shouldShowOnboarding } = useOnboarding();
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [votes, setVotes] = useState<VoteState>({});
   const [newMatchIds, setNewMatchIds] = useState<Set<string>>(new Set());
   const [gameFinished, setGameFinished] = useState(false);
@@ -76,9 +82,9 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
 
   // Determine polling interval based on game state
   // ENHANCEMENT: Keep minimal polling during post-game to detect cycleId transition
-  const refreshInterval = isTransitioning 
-    ? POLLING_INTERVALS.ROUND_TRANSITION 
-    : gameFinished 
+  const refreshInterval = isTransitioning
+    ? POLLING_INTERVALS.ROUND_TRANSITION
+    : gameFinished
       ? POLLING_INTERVALS.POST_GAME_WAIT  // Keep polling to detect new cycle
       : POLLING_INTERVALS.ACTIVE_GAME;
 
@@ -286,7 +292,7 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
       matchData?.matches?.length === 0
     ) {
       // Show reveal modal with 5s auto-close
-      showModal('reveal', 
+      showModal('reveal',
         {
           reveals: batchReveals,
           stats: {
@@ -298,7 +304,7 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
           },
           nextRoundNumber: matchData.currentRound,
         },
-        { 
+        {
           autoClose: 5000,
           onClose: () => setBatchReveals([])
         }
@@ -310,7 +316,7 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
   const handleTypingStart = useCallback((matchId: string, duration: number) => {
     const expiresAt = Date.now() + duration;
     typingStateRef.current[matchId] = { expiresAt };
-    
+
     // Update display state
     setTypingIndicators((prev) => ({ ...prev, [matchId]: true }));
 
@@ -471,9 +477,9 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
 
       // Check if this is actually a different match or just a re-render
       const messageCountChanged = (previousMatch?.messages?.length || 0) !== (currentMatch?.messages?.length || 0);
-      const messageContentChanged = messageCountChanged || 
+      const messageContentChanged = messageCountChanged ||
         JSON.stringify(previousMatch?.messages) !== JSON.stringify(currentMatch?.messages);
-      
+
       if (
         !previousMatch ||
         previousMatch.id !== currentMatch.id ||
@@ -572,7 +578,7 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
           setVotes({});
           mutate();
         }}
-        />
+      />
     );
   }
 
@@ -596,97 +602,149 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
   // Note: New message tracking would need WebSocket or more sophisticated tracking
   // for real new message detection - currently not implemented
 
+  // Check onboarding on mount
+  useEffect(() => {
+    if (shouldShowOnboarding()) {
+      setShowOnboarding(true);
+    }
+  }, [shouldShowOnboarding]);
+
+  // Handle onboarding completion
+  const handleOnboardingComplete = useCallback(() => {
+    setShowOnboarding(false);
+  }, []);
+
   return (
-    <div className="space-y-3 lg:space-y-4">
-      {/* Round indicator - more compact on mobile */}
-      <div className="text-center mb-3 lg:mb-4">
-        <span className="bg-slate-700 px-3 py-1.5 rounded-full text-xs lg:text-sm text-blue-300">
-          Round {Math.min(currentRound, totalRounds)} of {totalRounds}
-        </span>
-        {/* Hide player pool info on mobile to save space */}
-        {matchData?.totalPlayers && (
-          <p className="hidden lg:block text-xs text-gray-500 mt-3">
-            {matchData.totalPlayers} players in this game
-          </p>
-        )}
-      </div>
+    <>
+      {/* Onboarding Modal */}
+      {showOnboarding && (
+        <OnboardingModal
+          onComplete={handleOnboardingComplete}
+        />
+      )}
 
-      {/* Single responsive layout - grid on desktop, stack on mobile */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5">
-        {[1, 2].map((slotNumber) => {
-          const match = stableSlots[slotNumber];
-
-          if (!match) {
-            return (
-              <div
-                key={slotNumber}
-                className="bg-slate-800/50 rounded-lg p-4 lg:p-6 border-2 border-dashed border-slate-700"
-              >
-                <div className="text-center text-gray-500">
-                  <p className="text-sm lg:text-lg font-medium lg:mb-2">Chat Slot {slotNumber}</p>
-                  <p className="text-xs lg:text-sm">Waiting for opponent...</p>
-                </div>
-              </div>
-            );
-          }
-
-          const currentVote = votes[match.id] || "REAL";
-          const voteColor =
-            currentVote === "BOT" ? "border-red-500/50" : "border-green-500/50";
-
-          // Get stable handlers to prevent ChatWindow remounting
-          const stableHandlers = getStableHandlers(match.id);
-
-          return (
-            <div
-              key={match.id}
-              className={`relative border-l-4 ${voteColor} transition-colors duration-300 rounded-lg overflow-hidden`}
-            >
-              {/* Chat number badge - responsive sizing */}
-              <div className="absolute top-2 right-2 lg:-top-2 lg:-right-2 z-10 bg-blue-600 lg:bg-blue-600 backdrop-blur-sm lg:backdrop-blur-none rounded-full w-6 h-6 lg:w-8 lg:h-8 flex items-center justify-center text-white font-bold text-xs lg:text-sm opacity-80 lg:opacity-100">
-                {slotNumber}
-              </div>
-
-              {/* Chat content - single component with responsive props */}
-              <ChatWindow
-                fid={fid}
-                match={match}
-                currentVote={currentVote}
-                onVoteToggle={stableHandlers.onVoteToggle}
-                onComplete={stableHandlers.onComplete}
-                variant="minimal"
-                showVoteToggle={true}
-                isNewMatch={newMatchIds.has(match.id)}
-                onRefresh={async () => {
-                  await mutate();
-                }}
-                isOpponentTyping={typingIndicators[match.id] || false}
-                onTypingStart={handleTypingStart}
-              />
+      {/* Main Game UI */}
+      <div className="space-y-3 lg:space-y-4">
+        {/* Mobile Swipeable View */}
+        {isMobile ? (
+          <MobileSwipeableChat
+            fid={fid}
+            slots={stableSlots}
+            votes={votes}
+            newMatchIds={newMatchIds}
+            typingIndicators={typingIndicators}
+            onVoteToggle={handleVoteToggle}
+            onMatchComplete={handleMatchComplete}
+            onTypingStart={handleTypingStart}
+            onRefresh={async () => {
+              await mutate();
+            }}
+            currentRound={currentRound}
+            totalRounds={totalRounds}
+          />
+        ) : (
+          <>
+            {/* Desktop: Round indicator */}
+            <div className="text-center mb-3 lg:mb-4">
+              <span className="bg-slate-700 px-3 py-1.5 rounded-full text-xs lg:text-sm text-blue-300">
+                Round {Math.min(currentRound, totalRounds)} of {totalRounds}
+              </span>
+              {matchData?.totalPlayers && (
+                <p className="text-xs text-gray-500 mt-3">
+                  {matchData.totalPlayers} players in this game
+                </p>
+              )}
             </div>
-          );
-        })}
-      </div>
 
-      {/* Instructions - hidden on mobile to save space */}
-      <div className="hidden lg:block bg-slate-900/50 rounded-xl p-4 mt-6 border border-slate-700/50 shadow-lg">
-        <div className="text-center">
-          <h3 className="text-sm font-semibold text-slate-200 mb-3 flex items-center justify-center gap-2">
-            <span className="text-lg">💡</span>
-            Quick Tips
-          </h3>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-300 leading-relaxed">
-            <div>• 1 min rounds - decide fast!</div>
-            <div>• Toggle vote anytime</div>
-            <div>• Vote locks at timer end</div>
-            <div>• Manage both chats</div>
-            <div>• Use 🦄 or :unicorn:</div>
-            <div>• 4 opponents total</div>
+            {/* Desktop: Side-by-side chat grid */}
+            <div className="grid grid-cols-2 gap-5">
+              {[1, 2].map((slotNumber) => {
+                const match = stableSlots[slotNumber];
+
+                if (!match) {
+                  return (
+                    <div
+                      key={slotNumber}
+                      className="bg-slate-800/50 rounded-lg p-6 border-2 border-dashed border-slate-700"
+                    >
+                      <div className="text-center text-gray-500">
+                        <p className="text-lg font-medium mb-2">Chat Slot {slotNumber}</p>
+                        <p className="text-sm">Waiting for opponent...</p>
+                      </div>
+                    </div>
+                  );
+                }
+
+                const currentVote = votes[match.id] || "REAL";
+                const voteColor =
+                  currentVote === "BOT" ? "border-red-500/50" : "border-green-500/50";
+
+                // Get stable handlers to prevent ChatWindow remounting
+                const stableHandlers = getStableHandlers(match.id);
+
+                return (
+                  <div
+                    key={match.id}
+                    className={`relative border-l-4 ${voteColor} transition-colors duration-300 rounded-lg overflow-hidden`}
+                  >
+                    {/* Chat number badge */}
+                    <div className="absolute -top-2 -right-2 z-10 bg-blue-600 rounded-full w-8 h-8 flex items-center justify-center text-white font-bold text-sm">
+                      {slotNumber}
+                    </div>
+
+                    {/* Chat content */}
+                    <ChatWindow
+                      fid={fid}
+                      match={match}
+                      currentVote={currentVote}
+                      onVoteToggle={stableHandlers.onVoteToggle}
+                      onComplete={stableHandlers.onComplete}
+                      variant="minimal"
+                      showVoteToggle={true}
+                      isNewMatch={newMatchIds.has(match.id)}
+                      onRefresh={async () => {
+                        await mutate();
+                      }}
+                      isOpponentTyping={typingIndicators[match.id] || false}
+                      onTypingStart={handleTypingStart}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {/* Quick Tips - NOW VISIBLE ON ALL DEVICES */}
+        <div className="bg-gradient-to-r from-slate-900/80 to-slate-800/80 rounded-xl p-4 mt-4 border border-slate-600/50 shadow-lg backdrop-blur-sm">
+          <div className="text-center">
+            <h3 className="text-sm font-semibold text-white mb-3 flex items-center justify-center gap-2">
+              <span className="text-lg">🎯</span>
+              How to Play
+              <button
+                onClick={() => setShowOnboarding(true)}
+                className="ml-2 text-xs bg-blue-600 hover:bg-blue-500 px-2 py-1 rounded-full transition-colors"
+              >
+                Full Guide
+              </button>
+            </h3>
+            <div className="flex flex-wrap justify-center gap-3 text-xs">
+              <div className="bg-slate-800/50 rounded-full px-3 py-1.5 border border-slate-600/50">
+                <span className="text-green-400">👤</span> = Human | <span className="text-red-400">🤖</span> = Bot
+              </div>
+              <div className="bg-slate-800/50 rounded-full px-3 py-1.5 border border-slate-600/50">
+                ⏱️ 60 sec rounds
+              </div>
+              <div className="bg-slate-800/50 rounded-full px-3 py-1.5 border border-slate-600/50">
+                🔄 Tap toggle to switch vote
+              </div>
+              <div className="bg-slate-800/50 rounded-full px-3 py-1.5 border border-slate-600/50">
+                🔒 Vote locks at timer end
+              </div>
+            </div>
           </div>
         </div>
       </div>
-
-
-    </div>
+    </>
   );
 }
