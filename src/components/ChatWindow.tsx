@@ -283,9 +283,9 @@ export default function ChatWindow({
         {match.endTime && !isTimeUp && (
           <ProgressRingTimer
             duration={60}
-             endTime={match.endTime}
-             onComplete={handleTimeUp}
-             compact={isFarcasterFrame || variant !== "full"}
+            endTime={match.endTime}
+            onComplete={handleTimeUp}
+            compact={isFarcasterFrame || variant !== "full"}
           />
         )}
       </div>
@@ -334,14 +334,14 @@ export default function ChatWindow({
             <div className="text-center text-gray-500">No messages yet...</div>
           </div>
         ) : (
-           <VirtualizedMessageList
-             messages={messages || []}
-             currentUserId={fid}
-             containerHeight={styles.chatHeight}
-             opponentColors={opponentColors || undefined}
-             isOpponentTyping={isOpponentTyping}
-           />
-         )}
+          <VirtualizedMessageList
+            messages={messages || []}
+            currentUserId={fid}
+            containerHeight={styles.chatHeight}
+            opponentColors={opponentColors || undefined}
+            isOpponentTyping={isOpponentTyping}
+          />
+        )}
       </div>
 
       {isTimeUp || match.voteLocked ? (
@@ -354,29 +354,66 @@ export default function ChatWindow({
           </p>
         </div>
       ) : (
-        <div className={isFarcasterFrame ? responsive.spacing.small : responsive.spacing.medium}>
-          <input
-            className={`grow bg-slate-700 rounded-lg ${isFarcasterFrame ? "px-2 py-1.5" : "px-4 py-2"
-              } text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500`}
-            style={{
-              fontSize: '16px', // CRITICAL: Prevents mobile zoom
-              WebkitAppearance: 'none',
-              borderRadius: '0.5rem'
-            }}
-            value={input}
-            onChange={handleInputChange}
-            onKeyPress={(e) => e.key === "Enter" && handleSend()}
-            placeholder={isFarcasterFrame ? "Type message..." : "Type your message... (try :unicorn: or :fire:)"}
-          />
-          {!isFarcasterFrame && <EmojiPicker onEmojiSelect={handleEmojiSelect} isCompact={variant !== "full"} />}
-          <button
-            className={`bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white font-bold ${isFarcasterFrame ? "py-1.5 px-3" : "py-2 px-4"
-              } ${isFarcasterFrame ? responsive.text.small : responsive.text.medium} rounded-lg transition-colors`}
-            onClick={handleSend}
-            disabled={!input.trim()}
-          >
-            Send
-          </button>
+        <div className={`${isFarcasterFrame ? responsive.spacing.small : responsive.spacing.medium}`}>
+          {/* Full-width flex input row */}
+          <div className="flex items-center gap-2 w-full">
+            {/* Input field - takes full remaining width */}
+            <div className="flex-1 relative">
+              <input
+                className={`w-full bg-slate-700/80 border border-slate-600 rounded-xl ${isFarcasterFrame ? "px-3 py-2" : "px-4 py-3"
+                  } text-white placeholder-gray-400 
+                focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                hover:border-slate-500 transition-all duration-200`}
+                style={{
+                  fontSize: '16px', // CRITICAL: Prevents mobile zoom
+                  WebkitAppearance: 'none',
+                }}
+                value={input}
+                onChange={handleInputChange}
+                onKeyPress={(e) => e.key === "Enter" && handleSend()}
+                placeholder={isFarcasterFrame ? "Type message..." : "Type your message..."}
+              />
+            </div>
+
+            {/* Emoji picker */}
+            {!isFarcasterFrame && (
+              <EmojiPicker onEmojiSelect={handleEmojiSelect} isCompact={variant !== "full"} />
+            )}
+
+            {/* Send button - more prominent with icon */}
+            <button
+              className={`flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 
+                hover:from-blue-500 hover:to-blue-600 disabled:from-slate-600 disabled:to-slate-700 
+                disabled:cursor-not-allowed text-white font-semibold ${isFarcasterFrame ? "py-2 px-3" : "py-3 px-5"
+                } rounded-xl transition-all duration-200 shadow-lg shadow-blue-500/20 
+                hover:shadow-blue-500/40 disabled:shadow-none active:scale-95`}
+              onClick={handleSend}
+              disabled={!input.trim()}
+            >
+              {/* Send icon */}
+              <svg
+                className={`${isFarcasterFrame ? "w-4 h-4" : "w-5 h-5"}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                />
+              </svg>
+              {!isFarcasterFrame && <span>Send</span>}
+            </button>
+          </div>
+
+          {/* Shortcode hint - subtle */}
+          {!isFarcasterFrame && (
+            <p className="text-xs text-gray-500 mt-2 text-center">
+              Try typing <code className="bg-slate-700 px-1 rounded">:unicorn:</code> or <code className="bg-slate-700 px-1 rounded">:fire:</code>
+            </p>
+          )}
         </div>
       )}
     </div>
