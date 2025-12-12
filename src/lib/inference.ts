@@ -629,11 +629,12 @@ ${conversationContextString ? "\n" + conversationContextString : ""}
 CRITICAL GUIDELINES:
 ✓ MIMIC THEIR ACTUAL VOICE: Use phrases and tone FROM THEIR POSTS above
 ✓ STAY ON-TOPIC: Answer what they asked, in their style
-✓ BE CONCISE: Keep it SHORT - no corporate speak
+✓ BE ULTRA CONCISE: 1-2 sentences MAX. Keep it SHORT like real texting
 ✓ BE AUTHENTIC: Sound like them, not an AI or chatbot
 ✓ VARY RESPONSES: Never repeat the same phrase twice in 3 turns
 ✓ AVOID TEMPLATES: No "seems like a good time to", "I appreciate", "Great point", "let me know"
 ✓ NO HALLUCINATIONS: Don't make up facts or topics they didn't introduce
+✓ NEVER USE @MENTIONS: Do NOT mention or tag anyone with @ - this is a private DM
 
 RESPONSE PATTERNS FROM THEIR POSTS:
 ${recentPosts.slice(0, 3).map((p) => `- "${p}"`).join("\n")}
@@ -644,9 +645,11 @@ AVOID (AI/Bot language):
 - "That's interesting!", "I can help with that", "How can I assist"
 - "seems like a good time to discuss", "New:", "Catching Up"
 - Generic agreement without substance
+- @mentions of any username (this is a DM, not a public post)
+- Long multi-paragraph responses
 
 Context: ${userIntent} conversation
-Now respond as @${bot.username} would - ANSWER THEIR ACTUAL QUESTION in your voice, keep it SHORT, and make it feel spontaneous:`;
+Now respond as @${bot.username} would - ANSWER BRIEFLY in your voice (1-2 sentences max), make it feel spontaneous:`;
 
   return {
     prompt,
@@ -732,21 +735,22 @@ export async function generateBotResponse(
   const commonPhrases = extractCommonPhrases(recentPosts);
 
   // Dynamically set max_tokens based on posting patterns
-  let maxTokens = 100;
+  // REDUCED: Keep responses shorter for more natural feel
+  let maxTokens = 60;
   if (lengthDistribution.dominantPattern === "short") {
-    maxTokens = 50;
+    maxTokens = 30; // Very terse
   } else if (lengthDistribution.dominantPattern === "long") {
-    maxTokens = 150;
+    maxTokens = 80; // Still reasonable
   } else if (lengthDistribution.dominantPattern === "medium") {
-    maxTokens = 100;
+    maxTokens = 60;
   } else {
     const rand = Math.random();
     if (rand < lengthDistribution.shortPercentage / 100) {
-      maxTokens = 50;
+      maxTokens = 30;
     } else if (rand < (lengthDistribution.shortPercentage + lengthDistribution.mediumPercentage) / 100) {
-      maxTokens = 100;
+      maxTokens = 60;
     } else {
-      maxTokens = 150;
+      maxTokens = 80;
     }
   }
 
@@ -876,20 +880,24 @@ function processBotResponse(
     // If bot doesn't use emojis, don't add any
   }
 
+  // Strip any @ mentions - bots should NEVER use these in DMs
+  botResponse = botResponse.replace(/@[a-zA-Z0-9_]+/g, "").replace(/\s+/g, " ").trim();
+  
   // Ensure it stays within typical character limits for this person
-  let characterLimit = 240;
+  // REDUCED LIMITS: Keep responses short and human-like
+  let characterLimit = 120;
   if (lengthDistribution.dominantPattern === "short") {
-    characterLimit = 50;
+    characterLimit = 60; // Very brief responses
   } else if (lengthDistribution.dominantPattern === "long") {
-    characterLimit = 200;
+    characterLimit = 150; // Still cap it reasonably 
   } else if (lengthDistribution.dominantPattern === "medium") {
-    characterLimit = 150;
+    characterLimit = 100;
   }
 
   if (botResponse.length > characterLimit) {
     botResponse = botResponse.substring(0, characterLimit - 3);
     const lastSpace = botResponse.lastIndexOf(" ");
-    if (lastSpace > characterLimit * 0.7) {
+    if (lastSpace > characterLimit * 0.6) {
       botResponse = botResponse.substring(0, lastSpace);
     }
   }
