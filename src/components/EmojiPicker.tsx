@@ -18,7 +18,6 @@ export default function EmojiPicker({
   const handleEmojiClick = (emoji: string) => {
     onEmojiSelect(emoji);
     // Keep picker open for multiple selections
-    // User can close by clicking the button again
   };
 
   const handleTextClick = (text: string) => {
@@ -26,90 +25,102 @@ export default function EmojiPicker({
     setIsOpen(false);
   };
 
-  const buttonSize = isCompact ? "p-1.5" : "p-2";
-  const pickerPosition = isCompact ? "bottom-10 right-0" : "bottom-12 right-0";
+  const buttonSize = isCompact ? "p-2" : "p-2.5";
 
   return (
     <div className="relative">
-      {/* Emoji button */}
+      {/* Emoji trigger button - improved styling */}
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`${buttonSize} rounded-lg bg-slate-700 hover:bg-slate-600 text-gray-300 hover:text-white transition-all ${isOpen ? "bg-slate-600 text-white ring-2 ring-blue-500" : ""
+        className={`${buttonSize} rounded-xl bg-slate-700/80 border border-slate-600 
+          hover:bg-slate-600 hover:border-slate-500 text-gray-300 hover:text-white 
+          transition-all duration-200 ${isOpen ? "bg-slate-600 text-white ring-2 ring-blue-500 border-transparent" : ""
           }`}
         title="Add emoji"
       >
-        <span className={isCompact ? "text-sm" : "text-base"}>
-          {isOpen ? "✕" : "🦄"}
+        <span className={isCompact ? "text-lg" : "text-xl"}>
+          {isOpen ? "✕" : "😀"}
         </span>
       </button>
 
-      {/* Picker panel */}
+      {/* Picker panel - centered above button */}
       {isOpen && (
         <div
-          className={`absolute ${pickerPosition} z-20 bg-slate-800 rounded-lg shadow-xl border border-slate-700 p-3 min-w-[280px] animate-in fade-in slide-in-from-bottom-2 duration-200`}
+          className={`absolute z-20 bg-slate-800/95 backdrop-blur-sm rounded-2xl shadow-2xl 
+            border border-slate-600/50 p-4 animate-in fade-in slide-in-from-bottom-2 duration-200
+            ${isCompact ? "w-[280px]" : "w-[320px]"}`}
+          style={{
+            bottom: "100%",
+            left: "50%",
+            transform: "translateX(-50%)",
+            marginBottom: "8px",
+          }}
         >
           {/* Tab buttons */}
-          <div className="flex gap-1 mb-3">
+          <div className="flex gap-2 mb-4 justify-center">
             <button
               onClick={() => setShowShortcuts(false)}
-              className={`px-3 py-1 rounded text-xs font-medium transition-colors ${!showShortcuts
-                  ? "bg-blue-600 text-white"
-                  : "bg-slate-700 text-gray-400 hover:text-white"
+              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 ${!showShortcuts
+                  ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg"
+                  : "bg-slate-700 text-gray-400 hover:text-white hover:bg-slate-600"
                 }`}
             >
-              Emojis
+              😀 Emojis
             </button>
             <button
               onClick={() => setShowShortcuts(true)}
-              className={`px-3 py-1 rounded text-xs font-medium transition-colors ${showShortcuts
-                  ? "bg-blue-600 text-white"
-                  : "bg-slate-700 text-gray-400 hover:text-white"
+              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 ${showShortcuts
+                  ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg"
+                  : "bg-slate-700 text-gray-400 hover:text-white hover:bg-slate-600"
                 }`}
             >
-              Shortcuts
+              ⌨️ Shortcuts
             </button>
           </div>
 
-          {/* Emoji grid */}
+          {/* Emoji grid - 6 columns for better mobile fit */}
           {!showShortcuts && (
             <>
-              <div className="grid grid-cols-8 gap-1 mb-2">
+              <div className="grid grid-cols-6 gap-1">
                 {FARCASTER_EMOJIS.map((item) => (
                   <button
                     key={item.shortcode}
                     onClick={() => handleEmojiClick(item.emoji)}
-                    className="p-2 rounded hover:bg-slate-700 transition-colors text-lg leading-none"
+                    className="p-2.5 rounded-xl hover:bg-slate-700 active:scale-90 
+                      transition-all duration-150 text-xl leading-none flex items-center justify-center"
                     title={item.label}
                   >
                     {item.emoji}
                   </button>
                 ))}
               </div>
-              <div className="text-xs text-gray-500 text-center">
-                Click to insert • Click multiple for more
-              </div>
+              <p className="text-xs text-gray-500 text-center mt-3">
+                Tap to insert • Multiple allowed
+              </p>
             </>
           )}
 
           {/* Text shortcuts */}
           {showShortcuts && (
             <>
-              <div className="grid grid-cols-3 gap-1 mb-2">
+              <div className="grid grid-cols-3 gap-2">
                 {TEXT_SHORTCUTS.map((item) => (
                   <button
                     key={item.text}
                     onClick={() => handleTextClick(item.text)}
-                    className="px-3 py-2 rounded bg-slate-700 hover:bg-slate-600 transition-colors text-sm font-mono"
+                    className="px-3 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 
+                      active:scale-95 transition-all duration-150 text-sm font-mono 
+                      text-gray-200 hover:text-white"
                     title={item.label}
                   >
                     {item.text}
                   </button>
                 ))}
               </div>
-              <div className="text-xs text-gray-500 text-center">
-                Common Farcaster phrases
-              </div>
+              <p className="text-xs text-gray-500 text-center mt-3">
+                Farcaster culture phrases
+              </p>
             </>
           )}
         </div>
