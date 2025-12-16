@@ -1,6 +1,5 @@
 import { Player, UserProfile } from '@/lib/types';
 import { GAME_CONSTANTS } from '@/lib/gameConstants';
-import LoadingOverlay from '@/components/LoadingOverlay';
 
 type Props = {
     currentPlayer: UserProfile;
@@ -37,7 +36,6 @@ export default function Lobby({
 
     return (
         <div className="space-y-6">
-            <LoadingOverlay variant="registration" isVisible={isLoading} inline />
 
             {/* Registration Status Header */}
             <div className="text-center">

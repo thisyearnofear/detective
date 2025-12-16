@@ -8,11 +8,12 @@ import { useViewport } from './viewport';
 
 // TOUCH GESTURE DETECTION
 export interface TouchGestureEvent {
-  type: 'swipe' | 'tap' | 'longpress' | 'pinch';
+  type: 'swipe' | 'tap' | 'longpress' | 'pinch' | 'swipe-progress';
   direction?: 'left' | 'right' | 'up' | 'down';
   distance?: number;
   duration?: number;
   scale?: number;
+  progress?: number; // 0-100 for swipe progress feedback
 }
 
 export function useTouchGestures(
@@ -41,6 +42,26 @@ export function useTouchGestures(
       onGesture({ type: 'longpress' });
     }, longPressDelay);
   }, [onGesture, longPressDelay]);
+
+  const handleTouchMove = useCallback((e: TouchEvent) => {
+    if (!touchStartRef.current) return;
+
+    const touch = e.touches[0];
+    const deltaX = touch.clientX - touchStartRef.current.x;
+    const deltaY = touch.clientY - touchStartRef.current.y;
+    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+    // Only emit swipe progress for horizontal swipes
+    if (Math.abs(deltaX) > Math.abs(deltaY) && distance > 5) {
+      const progress = Math.min((distance / swipeThreshold) * 100, 150);
+      onGesture({
+        type: 'swipe-progress',
+        direction: deltaX > 0 ? 'right' : 'left',
+        progress,
+        distance,
+      });
+    }
+  }, [onGesture, swipeThreshold]);
 
   const handleTouchEnd = useCallback((e: TouchEvent) => {
     if (longPressTimerRef.current) {
@@ -82,7 +103,7 @@ export function useTouchGestures(
     touchStartRef.current = null;
   }, [onGesture, swipeThreshold, tapTimeout]);
 
-  return { handleTouchStart, handleTouchEnd };
+  return { handleTouchStart, handleTouchMove, handleTouchEnd };
 }
 
 // HAPTIC FEEDBACK

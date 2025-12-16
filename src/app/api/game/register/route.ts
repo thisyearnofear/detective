@@ -2,20 +2,39 @@
 import { NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
 import { getFarcasterUserData } from "@/lib/neynar";
+import { verifyArbitrumTx, getArbitrumConfig } from "@/lib/arbitrumVerification";
 
 /**
  * API route to register a user for the current game cycle.
- * Expects a POST request with a JSON body containing the user's `fid`.
+ * 
+ * Request body:
+ * {
+ *   fid: number,                    // Farcaster ID (required)
+ *   arbitrumTxHash?: string,        // Arbitrum TX hash (required if Arbitrum gating enabled)
+ *   arbitrumWalletAddress?: string, // Wallet that sent TX (required if Arbitrum gating enabled)
+ * }
+ * 
+ * FLOW:
+ * 1. Validate request body
+ * 2. Check game state (REGISTRATION phase only)
+ * 3. Verify Arbitrum TX (if enabled)
+ * 4. Fetch Farcaster user data (Neynar quality check)
+ * 5. Register player with game manager
  */
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { fid } = body;
+    const { fid, arbitrumTxHash, arbitrumWalletAddress } = body;
 
-    if (!fid || typeof fid !== "number") {
-      return NextResponse.json({ error: "Invalid FID provided." }, { status: 400 });
+    // ========== STEP 1: VALIDATE REQUEST ==========
+    if (!fid || typeof fid !== "number" || fid <= 0) {
+      return NextResponse.json(
+        { error: "Invalid FID provided. FID must be a positive integer." },
+        { status: 400 }
+      );
     }
 
+    // ========== STEP 2: CHECK GAME STATE ==========
     const gameState = await gameManager.getGameState();
     if (gameState.state !== "REGISTRATION") {
       return NextResponse.json(
@@ -24,17 +43,50 @@ export async function POST(request: Request) {
       );
     }
 
-    // Fetch all user data from Neynar, including validation, profile, and casts
+    // ========== STEP 3: VERIFY ARBITRUM TX (if enabled) ==========
+    const arbitrumConfig = getArbitrumConfig();
+    if (arbitrumConfig.enabled) {
+      // Arbitrum gating is required
+      if (!arbitrumTxHash || typeof arbitrumTxHash !== "string") {
+        return NextResponse.json(
+          { error: "Arbitrum TX hash required to register." },
+          { status: 400 }
+        );
+      }
+
+      if (!arbitrumWalletAddress || typeof arbitrumWalletAddress !== "string") {
+        return NextResponse.json(
+          { error: "Arbitrum wallet address required to register." },
+          { status: 400 }
+        );
+      }
+
+      // Verify TX on-chain
+      const txValid = await verifyArbitrumTx(arbitrumTxHash, arbitrumWalletAddress, fid);
+      if (!txValid) {
+        return NextResponse.json(
+          {
+            error: "Arbitrum TX verification failed. Please check that the transaction was sent to the correct contract with the correct FID.",
+            txHash: arbitrumTxHash,
+          },
+          { status: 403 }
+        );
+      }
+
+      console.log(`[Registration] Arbitrum TX verified for FID ${fid}: ${arbitrumTxHash}`);
+    }
+
+    // ========== STEP 4: FETCH FARCASTER USER DATA ==========
     const { isValid, userProfile, recentCasts, style } = await getFarcasterUserData(fid);
 
     if (!isValid || !userProfile) {
       return NextResponse.json(
-        { error: "User does not meet the quality criteria to join." },
+        { error: "User does not meet the quality criteria to join. (Neynar score too low)" },
         { status: 403 }
       );
     }
 
-    // Register the player and create the corresponding bot in the game state
+    // ========== STEP 5: REGISTER PLAYER ==========
     const player = await gameManager.registerPlayer(userProfile, recentCasts, style);
 
     if (!player) {
@@ -48,11 +100,12 @@ export async function POST(request: Request) {
       success: true,
       message: "Player registered successfully.",
       player,
+      arbitrumVerified: arbitrumConfig.enabled,
     });
   } catch (error) {
-    console.error("Error in game registration:", error);
+    console.error("[Registration] Error in game registration:", error);
     return NextResponse.json(
-      { error: "An unexpected error occurred." },
+      { error: "An unexpected error occurred during registration." },
       { status: 500 }
     );
   }

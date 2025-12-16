@@ -4,10 +4,12 @@ import { useState, useEffect } from 'react';
 import useSWR from 'swr';
 import { Player, UserProfile } from '@/lib/types';
 import { useCountdown } from '@/hooks/useCountdown';
+import { useRegistrationFlow } from '@/hooks/useRegistrationFlow';
 import { fetcher } from '@/lib/fetcher';
 import { GAME_CONSTANTS } from '@/lib/gameConstants';
 import Lobby from './phases/Lobby';
 import ErrorCard from '../ErrorCard';
+import ArbitrumRegistrationModal from '../ArbitrumRegistrationModal';
 
 type Props = {
   currentPlayer: UserProfile;
@@ -20,6 +22,10 @@ export default function GameLobby({ currentPlayer, isRegistrationOpen = true, ga
   const [error, setError] = useState<string | null>(null);
   const [isRegistered, setIsRegistered] = useState(gameState?.isRegistered || false);
   const [timeLeft, setTimeLeft] = useState(0);
+  const [showRegistrationModal, setShowRegistrationModal] = useState(false);
+
+  // Registration flow management
+  const flow = useRegistrationFlow();
 
   // Consolidated polling: single endpoint for game state, phase, and players
   // Reduces 2 requests/2s to 1 request/2s
@@ -50,26 +56,53 @@ export default function GameLobby({ currentPlayer, isRegistrationOpen = true, ga
   }, [timeRemaining]);
 
   const handleRegister = async () => {
-    console.log('handleRegister called for FID:', currentPlayer.fid); // Debug log
-    setIsLoading(true);
+    console.log('[GameLobby] Register initiated for FID:', currentPlayer.fid);
+    
+    // Store FID in localStorage for the flow hook to use
+    localStorage.setItem('userFid', currentPlayer.fid.toString());
+    
+    // Show modal and execute registration flow
+    setShowRegistrationModal(true);
     setError(null);
 
+    // Execute the wallet + TX flow
+    const txHash = await flow.executeRegistration(() => {
+      setIsLoading(true);
+    });
+
+    if (!txHash) {
+      // Flow hook will have set the error state
+      setIsLoading(false);
+      return;
+    }
+
     try {
+      // Step 2: Send registration request with TX hash
+      console.log('[GameLobby] Sending registration request with TX:', txHash);
+      const arbitrumWalletAddress = localStorage.getItem('arbitrumWalletAddress');
+      
+      const registrationBody: any = { fid: currentPlayer.fid };
+      
+      if (txHash && arbitrumWalletAddress) {
+        registrationBody.arbitrumTxHash = txHash;
+        registrationBody.arbitrumWalletAddress = arbitrumWalletAddress;
+      }
+
       const response = await fetch('/api/game/register', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: JSON.stringify({ fid: currentPlayer.fid }),
-        signal: AbortSignal.timeout(10000), // 10s timeout for mobile
+        body: JSON.stringify(registrationBody),
+        signal: AbortSignal.timeout(15000),
       });
 
-      console.log('Registration response status:', response.status); // Debug log
+      console.log('[GameLobby] Registration response status:', response.status);
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.log('Registration error response:', errorText); // Debug log
+        console.log('[GameLobby] Registration error response:', errorText);
         let errorData;
         try {
           errorData = JSON.parse(errorText);
@@ -80,10 +113,15 @@ export default function GameLobby({ currentPlayer, isRegistrationOpen = true, ga
       }
 
       const data = await response.json();
-      console.log('Registration success:', data); // Debug log
+      console.log('[GameLobby] Registration success:', data);
       setIsRegistered(true);
+      
+      // Keep modal visible briefly to show success, then close
+      setTimeout(() => {
+        setShowRegistrationModal(false);
+      }, 1500);
     } catch (err: any) {
-      console.error('Registration error:', err); // Debug log
+      console.error('[GameLobby] Registration error:', err);
       setError(err.name === 'TimeoutError' ? 'Registration timed out. Please try again.' : err.message);
     } finally {
       setIsLoading(false);
@@ -128,18 +166,46 @@ export default function GameLobby({ currentPlayer, isRegistrationOpen = true, ga
     );
   }
 
+  const handleModalConfirm = () => {
+    if (flow.currentStep === 'error') {
+      // Retry: reset and try again
+      flow.reset();
+      handleRegister();
+    } else if (flow.currentStep === 'success') {
+      // Close modal after success
+      setShowRegistrationModal(false);
+    }
+  };
+
+  const handleModalCancel = () => {
+    setShowRegistrationModal(false);
+    flow.reset();
+  };
+
   // Only show Lobby during REGISTRATION - parent GameStateView will switch to GameActiveView when LIVE
   return (
-    <Lobby
-      currentPlayer={currentPlayer}
-      registeredPlayers={registeredPlayers}
-      maxPlayers={maxPlayers}
-      timeLeft={timeLeft}
-      isRegistered={isRegistered}
-      isLoading={isLoading}
-      error={error}
-      onRegister={handleRegister}
-      onReady={handleReady}
-    />
+    <>
+      <Lobby
+        currentPlayer={currentPlayer}
+        registeredPlayers={registeredPlayers}
+        maxPlayers={maxPlayers}
+        timeLeft={timeLeft}
+        isRegistered={isRegistered}
+        isLoading={isLoading}
+        error={error}
+        onRegister={handleRegister}
+        onReady={handleReady}
+      />
+
+      {/* Registration Flow Modal */}
+      <ArbitrumRegistrationModal
+        isVisible={showRegistrationModal}
+        currentStep={flow.currentStep}
+        error={flow.error}
+        walletConnected={flow.walletConnected}
+        onConfirm={handleModalConfirm}
+        onCancel={handleModalCancel}
+      />
+    </>
   );
 }

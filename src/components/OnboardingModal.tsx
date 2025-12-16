@@ -28,6 +28,13 @@ const ONBOARDING_STEPS = [
         visual: "toggle",
     },
     {
+        icon: "📱",
+        title: "Quick Navigation (Mobile)",
+        description: "On mobile, swipe left or right to switch between chat rooms instantly.",
+        highlight: "Swipe: ← → to navigate between chats",
+        mobile: true,
+    },
+    {
         icon: "⏱️",
         title: "Time's Ticking",
         description: "You have 60 seconds per round. Your vote locks automatically when the timer ends.",
