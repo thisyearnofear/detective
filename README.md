@@ -122,7 +122,7 @@ Repeat 5 times per game cycle
 
 ## Latest Enhancements (December 2025) ✅
 
-### Bot Communication Enhancement (Phase 1-2) ✅ COMPLETE
+### Phase 1-2: Bot Communication Enhancement ✅ COMPLETE
 - ✅ **Realistic Typing Delays**: 2-7s thinking time (personality-dependent)
 - ✅ **Personality-Aware Responses**: System prompt now uses all 20+ extracted traits
 - ✅ **Opening Move Variance**: Each bot greets distinctly (frequency-weighted)
@@ -130,7 +130,24 @@ Repeat 5 times per game cycle
 - ✅ **Cross-Round Memory**: Lite Redis-backed context (topics, player style, phrases)
 - ✅ **Graceful Fallbacks**: Game works without Redis, all changes non-blocking
 
-See [ARCHITECTURE.md - Bot Communication Enhancement Plan](docs/ARCHITECTURE.md#bot-communication-enhancement-plan) for detailed implementation.
+### Phase 3A: Arbitrum Native TX Gating ✅ DEPLOYED
+- ✅ **Smart Contract**: `DetectiveGameEntry.sol` deployed on **Arbitrum One**
+  - **Address**: `0x2d0B651fE940f965AE239Ec6cF6EA35F502394ff`
+  - **Verified**: [Blockscout](https://arbitrum.blockscout.com/address/0x2d0B651fE940f965AE239Ec6cF6EA35F502394ff) | [Sourcify](https://repo.sourcify.dev/42161/0x2d0B651fE940f965AE239Ec6cF6EA35F502394ff)
+  - **Features**: registerForGame(), transferAdmin(), setPaused(), setMinEntryFee()
+  - **Events**: PlayerRegistered, AdminTransferred, PauseStatusChanged, MinEntryFeeUpdated
+  - **Errors**: ContractPaused, InvalidAddress
+- ✅ **TX Verification**: `arbitrumVerification.ts` - DRY single source of truth (~300 LOC)
+- ✅ **Registration Flow**: Enhanced GameLobby with `useRegistrationFlow` hook for step progression
+- ✅ **Modal States**: idle → wallet-check → signing → confirming → success/error with recovery
+- ✅ **Feature Gating**: `NEXT_PUBLIC_ARBITRUM_ENABLED` for gradual rollout
+- ✅ **Configuration**: `.env.example` with contract address + verification links
+- ✅ **Sybil Resistance**: One-shot registration per wallet per cycle (on-chain proof)
+- ✅ **Traction Measurement**: Entry TX count recorded in smart contract events
+
+**Contract ABI**: `src/lib/detectiveGameEntryAbi.ts` with full TypeScript interfaces  
+**Core Principles Applied**: ENHANCEMENT FIRST, DRY, CLEAN separation, MODULAR design  
+See [ARCHITECTURE.md - Phase 3A](docs/ARCHITECTURE.md#phase-3a-arbitrum-native-essential) for details.
 
 ### Authentication Modernization: Farcaster Quick Auth (Official 2025 Standard)
 - ✅ **Quick Auth Implementation**: Edge-deployed JWT tokens (0 manual nonce management)

@@ -651,38 +651,245 @@ BACKGROUND CONTEXT (from previous rounds):
 - **Venice API**: Unchanged
 - **Compute**: Negligible (<1ms per context operation)
 
-**PHASE 3: Future Enhancements (Safe for later)**
+**PHASE 3: Arbitrum Native + Flow State Integration (Monetization)**
 
-Optional improvements that build on Phases 1-2:
+This phase introduces Arbitrum transactions at registration to enable [Flow State](https://flowstate.network/) builder incentive program via Superfluid streaming.
 
-1. **Context-Aware Response Caching**
-    - Extend `botResponseCache.ts` to cache by context + player style
-    - Key: `response:{botFid}:{context}:{playerStyle}` 
-    - Reduces Venice API calls for common scenarios
-    - Still respects personality variation (cache miss = fresh response)
-    - Cost: ~100 LOC refactor, zero breaking changes
+#### **Why This Matters**
 
-2. **Cross-Conversation Learning**
-    - Track aggregate player behavior: "This player always asks questions"
-    - Use to adjust bot's proactivity/debate tendency per-player
-    - Store in same context key with aggregated stats
-    - Cost: ~50 LOC, fully optional
+Flow State is a program that incentivizes Farcaster mini app developers—paying builders per-second based on traction, not weekly. Detective becomes a perfect fit:
+- **Proof-of-Intent**: Arbitrum TX at registration (prevents sybil attacks, on-chain record)
+- **Traction Signal**: Player count + engagement metrics → builder streaming rate
+- **Continuous Payment**: Superfluid streams disbursements per-second vs batch payouts
 
-3. **Sentiment-Aware Responses**
-    - Detect player sentiment (positive/critical/frustrated)
-    - Adjust bot's emotional tone to match (build rapport)
-    - Use NLP or simple keyword patterns
-    - Cost: ~80 LOC, non-blocking
+#### **Core Design: Transaction-Gated Entry**
 
-4. **Response Variation Tracking**
-    - Log bot response diversity per context
-    - Alert if bot repeating same phrase too often
-    - Automatically inject more cast-history-based fallbacks
-    - Cost: ~60 LOC, informational only
+Current registration: `Auth → Neynar Check → Game Lobby`  
+New registration: `Auth → Neynar Check → TX Signature (0.001 ARB or sponsored) → Game Lobby`
 
-**IMPORTANT**: Phases 1-2 are complete and safe to deploy immediately. Phase 3 items are optional optimizations, not required for launch.
+**Key Principle**: Minimal friction entry point. Gas cost near-zero (~$0.0001) on Arbitrum. Transaction serves dual purpose:
+1. **Proof-of-intent on-chain** (sybil-resistant, transparent)
+2. **Traction metric for Flow State** (entry TXs per cycle = measurable activity)
+
+#### **Integration Points**
+
+**1. Registration Flow** (`src/components/game/GameLobby.tsx` line 52)
+```typescript
+// Before calling /api/game/register:
+// 1. Check Arbitrum wallet connection
+// 2. If not connected, request connection
+// 3. Prepare entry TX (0 or 0.001 ARB)
+// 4. User signs TX
+// 5. Wait for confirmation (can be async in background)
+// 6. Call /api/game/register with txHash as proof
+```
+
+**2. Smart Contract** (Deploy to Arbitrum)
+```solidity
+// DetectiveGameEntry.sol
+contract DetectiveGameEntry {
+    mapping(address => uint256) public registrations;
+    event PlayerRegistered(address indexed player, uint256 fid);
+    
+    function registerForGame(uint256 fid) external payable {
+        require(msg.value >= minEntryFee);
+        registrations[msg.sender] = fid;
+        emit PlayerRegistered(msg.sender, fid);
+        // Fees accumulate → available to Flow State pool
+    }
+}
+```
+
+**3. API Verification** (`src/app/api/game/register/route.ts`)
+```typescript
+// NEW: Verify Arbitrum TX before registration
+if (NEXT_PUBLIC_REQUIRE_TX === 'true') {
+    const isValidTx = await verifyArbitrumTx(txHash, walletAddress, fid);
+    if (!isValidTx) return error(403);
+}
+// Proceed with existing registration logic
+```
+
+**4. Wallet Integration** (`src/components/UnifiedAuthComponent.tsx`)
+- Offer Arbitrum wallet connection immediately after Farcaster auth
+- Support MetaMask, WalletConnect (built into Warpcast mini app)
+- Cache wallet address in localStorage for subsequent games
+
+#### **Flow State Streaming Model** (Optional, Longer-term)
+
+**Evaluation**: Superfluid streaming is **well-suited for this IF:**
+- Flow State has a fund pool specifically for Detective
+- Your builder wallet is registered with Flow State
+- Traction metrics (cycle revenue, player count) are transparent on-chain
+
+**How it works**:
+```typescript
+// After each game cycle completes:
+// 1. Calculate cycle traction: (players × engagement) / baseline
+// 2. Flow State multiplies this by pool allocation to derive flowRate
+// 3. Superfluid streams start: USDCx/second to your wallet
+// 4. Inbound flows persist until app loses traction or pool dries
+
+const cycleMetrics = {
+    playerCount: players.length,
+    engagementScore: avgMessagesPerRound,
+    accuracyDifficulty: avgWrongGuesses, // Harder = more valuable
+};
+
+// Flow State daemon calculates:
+// flowRate = (cycleMetrics.score / totalEcosystemScore) * poolAllocation
+```
+
+#### **Why Superfluid Streaming is or isn't a good fit**
+
+**Good Fit IF:**
+✅ Flow State pool exists for Detective  
+✅ Metrics are transparent on-chain (entry TXs, player engagement)  
+✅ You need predictable per-second payouts (vs batch weekly)  
+✅ Pool is well-capitalized (otherwise rate → 0 as pool depletes)
+
+**NOT a Good Fit IF:**
+❌ Flow State pool is finite (no revenue source) → depletes to zero  
+❌ Metrics are hard to verify on-chain → requires oracle/off-chain validation  
+❌ You'd rather capture direct entry revenue (keep fees) than streaming share  
+❌ Players prefer fee-free signup (TX friction reduces conversion)
+
+**Recommendation**: Start with **Arbitrum TXs only** (Phase 3A), then **opt-in to Flow State** (Phase 3B) only if:
+1. Flow State program explicitly includes Detective in their pool
+2. You want per-second payouts over batch distributions
+3. Your growth can sustain the pool (shrinking ecosystem = shrinking rate)
+
+#### **Configuration** (Add to `.env.local`)
+```bash
+NEXT_PUBLIC_ENTRY_CONTRACT=0x...
+NEXT_PUBLIC_ARBITRUM_RPC_URL=https://arb1.arbitrum.io/rpc
+NEXT_PUBLIC_REQUIRE_TX=true              # Feature gate
+NEXT_PUBLIC_TX_AMOUNT=0.001              # ARB (can be 0 if sponsored)
+```
+
+#### **Phase 3A: Arbitrum Native (Essential)**
+
+**IMPLEMENTED**: 
+- ✅ `DetectiveGameEntry.sol` - Minimal proof-of-intent contract
+- ✅ `src/lib/arbitrumVerification.ts` - DRY TX signing & verification
+- ✅ Enhanced `GameLobby.tsx` - Requests TX before registration
+- ✅ Enhanced `/api/game/register` - Verifies TX on-chain
+- ✅ `.env.example` - Arbitrum configuration
+
+**Files Added/Modified**:
+- `contracts/DetectiveGameEntry.sol` (NEW, ~100 LOC)
+- `src/lib/arbitrumVerification.ts` (NEW, ~300 LOC, DRY single source of truth)
+- `src/app/api/game/register/route.ts` (ENHANCED, +40 LOC)
+- `src/components/game/GameLobby.tsx` (ENHANCED, +30 LOC)
+- `.env.example` (ENHANCED, +25 LOC)
+
+**Design Principles Applied**:
+- ENHANCEMENT FIRST: Enhanced existing GameLobby & API route vs creating new components
+- DRY: Single `arbitrumVerification.ts` module for TX signing & verification
+- CLEAN: Clear separation (client TX signing vs server TX verification)
+- MODULAR: Testable, composable utility functions
+- ORGANIZED: Domain-driven design (Arbitrum config → verification → integration)
+
+**Timeline**: Complete (~6 hours)  
+**Complexity**: Medium  
+**Risk**: Low (no external dependencies, contract is ~100 LOC minimal)
+
+#### **Phase 3B: Flow State Integration (Optional, Deferred)**
+- Confirm with Flow State team if Detective is in scope
+- Register builder wallet with Flow State program
+- Expose traction metrics via Superfluid Distribution
+- Monitor streaming inflows
+
+**Timeline**: 4-6 weeks (after 3A stabilizes)  
+**Complexity**: High (requires Superfluid SDK, coordination with Flow State)  
+**Risk**: Medium (pool depletion risk, Flow State program clarity)
+
+#### **Launch Strategy (Phase 3A Only)**
+1. **Week 1-2**: Optional TX (measure wallet adoption friction)
+2. **Week 3-4**: Required but free (gas-sponsored via Arbitrum)
+3. **Week 5+**: Minimal fee (0.001 ARB or keep at 0)
+
+**Decision Point (Week 5)**: Based on TX volume + player feedback, decide whether to pursue Phase 3B with Flow State.
+
+#### **Success Metrics (Phase 3A)**
+- % of players willing to sign TX (conversion rate)
+- On-chain entry TX count per cycle
+- Player retention (repeat registrations)
+- Gas cost efficiency (Arbitrum should be <$0.0001/TX)
+
+#### **Deployment Checklist (Phase 3A)**
+
+**1. Smart Contract Deployment**
+```bash
+# Deploy DetectiveGameEntry.sol to Arbitrum Sepolia (testnet)
+# 1. Install Foundry or Hardhat
+# 2. Compile contract: forge build (or npx hardhat compile)
+# 3. Deploy to testnet:
+#    forge create --rpc-url https://sepolia-rollup.arbitrum.io/rpc \
+#                 --private-key $PRIVATE_KEY \
+#                 contracts/DetectiveGameEntry.sol:DetectiveGameEntry \
+#                 --constructor-args 0  # minEntryFee = 0 (free)
+# 4. Save contract address from output
+```
+
+**2. Configuration**
+```bash
+# Copy .env.example → .env.local
+cp .env.example .env.local
+
+# Add to .env.local:
+NEXT_PUBLIC_ARBITRUM_ENABLED=true
+NEXT_PUBLIC_ARBITRUM_ENTRY_CONTRACT=0x{contract_address_from_step_1}
+NEXT_PUBLIC_ARBITRUM_MIN_FEE=0                         # Free for now
+NEXT_PUBLIC_ARBITRUM_RPC_URL=https://arb1.arbitrum.io/rpc
+ARBITRUM_RPC_URL=https://arb1.arbitrum.io/rpc
+```
+
+**3. Local Testing**
+```bash
+# Test Arbitrum TX signing flow locally
+npm run dev
+
+# In browser:
+# 1. Go to http://localhost:3000
+# 2. Farcaster auth
+# 3. Click "Register" → MetaMask prompt should appear
+# 4. Sign TX (or use Foundry anvil for local testnet)
+# 5. Verify /api/game/register receives TX hash
+```
+
+**4. E2E Testing (Testnet)**
+```bash
+# 1. Get testnet ETH from faucet
+#    https://faucet.quicknode.com/arbitrum/sepolia
+# 2. Deploy contract to Sepolia testnet
+# 3. Update env vars to point to Sepolia contract
+# 4. Test registration flow (TX should succeed with test ETH)
+# 5. Verify TX on Arbitrum Sepolia explorer
+#    https://sepolia-explorer.arbitrum.io/
+```
+
+**5. Production Deployment**
+```bash
+# 1. Deploy to Arbitrum Mainnet
+# 2. Update .env vars (Vercel dashboard or .env.local)
+# 3. Set NEXT_PUBLIC_ARBITRUM_ENABLED=true
+# 4. Monitor first registrations (check logs for TX verification)
+# 5. Gradual rollout: Can toggle NEXT_PUBLIC_ARBITRUM_ENABLED on/off anytime
+```
+
+**6. Monitoring & Debugging**
+- Check browser console for `[ArbitrumVerification]` logs
+- Check server logs for `[Registration]` logs
+- Monitor TX success rate: `POST /api/game/register` with `arbitrumTxHash`
+- Use Arbiscan explorer to verify on-chain registrations
+
+**IMPORTANT**: Phase 3A (Arbitrum native) is **essential for traction measurement**. Phase 3B (Flow State) is **optional and should only be pursued if the program explicitly supports Detective**.
+
 
 ### Files Summary
+
+**Phase 1-2 (Bot Communication)**
 
 **New Files (1)**:
 - `src/lib/conversationContext.ts` (180 LOC)
@@ -694,6 +901,17 @@ Optional improvements that build on Phases 1-2:
 - `src/app/api/chat/send/route.ts` (15 LOC modified)
 - `src/lib/gameState.ts` (20 LOC added)
 
-**Total New Code**: ~450 LOC
-**Total Modified**: ~250 LOC
-**Code Deleted**: 0 LOC (all additive)
+**Phase 3A (Arbitrum Native - Implemented)**
+
+**New Files (2)**:
+- `contracts/DetectiveGameEntry.sol` (100 LOC, minimal proof-of-intent contract)
+- `src/lib/arbitrumVerification.ts` (300 LOC, DRY single source of truth for TX signing/verification)
+
+**Modified Files (3)**:
+- `src/app/api/game/register/route.ts` (+40 LOC, add TX verification step)
+- `src/components/game/GameLobby.tsx` (+30 LOC, request TX before registration)
+- `.env.example` (+25 LOC, Arbitrum configuration variables)
+
+**Total Phase 1-2**: ~450 LOC new, ~250 LOC modified  
+**Total Phase 3A**: ~400 LOC new, ~95 LOC modified  
+**Code Deleted**: 0 LOC (all additive, follows DRY principle)

@@ -83,10 +83,17 @@ export default function MobileSwipeableChat({
         }));
     }, [activeSlot]);
 
+    // Track swipe progress for visual feedback
+    const [swipeProgress, setSwipeProgress] = useState(0);
+
     // Handle swipe gesture
     const onGesture = useCallback(
-        (gesture: { type: string; direction?: string }) => {
-            if (gesture.type === "swipe" && !isAnimating) {
+        (gesture: { type: string; direction?: string; progress?: number }) => {
+            if (gesture.type === "swipe-progress") {
+                // Show preview of next slot as user swipes
+                setSwipeProgress(gesture.progress || 0);
+            } else if (gesture.type === "swipe" && !isAnimating) {
+                setSwipeProgress(0); // Reset preview
                 if (gesture.direction === "left" && activeSlot === 1) {
                     setIsAnimating(true);
                     setActiveSlot(2);
@@ -98,12 +105,14 @@ export default function MobileSwipeableChat({
                     haptics("light");
                     setTimeout(() => setIsAnimating(false), 300);
                 }
+            } else if (gesture.type === "tap") {
+                setSwipeProgress(0); // Clear preview on tap
             }
         },
         [activeSlot, isAnimating, haptics]
     );
 
-    const { handleTouchStart, handleTouchEnd } = useTouchGestures(onGesture, {
+    const { handleTouchStart, handleTouchMove, handleTouchEnd } = useTouchGestures(onGesture, {
         swipeThreshold: 40,
     });
 
@@ -113,13 +122,15 @@ export default function MobileSwipeableChat({
         if (!container || !isMobile) return;
 
         container.addEventListener("touchstart", handleTouchStart as any);
+        container.addEventListener("touchmove", handleTouchMove as any, { passive: true });
         container.addEventListener("touchend", handleTouchEnd as any);
 
         return () => {
             container.removeEventListener("touchstart", handleTouchStart as any);
+            container.removeEventListener("touchmove", handleTouchMove as any);
             container.removeEventListener("touchend", handleTouchEnd as any);
         };
-    }, [handleTouchStart, handleTouchEnd, isMobile]);
+    }, [handleTouchStart, handleTouchMove, handleTouchEnd, isMobile]);
 
     const match1 = slots[1];
     const match2 = slots[2];
@@ -127,14 +138,14 @@ export default function MobileSwipeableChat({
     return (
         <div className="flex flex-col h-full" ref={containerRef}>
             {/* Header with slot tabs and round info */}
-            <div className="flex items-center justify-between px-4 py-3 bg-slate-800/80 backdrop-blur-sm border-b border-slate-700">
+            <div className="flex items-center justify-between gap-2 px-3 md:px-4 py-3 bg-slate-800/80 backdrop-blur-sm border-b border-slate-700">
                 {/* Round indicator */}
-                <span className="bg-slate-700 px-3 py-1 rounded-full text-xs text-blue-300 font-medium">
+                <span className="bg-slate-700 px-3 py-1 rounded-full text-xs text-blue-300 font-medium whitespace-nowrap">
                     Round {Math.min(currentRound, totalRounds)}/{totalRounds}
                 </span>
 
-                {/* Slot tabs */}
-                <div className="flex bg-slate-900 rounded-full p-1">
+                {/* Slot tabs - responsive sizing */}
+                <div className="flex bg-slate-900 rounded-full p-1 gap-1 flex-shrink-0">
                     {[1, 2].map((slotNum) => {
                         const isActive = activeSlot === slotNum;
                         const hasUnread = unreadCounts[slotNum] > 0;
@@ -153,7 +164,7 @@ export default function MobileSwipeableChat({
                                     }
                                 }}
                                 className={`
-                  relative px-5 py-2 rounded-full text-sm font-semibold transition-all duration-200
+                  relative px-3 md:px-5 py-2 rounded-full text-xs md:text-sm font-semibold transition-all duration-200 whitespace-nowrap
                   ${isActive
                                         ? `bg-gradient-to-r ${vote === "BOT" ? "from-red-600 to-red-700" : "from-green-600 to-green-700"} text-white shadow-lg`
                                         : "text-gray-400 hover:text-white"
@@ -161,23 +172,21 @@ export default function MobileSwipeableChat({
                 `}
                             >
                                 Chat {slotNum}
-                                {/* Unread badge */}
+                                {/* Unread indicator dot (simplified from count) */}
                                 {hasUnread && !isActive && (
-                                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-xs font-bold text-white animate-pulse">
-                                        {unreadCounts[slotNum] > 9 ? "9+" : unreadCounts[slotNum]}
-                                    </span>
+                                    <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse flex-shrink-0" />
                                 )}
                                 {/* Typing indicator dot */}
                                 {match && typingIndicators[match.id] && !isActive && (
-                                    <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-blue-400 rounded-full animate-pulse" />
+                                    <span className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" />
                                 )}
                             </button>
                         );
                     })}
                 </div>
 
-                {/* Swipe hint */}
-                <div className="text-xs text-gray-500">
+                {/* Enhanced swipe hint - more visible with animation */}
+                <div className="text-xs text-blue-400 font-medium opacity-70 hover:opacity-100 transition-opacity whitespace-nowrap animate-pulse">
                     ← swipe →
                 </div>
             </div>
@@ -189,7 +198,13 @@ export default function MobileSwipeableChat({
                     className={`
             absolute inset-0 transition-all duration-300 ease-out
             ${activeSlot === 1 ? "translate-x-0 opacity-100" : "-translate-x-full opacity-0"}
+            ${swipeProgress > 0 && activeSlot === 1 ? "transition-none" : ""}
           `}
+                    style={
+                        swipeProgress > 0 && activeSlot === 1
+                            ? { transform: `translateX(${Math.min(swipeProgress * 2, 100)}%)` }
+                            : {}
+                    }
                 >
                     {match1 ? (
                         <ChatWindow
@@ -215,7 +230,13 @@ export default function MobileSwipeableChat({
                     className={`
             absolute inset-0 transition-all duration-300 ease-out
             ${activeSlot === 2 ? "translate-x-0 opacity-100" : "translate-x-full opacity-0"}
+            ${swipeProgress > 0 && activeSlot === 2 ? "transition-none" : ""}
           `}
+                    style={
+                        swipeProgress > 0 && activeSlot === 2
+                            ? { transform: `translateX(-${Math.min(swipeProgress * 2, 100)}%)` }
+                            : {}
+                    }
                 >
                     {match2 ? (
                         <ChatWindow
