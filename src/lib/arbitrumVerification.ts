@@ -284,13 +284,15 @@ export async function verifyArbitrumTx(
       return true; // Optimistically accept pending TX
     }
     
-    const status = receipt.status as unknown as number;
-    if (status !== 1) {
-      console.error('[ArbitrumVerification] TX failed on-chain');
+    console.log('[ArbitrumVerification] Receipt status:', receipt.status, 'type:', typeof receipt.status);
+    
+    // viem returns status as 'success' or 'reverted' (string)
+    if (receipt.status !== 'success') {
+      console.error('[ArbitrumVerification] TX failed on-chain, status:', receipt.status);
       return false;
     }
     
-    console.log('[ArbitrumVerification] TX verified successfully:', txHash);
+    console.log('[ArbitrumVerification] ✓ TX verified successfully:', txHash);
     return true;
   } catch (error) {
     console.error('[ArbitrumVerification] Verification error:', error);

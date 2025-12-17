@@ -133,7 +133,7 @@ class PostgresDatabase {
                 connectionString: DATABASE_URL,
                 max: 10,
                 idleTimeoutMillis: 30000,
-                connectionTimeoutMillis: 2000,
+                connectionTimeoutMillis: 10000, // Increased from 2s to 10s for better reliability
             });
 
             this.pool.on("error", (err: Error) => {
