@@ -7,6 +7,11 @@
   "openGraphTitle": "Detective - Is That You?",
   "openGraphDescription": "Can you tell if you are chatting with a real person or an AI bot?",
   "openGraphImage": "https://detectiveproof.vercel.app/og-image.png",
+  "accountAssociation": {
+    "header": "eyJmaWQiOjUyNTQsInR5cGUiOiJjdXN0b2R5Iiwia2V5IjoiMHg4QjAzQTJDMzY1YzI2MUFlQmU2ODQyMjREQkI2Qzk1OTJhQkNkRkIyIn0",
+    "payload": "eyJkb21haW4iOiJkZXRlY3RpdmVwcm9vZi52ZXJjZWwuYXBwIn0",
+    "signature": "f7lWtqKqtnnvuX4R3uCsMoEGurVprKqLcx25HsebwwAHgPxMXpfndM3DIKuOToeybb8NuSQ421bsDs9nRhukthw=="
+  },
   "frames": [
     {
       "label": "Start Snooping",
