@@ -77,6 +77,7 @@ export async function validateStateConsistency(): Promise<boolean> {
 export function markCacheFresh(version: number): void {
   lastLoadedVersion = version;
   stateVersion = version;
+  lastReadVersion = version; // Also mark as read to prevent immediate invalidation
   console.log(`[StateConsistency] Cache marked fresh at version ${version}`);
 }
 
@@ -126,8 +127,9 @@ export async function hasVersionChanged(): Promise<boolean> {
 /**
  * Mark version as read (for cache invalidation tracking)
  */
-export function markVersionAsRead(): void {
-  lastReadVersion = stateVersion;
+export async function markVersionAsRead(): Promise<void> {
+  const currentVersion = await loadStateVersion();
+  lastReadVersion = currentVersion;
 }
 
 /**

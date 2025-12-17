@@ -194,6 +194,8 @@ class GameManager {
         this.state!.finishedAt = stateMeta.finishedAt;
       }
       getRepository().invalidateAll();
+      // Mark version as read to prevent re-invalidation on subsequent requests
+      await stateConsistency.markVersionAsRead();
     }
     
     // Update state based on timers every time it's requested
