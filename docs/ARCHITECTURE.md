@@ -291,12 +291,12 @@ Based on recent development efforts, the following architectural improvements ha
 
 ### 1. Server-Driven Game Phase Transitions
 
-**Problem**: GameLobby had `setTimeout` delays that could drift from server state, causing frozen UI.
+**Problem**: BriefingRoom had `setTimeout` delays that could drift from server state, causing frozen UI.
 
 **Solution**: New `/api/game/phase` endpoint returns current phase + metadata with server-driven state management.
 
 **Implementation Details**:
-- GameLobby polls `/api/game/phase` every 1s instead of using client-side timeouts
+- BriefingRoom polls `/api/game/phase` every 1s instead of using client-side timeouts
 - Endpoint returns: `phase: 'REGISTRATION' | 'BOT_GENERATION' | 'PLAYER_REVEAL' | 'COUNTDOWN' | 'LIVE'`
 - Auto-transitions based on server response (not client timer)
 - Handles network failures gracefully with ErrorCard display
@@ -667,7 +667,7 @@ New registration: `Auth → Neynar Check → TX Signature (0.001 ARB or sponsore
 
 #### **Integration Points**
 
-**1. Registration Flow** (`src/components/game/GameLobby.tsx` line 52)
+**1. Registration Flow** (`src/components/game/BriefingRoom.tsx` line 52)
 ```typescript
 // Before calling /api/game/register:
 // 1. Check Arbitrum wallet connection
@@ -766,7 +766,7 @@ NEXT_PUBLIC_TX_AMOUNT=0.001              # ARB (can be 0 if sponsored)
 **IMPLEMENTED**: 
 - ✅ `DetectiveGameEntry.sol` - Minimal proof-of-intent contract
 - ✅ `src/lib/arbitrumVerification.ts` - DRY TX signing & verification
-- ✅ Enhanced `GameLobby.tsx` - Requests TX before registration
+- ✅ Enhanced `BriefingRoom.tsx` - Requests TX before registration
 - ✅ Enhanced `/api/game/register` - Verifies TX on-chain
 - ✅ `.env.example` - Arbitrum configuration
 
@@ -774,11 +774,11 @@ NEXT_PUBLIC_TX_AMOUNT=0.001              # ARB (can be 0 if sponsored)
 - `contracts/DetectiveGameEntry.sol` (NEW, ~100 LOC)
 - `src/lib/arbitrumVerification.ts` (NEW, ~300 LOC, DRY single source of truth)
 - `src/app/api/game/register/route.ts` (ENHANCED, +40 LOC)
-- `src/components/game/GameLobby.tsx` (ENHANCED, +30 LOC)
+- `src/components/game/BriefingRoom.tsx` (ENHANCED, +30 LOC)
 - `.env.example` (ENHANCED, +25 LOC)
 
 **Design Principles Applied**:
-- ENHANCEMENT FIRST: Enhanced existing GameLobby & API route vs creating new components
+- ENHANCEMENT FIRST: Enhanced existing BriefingRoom & API route vs creating new components
 - DRY: Single `arbitrumVerification.ts` module for TX signing & verification
 - CLEAN: Clear separation (client TX signing vs server TX verification)
 - MODULAR: Testable, composable utility functions
@@ -903,7 +903,7 @@ npm run dev
 
 **Modified Files (3)**:
 - `src/app/api/game/register/route.ts` (+40 LOC, add TX verification step)
-- `src/components/game/GameLobby.tsx` (+30 LOC, request TX before registration)
+- `src/components/game/BriefingRoom.tsx` (+30 LOC, request TX before registration)
 - `.env.example` (+25 LOC, Arbitrum configuration variables)
 
 **Total Phase 1-2**: ~450 LOC new, ~250 LOC modified  

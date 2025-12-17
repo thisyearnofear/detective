@@ -6,7 +6,7 @@ import { farcaster } from '@/lib/viewport';
 import MobileNavigationTabs from './MobileNavigationTabs';
 import Leaderboard from './Leaderboard';
 import ChatWindow from './ChatWindow';
-import GameLobby from './game/GameLobby';
+import BriefingRoom from './game/BriefingRoom';
 
 type Tab = 'game' | 'leaderboard' | 'profile';
 
@@ -87,7 +87,7 @@ export default function MobileAppContainer({
         if (gameState?.state === 'REGISTRATION') {
           return (
             <div className="p-4">
-              <GameLobby
+              <BriefingRoom
                 currentPlayer={sdkUser}
                 isRegistrationOpen={true}
                 gameState={gameState}

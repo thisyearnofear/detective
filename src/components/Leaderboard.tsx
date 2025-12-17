@@ -62,7 +62,7 @@ const helpers = {
   },
   getLeaderboardTitle: (type: 'current-game' | 'season' | 'all-time' | 'nft-holders' | 'token-holders') => {
     const titles = {
-      'current-game': 'Current Game',
+      'current-game': 'Current Investigation',
       'season': 'Season Rankings',
       'all-time': 'All-Time Legends',
       'nft-holders': 'NFT Holder Ranks',
@@ -179,7 +179,7 @@ interface PlayerInsights {
 interface ChainStats {
   chain: Chain;
   totalPlayers: number;
-  totalGames: number;
+  totalCases: number;
   nftHolders: number;
   tokenHolders?: number;
   topAccuracy: number;
@@ -257,8 +257,8 @@ export default function Leaderboard({
         {/* Results Summary */}
         <div className="max-w-2xl w-full mb-8">
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-black text-white mb-2">🎮 Mission Complete</h1>
-            <p className="text-xl font-bold text-slate-300">GAME OVER</p>
+            <h1 className="text-4xl font-black text-white mb-2">🎮 Case Closed</h1>
+            <p className="text-xl font-bold text-slate-300">CASE CLOSED</p>
             <p className="text-sm text-gray-400 mt-2">Here's how you performed</p>
           </div>
 
@@ -288,7 +288,7 @@ export default function Leaderboard({
           {/* Motivation */}
           <div className="bg-slate-900/50 rounded-lg p-4 text-center border border-slate-700 mb-8">
             <p className="text-gray-300 text-sm">
-              {accuracy >= 80 ? "🔥 Incredible detective work! You're a natural." :
+              {accuracy >= 80 ? "🔥 Incredible detective work! You're a natural detective." :
                accuracy >= 60 ? "💪 Nice work! Keep playing to improve." :
                accuracy >= 40 ? "📈 Not bad! You'll get better with practice." :
                "🎯 Keep playing - You'll improve"}
@@ -318,7 +318,7 @@ export default function Leaderboard({
               onClick={onPlayAgain}
               className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors"
             >
-              Register for Next Game
+              Join Next Investigation
             </button>
             <button
               onClick={() => setShowGameEnd(false)}
@@ -551,8 +551,8 @@ export default function Leaderboard({
                       <div className="font-bold text-white">{stats.totalPlayers.toLocaleString()}</div>
                     </div>
                     <div>
-                      <div className="text-gray-400">Games</div>
-                      <div className="font-bold text-white">{stats.totalGames.toLocaleString()}</div>
+                      <div className="text-gray-400">Cases</div>
+                      <div className="font-bold text-white">{stats.totalCases.toLocaleString()}</div>
                     </div>
                     <div>
                       <div className="text-gray-400">NFT Holders</div>
@@ -703,7 +703,7 @@ export default function Leaderboard({
                  : 'text-gray-400 hover:text-white'
              }`}
            >
-             Current Game
+             Current Investigation
            </button>
            <button
              onClick={() => setMode('career' as LeaderboardMode)}
@@ -722,9 +722,9 @@ export default function Leaderboard({
         {/* Main stats grid */}
         <div className="grid md:grid-cols-2 gap-4 mb-6">
           <div className="bg-slate-900/50 rounded-lg p-4">
-            <div className="text-sm text-gray-400 mb-2">Games Played</div>
+            <div className="text-sm text-gray-400 mb-2">Cases Played</div>
             <div className="text-3xl font-bold text-white">
-              {careerStats.totalGames}
+              {careerStats.totalCases}
             </div>
           </div>
 
@@ -739,7 +739,7 @@ export default function Leaderboard({
           </div>
 
           <div className="bg-slate-900/50 border border-green-500/20 rounded-lg p-4">
-            <div className="text-sm text-gray-400 mb-2">Best Game</div>
+            <div className="text-sm text-gray-400 mb-2">Best Case</div>
             <div className="text-3xl font-bold text-green-400">
               {careerStats.bestAccuracy.toFixed(0)}%
             </div>
@@ -772,7 +772,7 @@ export default function Leaderboard({
           ))}
         </div>
 
-        {/* Game history */}
+        {/* Case history */}
         {careerStats.games && careerStats.games.length > 0 ? (
           <div className="space-y-3">
             {careerStats.games.map((game: any) => {
@@ -791,7 +791,7 @@ export default function Leaderboard({
                 >
                   <div className="flex-1">
                     <div className="text-gray-300 font-medium">
-                      Game #{game.displayNumber}
+                      Case #{game.displayNumber}
                     </div>
                     <div className="text-xs text-gray-500">{date}</div>
                   </div>
@@ -842,24 +842,24 @@ export default function Leaderboard({
           </div>
         ) : (
           <div className="text-center py-8 text-gray-400">
-            No games found for this period
+            No cases found for this period
           </div>
         )}
 
         {/* Insights */}
-        {careerStats.totalGames > 0 && (
+        {careerStats.totalCases > 0 && (
           <div className="bg-slate-900/30 border border-slate-700 rounded-lg p-4 mt-6">
             <h3 className="font-bold text-white mb-2">Insights</h3>
             <div className="space-y-2 text-sm text-gray-300">
-              {careerStats.totalGames < 3 ? (
-                <p>💡 Play more games to unlock deeper insights about your playstyle!</p>
+              {careerStats.totalCases < 3 ? (
+                <p>💡 Solve more cases to unlock deeper insights about your deduction style!</p>
               ) : (
                 <>
                   <p>
                     📈{' '}
                     {careerStats.overallAccuracy >= 60
                       ? "You're above average! Keep playing to stay sharp."
-                      : 'Keep practicing - you improve with each game!'}
+                      : 'Keep practicing - you improve with each case!'}
                   </p>
                   <p>
                     ⚡ You make decisions{' '}
@@ -897,7 +897,7 @@ export default function Leaderboard({
                 : 'text-gray-400 hover:text-white'
             }`}
           >
-            Current Game
+            Current Investigation
           </button>
           {fid && (
             <button
@@ -930,7 +930,7 @@ export default function Leaderboard({
               : 'text-gray-400 hover:text-white'
           }`}
         >
-          Current Game
+          Current Investigation
         </button>
         {fid && (
           <button

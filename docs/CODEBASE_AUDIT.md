@@ -28,7 +28,7 @@
 - src/components/Leaderboard.tsx
 - src/components/MultiChatContainer.tsx
 - src/components/game/GameFinishedView.tsx
-- src/components/game/GameLobby.tsx
+- src/components/game/BriefingRoom.tsx
 ```
 
 **Solution**: `src/lib/fetcher.ts` (created)
@@ -100,7 +100,7 @@ export interface UserProfile {
 | MobileAppContainer.tsx | 267 | Mobile UI wrapper, acceptable | ⚠ Watch |
 | VirtualizedMessageList.tsx | 254 | Performance critical, OK | ⚠ Optimized |
 | StarfieldBackground.tsx | 221 | Canvas component, acceptable | ⚠ Watch |
-| GameLobby.tsx | 213 | State orchestration, refactorable | ✓ Recommended |
+| BriefingRoom.tsx | 213 | State orchestration, refactorable | ✓ Recommended |
 
 **Assessment**: 
 - 898 LOC (Leaderboard) is acceptable because it serves 4 distinct modes
@@ -133,7 +133,7 @@ export interface UserProfile {
    - **Fix**: Use shallow comparison or dependency array
 
 #### MEDIUM Priority
-4. **GameLobby.tsx - Dual polling**
+4. **BriefingRoom.tsx - Dual polling**
    - Lines 35 & 45: Both `playersData` and `phaseData` poll at 2s intervals
    - Creates waterfall requests instead of concurrent
    - **Impact**: Cumulative polling load
@@ -152,7 +152,7 @@ export interface UserProfile {
    - **Fix**: Remove or memoize
 
 #### LOW Priority
-7. **GameStatusCard.tsx - Mounted flag anti-pattern**
+7. **CaseStatusCard.tsx - Mounted flag anti-pattern**
    - Line 25: `const [mounted, setMounted] = useState(false)`
    - Should use useRef instead
    - **Impact**: Unnecessary state update on mount
@@ -227,9 +227,9 @@ Add tests for critical paths in Phase 4 (pre-launch):
 - [ ] Remove mock data generation from MobileAppContainer.tsx or memoize it
 
 ### NEXT SPRINT (Week 3-4)
-- [ ] Consolidate GameLobby polling (single endpoint)
+- [ ] Consolidate BriefingRoom polling (single endpoint)
 - [ ] Add Context API for `votes` state (instead of prop drilling)
-- [ ] Fix GameStatusCard anti-pattern (`mounted` useRef)
+- [ ] Fix CaseStatusCard anti-pattern (`mounted` useRef)
 - [ ] Add adaptive polling logic to ChatWindow
 
 ### PHASE 4 (Pre-Launch)

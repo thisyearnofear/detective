@@ -269,9 +269,9 @@ That's it! Your chat now uses WebSockets. 🎉
 ## Critical Issues Addressed
 
 ### Pre-Game State Machine Ambiguity
-**Problem**: GameLobby had 4 phases (lobby → bot_generation → player_reveal → countdown → live) but the logic for triggering transitions was fragile with hardcoded timeouts instead of server-driven phases.
+**Problem**: BriefingRoom had 4 phases (lobby → bot_generation → player_reveal → countdown → live) but the logic for triggering transitions was fragile with hardcoded timeouts instead of server-driven phases.
 
-**Solution**: Introduced server-driven phase contract via `/api/game/phase` endpoint that returns actual phase from API: 'REGISTRATION' | 'PREPARING_BOTS' | 'REVEALING_PLAYERS' | 'COUNTDOWN' | 'LIVE'. GameLobby now polls the endpoint every 1s instead of using local setTimeout logic.
+**Solution**: Introduced server-driven phase contract via `/api/game/phase` endpoint that returns actual phase from API: 'REGISTRATION' | 'PREPARING_BOTS' | 'REVEALING_PLAYERS' | 'COUNTDOWN' | 'LIVE'. BriefingRoom now polls the endpoint every 1s instead of using local setTimeout logic.
 
 **Impact**: Users no longer get stuck in "Preparing next round..." state, phase transitions happen reliably based on server state rather than client timers.
 
@@ -280,7 +280,7 @@ That's it! Your chat now uses WebSockets. 🎉
 
 **Duplication Found & Fixed**:
 - `RegistrationLoader` + `RoundStartLoader` consolidated into `LoadingOverlay` (90% identical)
-- `GameStatusCard` + status-badge styles unified
+- `CaseStatusCard` + status-badge styles unified
 - `ErrorCard` centralization across components
 - `RoundTransition` + `PlayerReveal` merged into `PhaseTransition`
 
@@ -350,17 +350,17 @@ Detective demonstrates the convergence of **synthetic identity**, **onchain econ
    - **Result**: -20 LOC, improved consistency
 
 2. **Anti-Pattern Fix**
-   - GameStatusCard.tsx: Removed `mounted` state anti-pattern
+   - CaseStatusCard.tsx: Removed `mounted` state anti-pattern
    - Replaced useState with no-op (component always renders on client)
    - **Result**: Eliminated unnecessary state update on mount
 
 3. **API Consolidation**
    - Enhanced `/api/game/status` to return players list + phase info
-   - GameLobby.tsx: Consolidated 2 polling requests into 1
+   - BriefingRoom.tsx: Consolidated 2 polling requests into 1
    - **Result**: 50% reduction in polling requests (2/2s → 1/2s)
 
 #### **Week 1: Critical Blockers (100% Complete)**
-- [x] **Server-Driven Phase Transitions**: GameLobby now polls `/api/game/phase` every 1s instead of using client-side timeouts
+- [x] **Server-Driven Phase Transitions**: BriefingRoom now polls `/api/game/phase` every 1s instead of using client-side timeouts
 - [x] **Modal Management System**: Created ModalStack context provider with automatic z-index management
 - [x] **Loader Consolidation**: Created LoadingOverlay component merging RegistrationLoader + RoundStartLoader
 - [x] **Auth UI Clarification**: Removed TODO comments and simplified to single clear authentication flow
@@ -427,8 +427,8 @@ Identified 6 optimization opportunities (all LOW-MEDIUM priority):
 1. VirtualizedMessageList memo comparison overhead (optimize string join)
 2. MultiChatContainer dual polling pattern (consolidate endpoints)
 3. Leaderboard over-fetching (more aggressive conditional fetching)
-4. GameLobby phase sync race condition (already mostly handled)
-5. GameStatusCard mounted flag anti-pattern (useRef vs useState)
+4. BriefingRoom phase sync race condition (already mostly handled)
+5. CaseStatusCard mounted flag anti-pattern (useRef vs useState)
 6. MobileAppContainer mock data regeneration (memoize or remove)
 
 **Assessment**: No critical performance issues. All components perform well under normal load.
@@ -467,8 +467,8 @@ Identified 6 optimization opportunities (all LOW-MEDIUM priority):
 
 **NEXT SPRINT** (Week 4):
 - [ ] Update 4 components to use UserProfile type
-- [ ] Fix GameStatusCard mounted anti-pattern  
-- [ ] Consolidate GameLobby polling
+- [ ] Fix CaseStatusCard mounted anti-pattern  
+- [ ] Consolidate BriefingRoom polling
 
 **PHASE 4** (Pre-launch):
 - [ ] Add unit tests for GameState
@@ -573,8 +573,8 @@ Despite Ably's historical issues, we optimized polling to eliminate outdated pra
 ```
 ✅ src/app/layout.tsx (ModalProvider wrapper)
 ✅ src/app/page.tsx (removed TODOs, import centralized fetcher)
-✅ src/components/game/GameLobby.tsx (server-driven phases, import centralized fetcher)
-✅ src/components/game/phases/Lobby.tsx (uses LoadingOverlay)
+✅ src/components/game/BriefingRoom.tsx (server-driven phases, import centralized fetcher)
+✅ src/components/game/phases/BriefingRoom.tsx (uses LoadingOverlay)
 ✅ src/components/MultiChatContainer.tsx (modal system, import centralized fetcher)
 ✅ src/components/ChatWindow.tsx (countdown timer)
 ✅ src/components/VoteToggle.tsx (warning states)

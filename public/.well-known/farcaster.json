@@ -1,0 +1,17 @@
+{
+  "name": "Detective",
+  "iconUrl": "https://detectiveproof.vercel.app/detective.png",
+  "description": "AI-powered social deduction game on Farcaster. Can you tell if you're chatting with a real person or an AI bot?",
+  "primaryCategory": "games",
+  "tags": ["game", "ai", "social-deduction", "farcaster"],
+  "openGraphTitle": "Detective - Is That You?",
+  "openGraphDescription": "Can you tell if you are chatting with a real person or an AI bot?",
+  "openGraphImage": "https://detectiveproof.vercel.app/og-image.png",
+  "frames": [
+    {
+      "label": "Start Snooping",
+      "action": "post",
+      "target": "https://detectiveproof.vercel.app/api/game"
+    }
+  ]
+}

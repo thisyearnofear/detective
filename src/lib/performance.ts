@@ -237,7 +237,7 @@ export function useFrameRateOptimization() {
 export const dynamicImports = {
   EmojiPicker: () => import('../components/EmojiPicker'),
   Leaderboard: () => import('../components/Leaderboard'),
-  GameLobby: () => import('../components/game/GameLobby'),
+  BriefingRoom: () => import('../components/game/BriefingRoom'),
 };
 
 // MEMORY MANAGEMENT

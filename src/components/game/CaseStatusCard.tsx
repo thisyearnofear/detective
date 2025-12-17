@@ -16,14 +16,14 @@ type Props = {
 };
 
 /**
- * GameStatusCard - Dynamic pre-auth status display
+ * CaseStatusCard - Dynamic pre-auth status display
  * 
  * Shows users what's happening in the game right now:
  * - REGISTRATION: countdown + player count
- * - LIVE: active players + time remaining
+ * - LIVE: active detectives + time remaining
  * - FINISHED: leaderboard ready + next round countdown
  */
-export default function GameStatusCard({ gameState }: Props) {
+export default function CaseStatusCard({ gameState }: Props) {
   const [timeLeft, setTimeLeft] = useState(0);
 
   // Update timer based on game state
@@ -73,9 +73,9 @@ export default function GameStatusCard({ gameState }: Props) {
                 <span className="text-2xl">⏱️</span>
               </div>
               <div>
-                <h3 className="text-xl font-black text-white tracking-tight">Registration Open</h3>
+                <h3 className="text-xl font-black text-white tracking-tight">Recruitment Open</h3>
                 <p className="text-sm text-emerald-300/90 font-medium">
-                  {!hasMinPlayers ? 'Waiting for players...' : countdownActive ? 'Starting soon!' : 'Ready to start'}
+                  {!hasMinPlayers ? 'Waiting for detectives...' : countdownActive ? 'Starting soon!' : 'Ready to start'}
                 </p>
               </div>
             </div>
@@ -107,7 +107,7 @@ export default function GameStatusCard({ gameState }: Props) {
               />
             </div>
             <p className="text-xs text-gray-300 font-medium">
-              {!hasMinPlayers ? `Need ${GAME_CONSTANTS.MIN_PLAYERS} players to start` : 'players registered'}
+              {!hasMinPlayers ? `Need ${GAME_CONSTANTS.MIN_PLAYERS} more detectives to start` : 'detectives recruited'}
             </p>
           </div>
         </div>
@@ -127,9 +127,9 @@ export default function GameStatusCard({ gameState }: Props) {
                 <span className="text-2xl">🎮</span>
               </div>
               <div>
-                <h3 className="text-xl font-black text-white tracking-tight">Game Live</h3>
+                <h3 className="text-xl font-black text-white tracking-tight">Investigation Live</h3>
                 <p className="text-sm text-purple-300/90 font-medium">
-                  {gameState.playerCount > 0 ? `${gameState.playerCount} players competing` : 'Game in progress'}
+                  {gameState.playerCount > 0 ? `${gameState.playerCount} detectives competing` : 'Investigation in progress'}
                 </p>
               </div>
             </div>
@@ -145,7 +145,7 @@ export default function GameStatusCard({ gameState }: Props) {
             <div className="text-4xl font-black text-white tracking-tight">
               {formatTime(timeLeft)}
             </div>
-            <p className="text-xs text-gray-400 font-medium">Next registration opens after game ends</p>
+            <p className="text-xs text-gray-400 font-medium">Next investigation opens after this case is closed</p>
           </div>
         </div>
       </div>
@@ -164,8 +164,8 @@ export default function GameStatusCard({ gameState }: Props) {
                 <span className="text-2xl">🏆</span>
               </div>
               <div>
-                <h3 className="text-xl font-black text-white tracking-tight">Game Finished</h3>
-                <p className="text-sm text-amber-300/90 font-medium">View results & leaderboard</p>
+                <h3 className="text-xl font-black text-white tracking-tight">Case Closed</h3>
+                <p className="text-sm text-amber-300/90 font-medium">View evidence & leaderboard</p>
               </div>
             </div>
             <div className="status-badge finished">
@@ -175,11 +175,11 @@ export default function GameStatusCard({ gameState }: Props) {
 
           {/* Next Round Timer */}
           <div className="space-y-2">
-            <p className="text-xs text-gray-300 font-medium uppercase tracking-wider">Next Round In</p>
+            <p className="text-xs text-gray-300 font-medium uppercase tracking-wider">Next Case In</p>
             <div className="text-4xl font-black text-white tracking-tight">
               {formatTime(timeLeft)}
             </div>
-            <p className="text-xs text-gray-400 font-medium">Registration will reopen shortly</p>
+            <p className="text-xs text-gray-400 font-medium">Next investigation will begin shortly</p>
           </div>
         </div>
       </div>

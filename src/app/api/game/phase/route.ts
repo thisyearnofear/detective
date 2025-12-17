@@ -4,7 +4,7 @@ import { gameManager } from "@/lib/gameState";
 
 /**
  * API route to get the current phase and transition state.
- * Used by GameLobby to drive phase transitions server-side.
+ * Used by BriefingRoom to drive phase transitions server-side.
  * 
  * Replaces client-side setTimeout magic with server-driven state.
  * Polls every 1s to check if phase should transition.

@@ -7,7 +7,7 @@ import SpinningDetective from "@/components/SpinningDetective";
 import AnimatedGridBackdrop from "@/components/AnimatedGridBackdrop";
 import StarfieldBackground from "@/components/StarfieldBackground";
 import GameStateView from "@/components/game/GameStateView";
-import GameStatusCard from "@/components/game/GameStatusCard";
+import CaseStatusCard from "@/components/game/CaseStatusCard";
 import Leaderboard from "@/components/Leaderboard";
 import CollapsibleSection from "@/components/CollapsibleSection";
 import { fetcher } from "@/lib/fetcher";
@@ -220,7 +220,7 @@ export default function Home() {
 
               {/* Game Status Card - Shows live game state */}
               {gameState ? (
-                <GameStatusCard
+                <CaseStatusCard
                   gameState={{
                     state: gameState.state,
                     playerCount: gameState.playerCount,
@@ -328,7 +328,7 @@ export default function Home() {
                        onClick={() => setShowLeaderboard(!showLeaderboard)}
                        className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-white/10 hover:bg-white/20 text-white border border-white/20"
                      >
-                       {showLeaderboard ? '← Game' : '🏆 Stats'}
+                       {showLeaderboard ? '← Back to Investigation' : '🏆 Stats'}
                      </button>
                      <button
                        onClick={handleLogout}
@@ -342,7 +342,7 @@ export default function Home() {
 
               {/* Live Game Status */}
               {gameState && (
-                <GameStatusCard
+                <CaseStatusCard
                   gameState={{
                     state: gameState.state,
                     playerCount: gameState.playerCount,
