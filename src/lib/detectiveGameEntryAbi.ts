@@ -1,9 +1,8 @@
 /**
  * DetectiveGameEntry Smart Contract ABI
  * 
- * Deployed on Arbitrum One: 0x99974Daa99039b13F62A4A6009fdAf6B1d25Ba34
- * Verified: https://arbitrum.blockscout.com/address/0x99974Daa99039b13F62A4A6009fdAf6B1d25Ba34
- * Source: https://repo.sourcify.dev/42161/0x99974Daa99039b13F62A4A6009fdAf6B1d25Ba34
+ * Deployed on Arbitrum One: 0xa879B5CbD12b6137fCcf70669D48F55666296357
+ * Verified: https://arbitrum.blockscout.com/address/0xa879B5CbD12b6137fCcf70669D48F55666296357
  * 
  * Purpose: Minimal proof-of-intent contract
  * - registerForGame(uint256 fid): Record wallet registration with FID on-chain
@@ -50,4 +49,4 @@ export const DETECTIVE_GAME_ENTRY_ABI = [
   },
 ] as const;
 
-export const CONTRACT_ADDRESS = '0x99974Daa99039b13F62A4A6009fdAf6B1d25Ba34' as const;
+export const CONTRACT_ADDRESS = '0xa879B5CbD12b6137fCcf70669D48F55666296357' as const;
