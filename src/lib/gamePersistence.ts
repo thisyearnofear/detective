@@ -16,6 +16,7 @@ const REDIS_KEYS = {
   matches: "game:matches",
   sessions: "game:sessions",
   stateVersion: "game:state-version", // Version counter for cache consistency
+  lastReadVersion: "game:last-read-version", // Hash of instance_id -> last_read_version
 };
 
 const REDIS_TTL = 60 * 60; // 1 hour
@@ -334,6 +335,34 @@ export async function atomicVersionIncrement(
 }
 
 /**
+ * Get last read version for this instance from Redis
+ * Used for cache invalidation across serverless instances
+ */
+export async function getLastReadVersion(instanceId: string): Promise<number | null> {
+  try {
+    const version = await redis.hget(REDIS_KEYS.lastReadVersion, instanceId);
+    return version ? parseInt(version, 10) : null;
+  } catch (error) {
+    console.error("[gamePersistence] Failed to get last read version:", error);
+    return null;
+  }
+}
+
+/**
+ * Set last read version for this instance in Redis
+ * TTL ensures stale instance IDs are cleaned up automatically
+ */
+export async function setLastReadVersion(instanceId: string, version: number): Promise<void> {
+  try {
+    await redis.hset(REDIS_KEYS.lastReadVersion, instanceId, version.toString());
+    // Set TTL on the hash to clean up old instances (10 minutes)
+    await redis.expire(REDIS_KEYS.lastReadVersion, 600);
+  } catch (error) {
+    console.error("[gamePersistence] Failed to set last read version:", error);
+  }
+}
+
+/**
  * Clear all Redis state (for reset)
  */
 export async function clearAll(): Promise<void> {
@@ -343,6 +372,7 @@ export async function clearAll(): Promise<void> {
     await redis.del(REDIS_KEYS.bots);
     await redis.del(REDIS_KEYS.matches);
     await redis.del(REDIS_KEYS.sessions);
+    await redis.del(REDIS_KEYS.lastReadVersion);
     console.log("[gamePersistence] Cleared all Redis state");
   } catch (error) {
     console.error("[gamePersistence] Failed to clear Redis state:", error);
