@@ -173,17 +173,23 @@ function encodeRegisterFunctionCall(fid: number): string {
 async function sendRegistrationTx(userAddress: string, config: any): Promise<string> {
   const fid = parseInt(localStorage.getItem('userFid') || '0', 10);
   
+  console.log('[useRegistrationFlow] Encoding FID:', fid);
+  
+  const encodedData = encodeRegisterFunctionCall(fid);
+  console.log('[useRegistrationFlow] Encoded data:', encodedData);
+  
   const params = [
     {
       from: userAddress,
       to: config.contractAddress,
-      value: config.minEntryFee,
-      data: encodeRegisterFunctionCall(fid),
+      value: '0x0', // No fee required
+      data: encodedData,
       gas: '0x186a0',
     },
   ];
 
   console.log('[useRegistrationFlow] Sending TX to contract:', config.contractAddress);
+  console.log('[useRegistrationFlow] TX params:', JSON.stringify(params[0], null, 2));
 
   const txHash = (await window.ethereum!.request({
     method: 'eth_sendTransaction',
