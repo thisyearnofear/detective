@@ -55,7 +55,6 @@ const INACTIVITY_FORFEIT = GAME_CONSTANTS.INACTIVITY_FORFEIT;
 
 // Game-specific constant (not part of shared GAME_CONSTANTS)
 const SIMULTANEOUS_MATCHES = 2; // 2 concurrent chats
-const USE_REDIS = process.env.USE_REDIS === "true";
 
 /**
  * Manages the complete game state.
@@ -626,7 +625,7 @@ class GameManager {
     await this.ensureInitialized();
 
     let match = this.state!.matches.get(matchId);
-    if (!match && USE_REDIS) {
+    if (!match) {
       const loaded = await persistence.loadMatch(matchId);
       if (loaded) {
         match = loaded;
@@ -1044,12 +1043,10 @@ class GameManager {
 
     // Clear all player data from Redis FIRST (before state meta update)
     // This prevents race condition where other instances load old data
-    if (USE_REDIS) {
-      await persistence.clearAllPlayers();
-      await persistence.clearAllBots();
-      await persistence.clearAllSessions();
-      await persistence.clearAllMatches();
-    }
+    await persistence.clearAllPlayers();
+    await persistence.clearAllBots();
+    await persistence.clearAllSessions();
+    await persistence.clearAllMatches();
 
     // Then atomically save new state to Redis
     await persistence.saveGameStateMeta({

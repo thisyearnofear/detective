@@ -2,8 +2,16 @@
 import { UserProfile } from "./types";
 import { inferWritingStyle } from "./inference";
 
+// Configuration - REQUIRED
 const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
-const NEYNAR_BASE_URL = 'https://api.neynar.com/v2/farcaster';
+if (!NEYNAR_API_KEY) {
+  throw new Error(
+    `[Neynar] FATAL: NEYNAR_API_KEY not set.
+    Get your API key at: https://neynar.com/app/api-keys`
+  );
+}
+
+const NEYNAR_BASE_URL = "https://api.neynar.com/v2/farcaster";
 
 // As per the docs, the quality score required to play.
 const NEYNAR_SCORE_THRESHOLD = 0.8;
@@ -45,26 +53,21 @@ function setCached(key: string, data: any): void {
  */
 export async function getFarcasterUserByAddress(
   address: string,
-  signature?: string,
+  signature?: string
 ): Promise<FarcasterUserData | null> {
   const cacheKey = `user-addr-${address.toLowerCase()}`;
   const cached = getCached(cacheKey);
   if (cached && !signature) return cached; // Only use cache if no signature verification needed
-
-  if (!NEYNAR_API_KEY) {
-    console.warn("NEYNAR_API_KEY not set, returning null for address lookup");
-    return null;
-  }
 
   try {
     // Use Neynar's by_eth_addresses endpoint to verify wallet ownership
     const response = await fetch(
       `${NEYNAR_BASE_URL}/user/by_eth_addresses?eth_addresses=${address}`,
       {
-        method: 'GET',
+        method: "GET",
         headers: {
-          'Content-Type': 'application/json',
-          'api_key': NEYNAR_API_KEY,
+          "Content-Type": "application/json",
+          api_key: NEYNAR_API_KEY!,
         },
       }
     );
@@ -76,7 +79,7 @@ export async function getFarcasterUserByAddress(
 
     const data = await response.json();
     const users = data.result || [];
-    
+
     if (users.length === 0) return null;
 
     // Get primary user (first result is most active)
@@ -85,11 +88,11 @@ export async function getFarcasterUserByAddress(
 
     // Now fetch full user data with validation
     const fullData = await getFarcasterUserData(fid);
-    
+
     if (fullData.isValid) {
       setCached(cacheKey, fullData);
     }
-    
+
     return fullData.isValid ? fullData : null;
   } catch (error) {
     console.error(`Error fetching user by address ${address}:`, error);
@@ -105,28 +108,8 @@ export async function getFarcasterUserByAddress(
  * @returns A comprehensive object with all user data for the game.
  */
 export async function getFarcasterUserData(
-  fid: number,
+  fid: number
 ): Promise<FarcasterUserData> {
-  // For local development without an API key, return mock data.
-  if (!NEYNAR_API_KEY) {
-    console.warn("NEYNAR_API_KEY is not set. Returning mock user data.");
-    const mockCasts = [
-      { text: "Just enjoying a cup of coffee and coding." },
-      { text: "Farcaster is a really interesting platform." },
-    ];
-    return {
-      isValid: true,
-      userProfile: {
-        fid,
-        username: `testuser${fid}`,
-        displayName: `Test User ${fid}`,
-        pfpUrl: "https://i.imgur.com/vL43u65.jpg",
-      },
-      recentCasts: mockCasts,
-      style: await inferWritingStyle(mockCasts.map((c) => c.text)),
-    };
-  }
-
   try {
     // 1. Fetch user profile for validation and basic info
     const userResponse = await fetch(
@@ -135,9 +118,9 @@ export async function getFarcasterUserData(
         method: "GET",
         headers: {
           "Content-Type": "application/json",
-          api_key: NEYNAR_API_KEY,
+          api_key: NEYNAR_API_KEY!,
         },
-      },
+      }
     );
 
     if (!userResponse.ok)
@@ -169,9 +152,9 @@ export async function getFarcasterUserData(
         method: "GET",
         headers: {
           "Content-Type": "application/json",
-          api_key: NEYNAR_API_KEY,
+          api_key: NEYNAR_API_KEY!,
         },
-      },
+      }
     );
     if (!feedResponse.ok)
       throw new Error(`Neynar feed API error: ${feedResponse.statusText}`);

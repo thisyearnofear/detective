@@ -752,13 +752,163 @@ export interface IDatabase {
     getCrossChainLeaderboard(limit?: number): Promise<DbLeaderboardEntry[]>;
 }
 
-// Initialize database
-const dbInstance = new PostgresDatabase();
-dbInstance.initialize().catch(err => {
-    console.error("[Database] Failed to initialize PostgreSQL:", err);
-    process.exit(1); // Fail fast - database is required
-});
+// Initialize database (lazy initialization at first use)
+let dbInstance: PostgresDatabase | null = null;
+let initializationPromise: Promise<void> | null = null;
 
-export const db: IDatabase = dbInstance;
-export const database: IDatabase = dbInstance; // Backwards compatibility
-export default dbInstance;
+async function getDbInstance(): Promise<PostgresDatabase> {
+    if (!dbInstance) {
+        dbInstance = new PostgresDatabase();
+        if (!initializationPromise) {
+            initializationPromise = dbInstance.initialize().catch(err => {
+                console.error("[Database] Failed to initialize PostgreSQL:", err);
+                process.exit(1); // Fail fast - database is required
+            });
+        }
+        await initializationPromise;
+    }
+    return dbInstance;
+}
+
+// Create proxy to ensure lazy initialization
+class DatabaseProxy implements IDatabase {
+    async initialize(): Promise<void> {
+        const db = await getDbInstance();
+        return db.initialize?.();
+    }
+
+    async saveGameCycle(cycle: Omit<DbGameCycle, "created_at">): Promise<void> {
+        const db = await getDbInstance();
+        return db.saveGameCycle(cycle);
+    }
+
+    async getGameCycle(id: string): Promise<DbGameCycle | null> {
+        const db = await getDbInstance();
+        return db.getGameCycle(id);
+    }
+
+    async saveMatch(match: Omit<DbMatch, "created_at">): Promise<void> {
+        const db = await getDbInstance();
+        return db.saveMatch(match);
+    }
+
+    async getMatch(id: string): Promise<DbMatch | null> {
+        const db = await getDbInstance();
+        return db.getMatch(id);
+    }
+
+    async getMatchesByPlayer(fid: number, limit?: number): Promise<DbMatch[]> {
+        const db = await getDbInstance();
+        return db.getMatchesByPlayer(fid, limit);
+    }
+
+    async getMatchesByCycle(cycleId: string): Promise<DbMatch[]> {
+        const db = await getDbInstance();
+        return db.getMatchesByCycle(cycleId);
+    }
+
+    async updatePlayerStats(
+        fid: number,
+        username: string,
+        displayName: string,
+        pfpUrl: string,
+        matchResult: { correct: boolean; speedMs: number }
+    ): Promise<void> {
+        const db = await getDbInstance();
+        return db.updatePlayerStats(fid, username, displayName, pfpUrl, matchResult);
+    }
+
+    async getPlayerStats(fid: number): Promise<DbPlayerStats | null> {
+        const db = await getDbInstance();
+        return db.getPlayerStats(fid);
+    }
+
+    async getGlobalLeaderboard(limit?: number): Promise<DbLeaderboardEntry[]> {
+        const db = await getDbInstance();
+        return db.getGlobalLeaderboard(limit);
+    }
+
+    async incrementPlayerGames(fid: number): Promise<void> {
+        const db = await getDbInstance();
+        return db.incrementPlayerGames(fid);
+    }
+
+    async saveGameResult(result: Omit<DbGameResult, "id" | "created_at">): Promise<void> {
+        const db = await getDbInstance();
+        return db.saveGameResult(result);
+    }
+
+    async getGameResultsByCycle(cycleId: string): Promise<DbGameResult[]> {
+        const db = await getDbInstance();
+        return db.getGameResultsByCycle(cycleId);
+    }
+
+    async getGameResultsByPlayer(fid: number, limit?: number): Promise<DbGameResult[]> {
+        const db = await getDbInstance();
+        return db.getGameResultsByPlayer(fid, limit);
+    }
+
+    async getLeaderboardNearPlayer(fid: number, chain?: string, limit?: number): Promise<DbLeaderboardEntry[]> {
+        const db = await getDbInstance();
+        return db.getLeaderboardNearPlayer(fid, chain, limit);
+    }
+
+    async getTopPlayers(chain?: string, limit?: number): Promise<DbLeaderboardEntry[]> {
+        const db = await getDbInstance();
+        return db.getTopPlayers(chain, limit);
+    }
+
+    async getFriendsLeaderboard(fid: number, chain?: string, limit?: number): Promise<DbLeaderboardEntry[]> {
+        const db = await getDbInstance();
+        return db.getFriendsLeaderboard(fid, chain, limit);
+    }
+
+    async saveRegistration(registration: Omit<DbRegistration, "id" | "created_at">): Promise<DbRegistration> {
+        const db = await getDbInstance();
+        return db.saveRegistration(registration);
+    }
+
+    async getRegistrationByTxHash(cycleId: string, txHash: string): Promise<DbRegistration | null> {
+        const db = await getDbInstance();
+        return db.getRegistrationByTxHash(cycleId, txHash);
+    }
+
+    async getRegistrationByFid(cycleId: string, fid: number): Promise<DbRegistration | null> {
+        const db = await getDbInstance();
+        return db.getRegistrationByFid(cycleId, fid);
+    }
+
+    async getCurrentGameLeaderboard(chain?: string, limit?: number): Promise<DbLeaderboardEntry[]> {
+        const db = await getDbInstance();
+        return db.getCurrentGameLeaderboard(chain, limit);
+    }
+
+    async getSeasonLeaderboard(chain?: string, timeframe?: string, limit?: number): Promise<DbLeaderboardEntry[]> {
+        const db = await getDbInstance();
+        return db.getSeasonLeaderboard(chain, timeframe, limit);
+    }
+
+    async getAllTimeLeaderboard(chain?: string, limit?: number): Promise<DbLeaderboardEntry[]> {
+        const db = await getDbInstance();
+        return db.getAllTimeLeaderboard(chain, limit);
+    }
+
+    async getNFTHolderLeaderboard(chain?: string, timeframe?: string, limit?: number): Promise<DbLeaderboardEntry[]> {
+        const db = await getDbInstance();
+        return db.getNFTHolderLeaderboard(chain, timeframe, limit);
+    }
+
+    async getTokenHolderLeaderboard(chain?: string, timeframe?: string, limit?: number): Promise<DbLeaderboardEntry[]> {
+        const db = await getDbInstance();
+        return db.getTokenHolderLeaderboard(chain, timeframe, limit);
+    }
+
+    async getCrossChainLeaderboard(limit?: number): Promise<DbLeaderboardEntry[]> {
+        const db = await getDbInstance();
+        return db.getCrossChainLeaderboard(limit);
+    }
+}
+
+export const db: IDatabase = new DatabaseProxy();
+export const database: IDatabase = new DatabaseProxy(); // Backwards compatibility
+export default db;

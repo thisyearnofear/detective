@@ -128,7 +128,7 @@ Repeat 5 times per game cycle
 - ✅ **Opening Move Variance**: Each bot greets distinctly (frequency-weighted)
 - ✅ **Authentic Fallbacks**: 100% from cast history, intelligent combining
 - ✅ **Cross-Round Memory**: Lite Redis-backed context (topics, player style, phrases)
-- ✅ **Graceful Fallbacks**: Game works without Redis, all changes non-blocking
+- ✅ **Production-Ready**: All required services (Redis, Database, APIs) are mandatory with fail-fast startup
 
 ### Phase 3A: Arbitrum Native TX Gating ✅ DEPLOYED
 - ✅ **Smart Contract**: `DetectiveGameEntry.sol` deployed on **Arbitrum One**
