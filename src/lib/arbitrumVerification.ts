@@ -2,13 +2,11 @@
  * Arbitrum TX Verification Utility
  * 
  * Single source of truth for:
- * - TX signature requirements
- * - Contract address validation (DetectiveGameEntry on Arbitrum One)
- * - TX proof verification
- * - Error handling
+ * - Client-side TX signing with wallet
+ * - Server-side TX verification on-chain
+ * - Contract address and RPC configuration
  * 
  * Contract: DetectiveGameEntry (0x2d0B651fE940f965AE239Ec6cF6EA35F502394ff)
- * Verified: https://arbitrum.blockscout.com/address/0x2d0B651fE940f965AE239Ec6cF6EA35F502394ff
  * 
  * Used by:
  * - useRegistrationFlow hook: Request TX from user with progress tracking
@@ -18,22 +16,18 @@
 
 import { createPublicClient, http, Address, getAddress, isAddress, toHex } from 'viem';
 import { arbitrum } from 'viem/chains';
-// Contract ABI available in: src/lib/detectiveGameEntryAbi.ts
-// Address: 0x2d0B651fE940f965AE239Ec6cF6EA35F502394ff (Arbitrum One)
 
 // ========== CONFIGURATION ==========
 
 export interface ArbitrumConfig {
   enabled: boolean;
   contractAddress: Address;
-  minEntryFee: string; // wei as string for precision
   rpcUrl: string;
 }
 
 export function getArbitrumConfig(): ArbitrumConfig {
   const enabled = process.env.NEXT_PUBLIC_ARBITRUM_ENABLED === 'true';
   const contractAddress = process.env.NEXT_PUBLIC_ARBITRUM_ENTRY_CONTRACT as Address | undefined;
-  const minEntryFee = process.env.NEXT_PUBLIC_ARBITRUM_MIN_FEE || '0';
   const rpcUrl = process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL || 'https://arb1.arbitrum.io/rpc';
   
   if (enabled && !contractAddress) {
@@ -43,7 +37,6 @@ export function getArbitrumConfig(): ArbitrumConfig {
   return {
     enabled,
     contractAddress: contractAddress || ('0x' as Address),
-    minEntryFee,
     rpcUrl,
   };
 }
@@ -84,7 +77,7 @@ export async function requestArbitrumRegistrationTx(userFid: number): Promise<st
   }
   
   try {
-    // Step 1: Request account access
+    // Request account access
     const accounts = (await window.ethereum.request({
       method: 'eth_requestAccounts',
     })) as string[];
@@ -101,14 +94,13 @@ export async function requestArbitrumRegistrationTx(userFid: number): Promise<st
       localStorage.setItem('arbitrumWalletAddress', userAddress);
     }
     
-    // Step 2: Switch to Arbitrum network
+    // Switch to Arbitrum network
     try {
       await window.ethereum.request({
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: '0xa4b1' }], // Arbitrum mainnet
       });
     } catch (switchError: any) {
-      // Error code 4902 means the chain hasn't been added
       if (switchError.code === 4902) {
         await window.ethereum.request({
           method: 'wallet_addEthereumChain',
@@ -131,7 +123,7 @@ export async function requestArbitrumRegistrationTx(userFid: number): Promise<st
       }
     }
     
-    // Step 3: Send TX to contract
+    // Send TX to contract
     const txHash = await sendRegistrationTx(userAddress, userFid, config);
     return txHash;
   } catch (error) {
@@ -141,7 +133,7 @@ export async function requestArbitrumRegistrationTx(userFid: number): Promise<st
 }
 
 /**
- * Send actual TX to contract
+ * Send TX to contract
  * 
  * @internal Used by requestArbitrumRegistrationTx
  */
@@ -155,8 +147,8 @@ async function sendRegistrationTx(
     {
       from: userAddress,
       to: config.contractAddress,
-      value: config.minEntryFee, // '0x0' for free, or amount in wei
-      data: encodeRegisterFunctionCall(userFid), // Function selector + encoded params
+      value: '0x0', // No fee required
+      data: encodeRegisterFunctionCall(userFid),
       gas: '0x186a0', // ~100k gas estimate
     },
   ];
@@ -180,14 +172,12 @@ async function sendRegistrationTx(
 // ========== TX VERIFICATION (SERVER-SIDE) ==========
 
 /**
- * Verify TX on server
- * 
- * Called by /api/game/register before allowing registration
+ * Verify TX on server before allowing registration
  * 
  * @param txHash The TX hash from client
  * @param walletAddress The wallet that sent the TX
  * @param userFid The FID that was registered
- * @returns true if TX is valid and confirmed
+ * @returns true if TX is valid and confirmed on-chain
  */
 export async function verifyArbitrumTx(
   txHash: string,
@@ -198,7 +188,7 @@ export async function verifyArbitrumTx(
   
   if (!config.enabled) {
     console.log('[ArbitrumVerification] Verification disabled');
-    return true; // Allow if feature disabled
+    return true;
   }
   
   try {
@@ -225,31 +215,22 @@ export async function verifyArbitrumTx(
       hash: txHash as `0x${string}`,
     });
     
-    // Verify TX properties
     if (!tx) {
       console.error('[ArbitrumVerification] TX not found on chain:', txHash);
       return false;
     }
     
-    // 1. Check TX was sent from expected wallet
+    // Verify TX properties
     if (!isSameAddress(tx.from, walletAddress)) {
       console.error('[ArbitrumVerification] TX from unexpected wallet:', tx.from, 'expected:', walletAddress);
       return false;
     }
     
-    // 2. Check TX destination is our contract
     if (!tx.to || !isSameAddress(tx.to, config.contractAddress)) {
       console.error('[ArbitrumVerification] TX to unexpected address:', tx.to, 'expected:', config.contractAddress);
       return false;
     }
     
-    // 3. Check TX value is sufficient (if fee-based)
-    if (BigInt(tx.value) < BigInt(config.minEntryFee)) {
-      console.error('[ArbitrumVerification] TX value too low:', tx.value, 'required:', config.minEntryFee);
-      return false;
-    }
-    
-    // 4. Check TX has correct function call (registerForGame)
     if (!isValidRegisterFunctionCall(tx.input, userFid)) {
       console.error('[ArbitrumVerification] TX data does not match registerForGame(fid)');
       return false;
@@ -261,12 +242,10 @@ export async function verifyArbitrumTx(
     });
     
     if (!receipt) {
-      console.warn('[ArbitrumVerification] TX receipt not available yet (pending or not yet mined):', txHash);
-      // Don't fail here - TX might be pending. Let caller decide retry strategy.
-      return true; // Optimistically accept
+      console.warn('[ArbitrumVerification] TX receipt not available yet (pending):', txHash);
+      return true; // Optimistically accept pending TX
     }
     
-    // 5. Check TX status (1 = success, 0 = reverted)
     const status = receipt.status as unknown as number;
     if (status !== 1) {
       console.error('[ArbitrumVerification] TX failed on-chain');
@@ -277,7 +256,6 @@ export async function verifyArbitrumTx(
     return true;
   } catch (error) {
     console.error('[ArbitrumVerification] Verification error:', error);
-    // Return false on any unexpected error (fail secure)
     return false;
   }
 }
@@ -291,12 +269,8 @@ export async function verifyArbitrumTx(
  * Selector: keccak256("registerForGame(uint256)") = 0x7c5de883
  */
 function encodeRegisterFunctionCall(fid: number): string {
-  // Function selector for registerForGame(uint256)
   const SELECTOR = '0x7c5de883';
-  
-  // Encode FID as 32-byte uint256
   const encodedFid = toHex(fid, { size: 32 });
-  
   return (SELECTOR + encodedFid.slice(2)) as `0x${string}`;
 }
 
@@ -306,7 +280,6 @@ function encodeRegisterFunctionCall(fid: number): string {
 function isValidRegisterFunctionCall(input: string, expectedFid: number): boolean {
   try {
     const expected = encodeRegisterFunctionCall(expectedFid);
-    // Case-insensitive comparison
     return input.toLowerCase() === expected.toLowerCase();
   } catch {
     return false;
@@ -325,13 +298,4 @@ function isSameAddress(a: string, b: string): boolean {
   } catch {
     return false;
   }
-}
-
-// ========== TYPES FOR EXTERNAL USE ==========
-
-export interface RegistrationTxState {
-  status: 'idle' | 'pending' | 'confirming' | 'confirmed' | 'failed';
-  txHash: string | null;
-  error: string | null;
-  walletAddress: string | null;
 }
