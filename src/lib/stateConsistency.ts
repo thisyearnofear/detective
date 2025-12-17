@@ -30,10 +30,14 @@
  */
 
 import * as persistence from "./gamePersistence";
+import { randomUUID } from "crypto";
+
+// Generate a unique ID for this serverless instance
+// In serverless environments, each cold start gets a new ID
+const INSTANCE_ID = randomUUID();
 
 let stateVersion = 0;
 let lastLoadedVersion = -1;
-let lastReadVersion = -1; // For detecting version changes
 
 /**
  * Load state version from Redis
@@ -74,10 +78,11 @@ export async function validateStateConsistency(): Promise<boolean> {
 /**
  * Mark cache as fresh after loading from Redis
  */
-export function markCacheFresh(version: number): void {
+export async function markCacheFresh(version: number): Promise<void> {
   lastLoadedVersion = version;
   stateVersion = version;
-  lastReadVersion = version; // Also mark as read to prevent immediate invalidation
+  // Also mark as read in Redis to prevent immediate invalidation
+  await persistence.setLastReadVersion(INSTANCE_ID, version);
   console.log(`[StateConsistency] Cache marked fresh at version ${version}`);
 }
 
@@ -118,18 +123,27 @@ export async function tryIncrementStateVersion(): Promise<boolean> {
 /**
  * Check if version has changed since last read
  * Used by repository cache invalidation
+ * Now uses Redis for serverless compatibility
  */
 export async function hasVersionChanged(): Promise<boolean> {
   const currentVersion = await loadStateVersion();
-  return currentVersion !== lastReadVersion;
+  const lastRead = await persistence.getLastReadVersion(INSTANCE_ID);
+  
+  // If this is the first read (null), consider it changed to trigger initial load
+  if (lastRead === null) {
+    return true;
+  }
+  
+  return currentVersion !== lastRead;
 }
 
 /**
  * Mark version as read (for cache invalidation tracking)
+ * Now persists to Redis for serverless compatibility
  */
 export async function markVersionAsRead(): Promise<void> {
   const currentVersion = await loadStateVersion();
-  lastReadVersion = currentVersion;
+  await persistence.setLastReadVersion(INSTANCE_ID, currentVersion);
 }
 
 /**
@@ -138,5 +152,5 @@ export async function markVersionAsRead(): Promise<void> {
 export function resetVersion(): void {
   stateVersion = 0;
   lastLoadedVersion = -1;
-  lastReadVersion = -1;
+  // Note: Redis-tracked lastReadVersion is not reset here (per-instance)
 }

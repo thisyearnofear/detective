@@ -142,7 +142,7 @@ class GameManager {
         
         // Mark cache as fresh - version is loaded from Redis
         const version = await stateConsistency.loadStateVersion();
-        stateConsistency.markCacheFresh(version || 0);
+        await stateConsistency.markCacheFresh(version || 0);
       } else {
         // Create new cycle
         this.state = this.createNewGameState();
@@ -172,7 +172,7 @@ class GameManager {
         }
         
         // Mark cache as fresh (version 0 for new cycle)
-        stateConsistency.markCacheFresh(0);
+        await stateConsistency.markCacheFresh(0);
       }
     } finally {
       this.initializing = false;
@@ -948,7 +948,7 @@ class GameManager {
     // Mark cache as fresh at the new version
     const version = await stateConsistency.loadStateVersion();
     if (version !== null && version !== undefined) {
-      stateConsistency.markCacheFresh(version);
+      await stateConsistency.markCacheFresh(version);
     }
   }
 
