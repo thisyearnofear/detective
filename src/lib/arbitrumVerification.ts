@@ -271,10 +271,10 @@ export async function verifyArbitrumTx(
  * Encode the registerForGame(uint256 fid) function call
  * 
  * Function signature: registerForGame(uint256)
- * Selector: keccak256("registerForGame(uint256)") = 0x7c5de883
+ * Selector: keccak256("registerForGame(uint256)") = 0x3017f27c
  */
 function encodeRegisterFunctionCall(fid: number): string {
-  const SELECTOR = '0x7c5de883';
+  const SELECTOR = '0x3017f27c';
   const encodedFid = toHex(fid, { size: 32 });
   return (SELECTOR + encodedFid.slice(2)) as `0x${string}`;
 }

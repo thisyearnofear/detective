@@ -162,7 +162,7 @@ export function useRegistrationFlow(): UseRegistrationFlowReturn {
  * Helper: Encode registerForGame function call
  */
 function encodeRegisterFunctionCall(fid: number): string {
-  const SELECTOR = '0x7c5de883';
+  const SELECTOR = '0x3017f27c';
   const encodedFid = fid.toString(16).padStart(64, '0');
   return SELECTOR + encodedFid;
 }

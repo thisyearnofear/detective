@@ -3,13 +3,13 @@
 ## Contract Information
 
 **Network**: Arbitrum One (mainnet)  
-**Address**: `0x2d0B651fE940f965AE239Ec6cF6EA35F502394ff`  
+**Address**: `0xa879B5CbD12b6137fCcf70669D48F55666296357`  
 **Status**: ✅ Deployed & Verified
 
 ## Verification Links
 
-- **Blockscout Explorer**: [Contract Page](https://arbitrum.blockscout.com/address/0x2d0B651fE940f965AE239Ec6cF6EA35F502394ff)
-- **Source Code Verification**: [Sourcify](https://repo.sourcify.dev/42161/0x2d0B651fE940f965AE239Ec6cF6EA35F502394ff)
+- **Blockscout Explorer**: [Contract Page](https://arbitrum.blockscout.com/address/0xa879B5CbD12b6137fCcf70669D48F55666296357)
+- **Source Code Verification**: [Sourcify](https://repo.sourcify.dev/42161/0xa879B5CbD12b6137fCcf70669D48F55666296357)
 
 ## Contract Features
 
@@ -88,7 +88,7 @@ Set in `.env.local` for registration to work:
 NEXT_PUBLIC_ARBITRUM_ENABLED=true
 
 # Contract address (pre-filled with deployment address)
-NEXT_PUBLIC_ARBITRUM_ENTRY_CONTRACT=0x2d0B651fE940f965AE239Ec6cF6EA35F502394ff
+NEXT_PUBLIC_ARBITRUM_ENTRY_CONTRACT=0xa879B5CbD12b6137fCcf70669D48F55666296357
 
 # Minimum entry fee (0 = free, examples below)
 NEXT_PUBLIC_ARBITRUM_MIN_FEE=0
@@ -186,6 +186,7 @@ curl "https://api.arbiscan.io/api?module=logs&action=getLogs&address=0x2d0B651fE
 - [ ] Initial pause state = false (registrations enabled)
 - [ ] Minimum fee set to 0 or desired amount
 - [ ] RPC endpoints responding correctly
+- [ ] **Function selector updated** in `useRegistrationFlow.ts` and `arbitrumVerification.ts` (use `cast sig "functionName(types)"` to generate)
 - [ ] Client can connect and submit registrations
 - [ ] TX verification works on server side
 - [ ] Events emitted correctly
