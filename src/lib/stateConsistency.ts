@@ -129,12 +129,20 @@ export async function hasVersionChanged(): Promise<boolean> {
   const currentVersion = await loadStateVersion();
   const lastRead = await persistence.getLastReadVersion(INSTANCE_ID);
   
+  console.log(`[StateConsistency] Version check: current=${currentVersion}, lastRead=${lastRead}, instanceId=${INSTANCE_ID.slice(0, 8)}`);
+  
   // If this is the first read (null), consider it changed to trigger initial load
   if (lastRead === null) {
+    console.log(`[StateConsistency] First read for instance, triggering load`);
     return true;
   }
   
-  return currentVersion !== lastRead;
+  const hasChanged = currentVersion !== lastRead;
+  if (hasChanged) {
+    console.log(`[StateConsistency] Version changed: ${lastRead} → ${currentVersion}`);
+  }
+  
+  return hasChanged;
 }
 
 /**
