@@ -46,9 +46,16 @@ export async function POST(request: Request) {
 
     // ========== STEP 3: VERIFY ARBITRUM TX (if enabled) ==========
     const arbitrumConfig = getArbitrumConfig();
+    console.log('[Registration] Arbitrum config:', arbitrumConfig);
+    
     if (arbitrumConfig.enabled) {
+      console.log('[Registration] Starting Arbitrum verification for FID:', fid);
+      console.log('[Registration] TX hash:', arbitrumTxHash);
+      console.log('[Registration] Wallet:', arbitrumWalletAddress);
+      
       // Arbitrum gating is required
       if (!arbitrumTxHash || typeof arbitrumTxHash !== "string") {
+        console.error('[Registration] Missing or invalid TX hash');
         return NextResponse.json(
           { error: "Arbitrum TX hash required to register." },
           { status: 400 }
@@ -56,6 +63,7 @@ export async function POST(request: Request) {
       }
 
       if (!arbitrumWalletAddress || typeof arbitrumWalletAddress !== "string") {
+        console.error('[Registration] Missing or invalid wallet address');
         return NextResponse.json(
           { error: "Arbitrum wallet address required to register." },
           { status: 400 }
@@ -63,6 +71,7 @@ export async function POST(request: Request) {
       }
 
       // Check: TX hash not already used (replay attack prevention)
+      console.log('[Registration] Checking for existing TX hash...');
       const existingReg = await db.getRegistrationByTxHash(gameState.cycleId, arbitrumTxHash);
       if (existingReg) {
         console.log(`[Registration] TX hash already used: ${arbitrumTxHash}`);
@@ -71,8 +80,10 @@ export async function POST(request: Request) {
           { status: 403 }
         );
       }
+      console.log('[Registration] ✓ TX hash not previously used');
 
       // Check: FID not already registered for this game
+      console.log('[Registration] Checking if FID already registered...');
       const fidReg = await db.getRegistrationByFid(gameState.cycleId, fid);
       if (fidReg) {
         console.log(`[Registration] FID ${fid} already registered for cycle ${gameState.cycleId}`);
@@ -81,9 +92,12 @@ export async function POST(request: Request) {
           { status: 403 }
         );
       }
+      console.log('[Registration] ✓ FID not previously registered');
 
       // Verify TX on-chain
+      console.log('[Registration] Calling verifyArbitrumTx...');
       const txValid = await verifyArbitrumTx(arbitrumTxHash, arbitrumWalletAddress, fid);
+      console.log('[Registration] verifyArbitrumTx returned:', txValid);
       if (!txValid) {
         return NextResponse.json(
           {
