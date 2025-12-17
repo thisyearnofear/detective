@@ -10,7 +10,7 @@
  * 
  * Used by:
  * - useRegistrationFlow hook: Request TX from user with progress tracking
- * - GameLobby: Orchestrate registration flow with modal states
+ * - BriefingRoom: Orchestrate investigation join flow with modal states
  * - /api/game/register: Verify TX proof on server
  */
 

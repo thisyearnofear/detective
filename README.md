@@ -107,7 +107,7 @@ Detective is a Farcaster-native social deduction game where players chat with op
 - **Hosting**: Vercel (free tier)
 
 ### Mini App Setup ✅
-- **Manifest**: `/public/manifest.json` - Farcaster app metadata
+- **Manifest**: `/public/.well-known/farcaster.json` - Farcaster app metadata
 - **SDK Ready**: `sdk.actions.ready()` called in Providers on app load
 - **Mobile**: Viewport/meta tags configured for Farcaster clients
 - **Authentication**: Integrated with Mini App SDK + Quick Auth
@@ -131,13 +131,13 @@ Repeat 5 times per game cycle
 
 Detective is fully configured to run as a Farcaster Mini App:
 
-1. **Manifest Configuration** - `/public/manifest.json` defines app metadata for Farcaster
+1. **Manifest Configuration** - `/public/.well-known/farcaster.json` defines app metadata for Farcaster
 2. **SDK Integration** - `@farcaster/miniapp-sdk` handles native features (auth, wallet, notifications)
 3. **Ready Signal** - `sdk.actions.ready()` called on app load to dismiss splash screen
 4. **Mobile Optimization** - Viewport settings and meta tags for Farcaster clients
 5. **Authentication** - Quick Auth integrated with Mini App environment
 
-**To deploy**: Push to public HTTPS URL (Vercel recommended), then share manifest.json URL with Farcaster.
+**To deploy**: Push to public HTTPS URL (Vercel recommended), then share your domain with Farcaster. The manifest will be automatically discovered at `https://your-domain.com/.well-known/farcaster.json`.
 
 ## Latest Enhancements (December 2025) ✅
 
@@ -157,7 +157,7 @@ Detective is fully configured to run as a Farcaster Mini App:
   - **Events**: PlayerRegistered, AdminTransferred, PauseStatusChanged, MinEntryFeeUpdated
   - **Errors**: ContractPaused, InvalidAddress
 - ✅ **TX Verification**: `arbitrumVerification.ts` - DRY single source of truth (~300 LOC)
-- ✅ **Registration Flow**: Enhanced GameLobby with `useRegistrationFlow` hook for step progression
+- ✅ **Registration Flow**: Enhanced BriefingRoom with `useRegistrationFlow` hook for step progression
 - ✅ **Modal States**: idle → wallet-check → signing → confirming → success/error with recovery
 - ✅ **Feature Gating**: `NEXT_PUBLIC_ARBITRUM_ENABLED` for gradual rollout
 - ✅ **Configuration**: `.env.example` with contract address + verification links

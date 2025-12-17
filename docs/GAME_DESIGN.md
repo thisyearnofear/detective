@@ -21,7 +21,7 @@ Detective is a social deduction game where players chat with opponents and try t
 **Single Source of Truth**: Server state (`REGISTRATION` → `LIVE` → `FINISHED`) drives all client transitions. 
 - When 3+ players register, server starts 30s countdown
 - Client polls every 2s and updates UI accordingly
-- When countdown expires, server transitions to LIVE and client switches from GameLobby to GameActiveView
+- When countdown expires, server transitions to LIVE and client switches from BriefingRoom to GameActiveView
 - No client-side phase conflicts or timer resets
 
 ### Registration Flow with Blockchain Integration
@@ -208,8 +208,8 @@ async function registerWithNFT(fid: number, chain: 'monad') {
 ```
 src/components/game/
 ├── GameStateView.tsx          # Orchestrator for authenticated users
-├── GameStatusCard.tsx         # Pre-auth dynamic status display
-├── GameLobby.tsx              # REGISTRATION phase
+├── CaseStatusCard.tsx         # Pre-auth dynamic status display
+├── BriefingRoom.tsx           # REGISTRATION phase
 ├── GameActiveView.tsx         # LIVE phase
 └── GameFinishedView.tsx       # FINISHED phase
 ```
@@ -218,7 +218,7 @@ src/components/game/
 ```
 PRE-AUTH (Unauthenticated)
 │
-├─→ GameStatusCard
+├─→ CaseStatusCard
 │   ├─ REGISTRATION: "Join now • 45s left"
 │   ├─ LIVE: "12 players competing • 2:30 remaining"
 │   └─ FINISHED: "View leaderboard • Next in 45s"
@@ -228,7 +228,7 @@ PRE-AUTH (Unauthenticated)
 POST-AUTH (Authenticated)
 │
 └─→ GameStateView
-    ├─ REGISTRATION → GameLobby
+    ├─ REGISTRATION → BriefingRoom
     │  ├─ Lobby phase (register, view players)
     │  ├─ Bot generation (AI opponent creation)
     │  ├─ Player reveal (meet your opponents)
@@ -242,7 +242,7 @@ POST-AUTH (Authenticated)
        └─ Next cycle countdown
 ```
 
-### GameStatusCard (Pre-Auth Discovery)
+### CaseStatusCard (Pre-Auth Discovery)
 Shows live game state to unauthenticated users, creating FOMO and urgency.
 
 **Features**:
@@ -430,7 +430,7 @@ MultiChatContainer
 Based on recent development work, several UX improvements have been implemented to enhance the user experience:
 
 ### Enhanced Phase Transitions
-**Problem**: GameLobby had 4 phases (lobby → bot_generation → player_reveal → countdown → live) but the logic for triggering transitions was fragile with hardcoded timeouts.
+**Problem**: BriefingRoom had 4 phases (lobby → bot_generation → player_reveal → countdown → live) but the logic for triggering transitions was fragile with hardcoded timeouts.
 
 **Solution**:
 - Now uses server-driven phase transitions with `/api/game/phase` endpoint

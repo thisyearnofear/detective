@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { GameCycleState } from '@/lib/types';
 import { sendGameStartNotification } from '@/lib/farcasterAuth';
-import GameLobby from './GameLobby';
+import BriefingRoom from './BriefingRoom';
 import GameActiveView from './GameActiveView';
 import GameFinishedView from './GameFinishedView';
 
@@ -61,7 +61,7 @@ export default function GameStateView({
   switch (gameState.state as GameCycleState) {
     case 'REGISTRATION':
       return (
-        <GameLobby
+        <BriefingRoom
           currentPlayer={currentPlayer}
           gameState={gameState}
         />

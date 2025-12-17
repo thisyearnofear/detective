@@ -6,7 +6,7 @@
 
 export const GAME_CONSTANTS = {
   // Player limits
-  MIN_PLAYERS: 3, // Minimum to start game
+  MIN_PLAYERS: 3, // Minimum to start investigation
   MAX_PLAYERS: 50, // Maximum concurrent players in single match
 
   // Timing (milliseconds)

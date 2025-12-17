@@ -46,8 +46,8 @@ export default function MobileNavigationTabs({
   const tabs: NavigationTab[] = [
     {
       id: 'game',
-      label: gameState === 'playing' ? 'Playing' : gameState === 'lobby' ? 'Lobby' : 'Game',
-      icon: gameState === 'playing' ? '🎮' : gameState === 'lobby' ? '⏳' : '🎯',
+      label: gameState === 'playing' ? 'Snooping' : gameState === 'lobby' ? 'Briefing' : 'Case File',
+      icon: '🔍',
       disabled: false,
     },
     {
