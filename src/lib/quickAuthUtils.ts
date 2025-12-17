@@ -1,15 +1,8 @@
 /**
  * Farcaster Auth Utilities (2025)
  * 
- * Unified server-side auth verification handling:
- * - Quick Auth JWT tokens from MiniApp context
- * - SIWF signatures from web context
- * 
- * Both routed through @farcaster/auth-client for proper verification
- * Reference: https://docs.farcaster.xyz/auth-kit/client/introduction
+ * JWT token verification for Quick Auth tokens
  */
-
-import { createAppClient } from '@farcaster/auth-client';
 
 /**
  * Extract Bearer token from Authorization header
@@ -31,10 +24,6 @@ export async function verifyQuickAuthToken(
   token: string,
   hostname: string
 ): Promise<{ sub: number; iat: number; exp: number }> {
-  // Quick Auth verification logic
-  // Since we removed @farcaster/quick-auth, we'll use auth-client instead
-  // For now, return a simple JWT decode (in production, you'd verify the signature)
-  
   try {
     // Decode JWT manually (Quick Auth tokens are asymmetrically signed)
     const parts = token.split('.');
@@ -61,16 +50,4 @@ export async function verifyQuickAuthToken(
       `Invalid Quick Auth token: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
   }
-}
-
-/**
- * Create auth client for SIWF verification
- * Used for web-based Sign In With Farcaster flows
- */
-export function createFarcasterAuthClient() {
-  // Create app client with relay only
-  // Ethereum provider is managed separately via window.ethereum for wallet interaction
-  return createAppClient({
-    relay: 'https://relay.farcaster.xyz',
-  });
 }
