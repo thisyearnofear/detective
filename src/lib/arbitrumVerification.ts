@@ -142,19 +142,24 @@ async function sendRegistrationTx(
   userFid: number,
   config: ArbitrumConfig
 ): Promise<string> {
+  console.log('[ArbitrumVerification] Encoding FID:', userFid);
+  
+  const encodedData = encodeRegisterFunctionCall(userFid);
+  console.log('[ArbitrumVerification] Encoded data:', encodedData);
+  
   const method = 'eth_sendTransaction';
   const params = [
     {
       from: userAddress,
       to: config.contractAddress,
       value: '0x0', // No fee required
-      data: encodeRegisterFunctionCall(userFid),
+      data: encodedData,
       gas: '0x186a0', // ~100k gas estimate
     },
   ];
   
   console.log('[ArbitrumVerification] Sending TX to contract:', config.contractAddress);
-  console.log('[ArbitrumVerification] Encoded call:', params[0].data);
+  console.log('[ArbitrumVerification] TX params:', JSON.stringify(params[0], null, 2));
   
   const txHash = (await window.ethereum!.request({
     method,
