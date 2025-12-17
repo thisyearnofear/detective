@@ -20,7 +20,15 @@ import {
   enrichPromptWithMemory,
 } from "./conversationContext";
 
+// Configuration - REQUIRED
 const VENICE_API_KEY = process.env.VENICE_API_KEY;
+if (!VENICE_API_KEY) {
+  throw new Error(
+    `[Venice] FATAL: VENICE_API_KEY not set.
+    Get your API key at: https://venice.ai/settings/api`
+  );
+}
+
 const VENICE_API_URL = "https://api.venice.ai/api/v1/chat/completions";
 const VENICE_MODEL = "llama-3.3-70b";
 
@@ -668,11 +676,6 @@ export async function generateBotResponse(
   messageHistory: ChatMessage[],
   matchId?: string,
 ): Promise<string> {
-  if (!VENICE_API_KEY) {
-    console.error("VENICE_API_KEY is not set.");
-    return "...";
-  }
-
   const userMessages = messageHistory
     .filter((msg) => msg.sender.fid !== bot.fid)
     .map((msg) => msg.text);

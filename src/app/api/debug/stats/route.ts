@@ -31,11 +31,9 @@ export async function GET(request: NextRequest) {
 
     // Check environment
     const databaseUrl = process.env.DATABASE_URL;
-    const useDatabase = process.env.USE_DATABASE === "true" && databaseUrl;
 
     console.log(`[DEBUG] Database config:`, {
       hasUrl: !!databaseUrl,
-      isEnabled: useDatabase,
       urlPattern: databaseUrl ? `${databaseUrl.substring(0, 50)}...` : "none",
     });
 
@@ -46,7 +44,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       debug: {
-        databaseConfigured: useDatabase,
         databaseUrlPresent: !!databaseUrl,
       },
       player: {

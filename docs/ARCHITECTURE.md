@@ -242,16 +242,12 @@ NEYNAR_API_KEY=xxx          # Farcaster user data
 VENICE_API_KEY=xxx          # Bot AI responses
 ABLY_API_KEY=xxx            # WebSocket
 
-# Redis (for horizontal scaling)
-REDIS_URL=redis://xxx
-USE_REDIS=true
+# Redis (REQUIRED - Upstash REST API)
+UPSTASH_REDIS_REST_URL=https://xxx.upstash.io
+UPSTASH_REDIS_REST_TOKEN=xxx
 
-# PostgreSQL (for persistence)
+# PostgreSQL (REQUIRED - for persistence)
 DATABASE_URL=postgresql://xxx
-USE_DATABASE=true
-
-# WebSocket
-NEXT_PUBLIC_ENABLE_WEBSOCKET=true
 ```
 
 ### Performance Optimization
@@ -403,11 +399,9 @@ This architecture provides a solid foundation for scaling from MVP to production
 - Personality profiles extracted (20+ traits: greetings, questions, tone, emojis, etc.)
 - Adaptive responses using only 3 traits (`initiatesConversations`, `asksQuestions`, `isDebater`)
 - Typing delays: 200ms base + char-based scaling (too fast for realistic delivery)
-- Response fallbacks use generic templates (deprecated but still active)
 - No cross-conversation memory (each round isolated)
 
 ### Identified Issues
-1. **Repetitive communication**: Generic RESPONSE_TEMPLATES still used as fallbacks
 2. **Unrealistic typing speed**: Messages appear instantly after 200-800ms delay
 3. **Under-utilized personality data**: `frequentPhrases`, `responseStarters`, `responseClosers`, `emotionalTone`, `topicKeywords`, `reactionEmojis` not used in response generation
 4. **Personality mismatches**: Both bots open identically even when their patterns differ
@@ -575,11 +569,11 @@ BACKGROUND CONTEXT (from previous rounds):
 - Persistence layer
 - Database schema
 
-**✅ Graceful Fallbacks**:
-- Redis unavailable → Context loading returns null, bot continues
+**✅ Resilience**:
 - Venice API timeout → Fallback to authentic cast history
 - Personality data missing → Uses defaults
 - Context data missing → Bot responds without context (normal behavior)
+- Required services (Redis, Database, APIs) fail fast at startup
 
 ### Testing Recommendations
 
