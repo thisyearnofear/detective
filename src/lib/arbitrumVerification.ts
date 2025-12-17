@@ -28,7 +28,9 @@ export interface ArbitrumConfig {
 export function getArbitrumConfig(): ArbitrumConfig {
   const enabled = process.env.NEXT_PUBLIC_ARBITRUM_ENABLED === 'true';
   const contractAddress = process.env.NEXT_PUBLIC_ARBITRUM_ENTRY_CONTRACT as Address | undefined;
-  const rpcUrl = process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL || 'https://arb1.arbitrum.io/rpc';
+  // Server-side: prefer ARBITRUM_RPC_URL, fall back to NEXT_PUBLIC_ version
+  // Client-side: only NEXT_PUBLIC_ version is available
+  const rpcUrl = process.env.ARBITRUM_RPC_URL || process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL || 'https://arb1.arbitrum.io/rpc';
   
   if (enabled && !contractAddress) {
     console.error('[ArbitrumVerification] ARBITRUM_ENABLED=true but contract address missing');
@@ -191,6 +193,15 @@ export async function verifyArbitrumTx(
 ): Promise<boolean> {
   const config = getArbitrumConfig();
   
+  console.log('[ArbitrumVerification] Starting verification:', {
+    txHash,
+    walletAddress,
+    userFid,
+    configEnabled: config.enabled,
+    contractAddress: config.contractAddress,
+    rpcUrl: config.rpcUrl,
+  });
+  
   if (!config.enabled) {
     console.log('[ArbitrumVerification] Verification disabled');
     return true;
@@ -202,18 +213,22 @@ export async function verifyArbitrumTx(
       console.error('[ArbitrumVerification] Invalid TX hash format:', txHash);
       return false;
     }
+    console.log('[ArbitrumVerification] ✓ TX hash format valid');
     
     if (!isAddress(walletAddress)) {
       console.error('[ArbitrumVerification] Invalid wallet address:', walletAddress);
       return false;
     }
+    console.log('[ArbitrumVerification] ✓ Wallet address valid');
     
     if (userFid <= 0) {
       console.error('[ArbitrumVerification] Invalid FID:', userFid);
       return false;
     }
+    console.log('[ArbitrumVerification] ✓ FID valid');
     
     const client = getArbitrumClient();
+    console.log('[ArbitrumVerification] Fetching TX from chain...');
     
     // Fetch TX from Arbitrum RPC
     const tx = await client.getTransaction({
@@ -224,22 +239,40 @@ export async function verifyArbitrumTx(
       console.error('[ArbitrumVerification] TX not found on chain:', txHash);
       return false;
     }
+    console.log('[ArbitrumVerification] ✓ TX found on chain');
+    console.log('[ArbitrumVerification] TX details:', {
+      from: tx.from,
+      to: tx.to,
+      input: tx.input,
+    });
     
     // Verify TX properties
     if (!isSameAddress(tx.from, walletAddress)) {
       console.error('[ArbitrumVerification] TX from unexpected wallet:', tx.from, 'expected:', walletAddress);
       return false;
     }
+    console.log('[ArbitrumVerification] ✓ From address matches');
     
     if (!tx.to || !isSameAddress(tx.to, config.contractAddress)) {
       console.error('[ArbitrumVerification] TX to unexpected address:', tx.to, 'expected:', config.contractAddress);
       return false;
     }
+    console.log('[ArbitrumVerification] ✓ To address matches contract');
+    
+    const expectedData = encodeRegisterFunctionCall(userFid);
+    console.log('[ArbitrumVerification] Comparing TX input:', {
+      actual: tx.input,
+      expected: expectedData,
+      match: tx.input.toLowerCase() === expectedData.toLowerCase(),
+    });
     
     if (!isValidRegisterFunctionCall(tx.input, userFid)) {
       console.error('[ArbitrumVerification] TX data does not match registerForGame(fid)');
+      console.error('[ArbitrumVerification] Expected:', expectedData);
+      console.error('[ArbitrumVerification] Actual:', tx.input);
       return false;
     }
+    console.log('[ArbitrumVerification] ✓ Function call data matches');
     
     // Fetch receipt to confirm TX succeeded
     const receipt = await client.getTransactionReceipt({
