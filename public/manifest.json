@@ -1,0 +1,8 @@
+{
+  "name": "Detective - Is That You?",
+  "description": "AI-powered social deduction game. Chat with opponents and figure out who's real and who's AI.",
+  "iconUrl": "https://detectiveproof.vercel.app/detective.png",
+  "splashImageUrl": "https://detectiveproof.vercel.app/og-image.png",
+  "splashBackgroundColor": "#0f172a",
+  "url": "https://detectiveproof.vercel.app"
+}

@@ -100,10 +100,17 @@ Detective is a Farcaster-native social deduction game where players chat with op
 ### Tech Stack
 - **Frontend**: Next.js 15 + React 19 + TypeScript + Tailwind CSS
 - **Backend**: Next.js API Routes (serverless)
+- **Mini App SDK**: `@farcaster/miniapp-sdk` v0.2.1 - Farcaster-native integration
 - **Authentication**: Farcaster Quick Auth (2025 standard) - Edge-deployed JWT tokens
 - **Game State**: In-memory (no database required for MVP)
 - **APIs**: Neynar (Farcaster data), Claude (bot intelligence)
 - **Hosting**: Vercel (free tier)
+
+### Mini App Setup ✅
+- **Manifest**: `/public/manifest.json` - Farcaster app metadata
+- **SDK Ready**: `sdk.actions.ready()` called in Providers on app load
+- **Mobile**: Viewport/meta tags configured for Farcaster clients
+- **Authentication**: Integrated with Mini App SDK + Quick Auth
 
 ### Game Flow
 ```
@@ -119,6 +126,18 @@ Scoring & Leaderboard
     ↓
 Repeat 5 times per game cycle
 ```
+
+## Farcaster Mini App Integration ✅ (Latest)
+
+Detective is fully configured to run as a Farcaster Mini App:
+
+1. **Manifest Configuration** - `/public/manifest.json` defines app metadata for Farcaster
+2. **SDK Integration** - `@farcaster/miniapp-sdk` handles native features (auth, wallet, notifications)
+3. **Ready Signal** - `sdk.actions.ready()` called on app load to dismiss splash screen
+4. **Mobile Optimization** - Viewport settings and meta tags for Farcaster clients
+5. **Authentication** - Quick Auth integrated with Mini App environment
+
+**To deploy**: Push to public HTTPS URL (Vercel recommended), then share manifest.json URL with Farcaster.
 
 ## Latest Enhancements (December 2025) ✅
 
