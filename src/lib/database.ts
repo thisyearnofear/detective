@@ -105,6 +105,15 @@ export interface DbGameResult {
     created_at: Date;
 }
 
+export interface DbRegistration {
+    id: string;
+    cycle_id: string;
+    fid: number;
+    wallet_address: string;
+    arbitrum_tx_hash: string | null;
+    created_at: Date;
+}
+
 /**
  * In-memory database fallback for development
  */
@@ -114,6 +123,8 @@ class InMemoryDatabase {
     private playerStats: Map<number, DbPlayerStats> = new Map();
     private gameResults: DbGameResult[] = [];
     private gameResultIdCounter = 1;
+    private registrations: Map<string, DbRegistration> = new Map();
+    private registrationIdCounter = 1;
 
     async saveGameCycle(cycle: Omit<DbGameCycle, "created_at">): Promise<void> {
         this.cycles.set(cycle.id, {
@@ -279,6 +290,37 @@ class InMemoryDatabase {
         return await this.getGlobalLeaderboard(limit);
     }
 
+    // ========== REGISTRATION TRACKING ==========
+
+    async saveRegistration(registration: Omit<DbRegistration, "id" | "created_at">): Promise<DbRegistration> {
+        const id = `reg-${registration.cycle_id}-${registration.fid}-${this.registrationIdCounter++}`;
+        const record: DbRegistration = {
+            ...registration,
+            id,
+            created_at: new Date(),
+        };
+        this.registrations.set(id, record);
+        return record;
+    }
+
+    async getRegistrationByTxHash(cycleId: string, txHash: string): Promise<DbRegistration | null> {
+        for (const reg of this.registrations.values()) {
+            if (reg.cycle_id === cycleId && reg.arbitrum_tx_hash === txHash) {
+                return reg;
+            }
+        }
+        return null;
+    }
+
+    async getRegistrationByFid(cycleId: string, fid: number): Promise<DbRegistration | null> {
+        for (const reg of this.registrations.values()) {
+            if (reg.cycle_id === cycleId && reg.fid === fid) {
+                return reg;
+            }
+        }
+        return null;
+    }
+
     async getFriendsLeaderboard(fid: number, chain?: string, limit: number = 100): Promise<DbLeaderboardEntry[]> {
         // For in-memory implementation, return empty array or global leaderboard
         // Note: fid is used for API compatibility but not implemented in in-memory version
@@ -423,11 +465,22 @@ class PostgresDatabase {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
       
+      CREATE TABLE IF NOT EXISTS game_registrations (
+        id VARCHAR(255) PRIMARY KEY,
+        cycle_id VARCHAR(255) NOT NULL REFERENCES game_cycles(id),
+        fid INTEGER NOT NULL,
+        wallet_address VARCHAR(255) NOT NULL,
+        arbitrum_tx_hash VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      
       CREATE INDEX IF NOT EXISTS idx_matches_player ON matches(player_fid);
       CREATE INDEX IF NOT EXISTS idx_matches_cycle ON matches(cycle_id);
       CREATE INDEX IF NOT EXISTS idx_player_stats_accuracy ON player_stats(accuracy DESC);
       CREATE INDEX IF NOT EXISTS idx_game_results_cycle ON game_results(cycle_id);
       CREATE INDEX IF NOT EXISTS idx_game_results_player ON game_results(player_fid);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_registrations_tx_hash ON game_registrations(cycle_id, arbitrum_tx_hash);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_registrations_fid_cycle ON game_registrations(cycle_id, fid);
       CREATE INDEX IF NOT EXISTS idx_game_results_rank ON game_results(rank);
     `);
 
@@ -862,6 +915,49 @@ class PostgresDatabase {
         return result.rows.map(convertAccuracy);
     }
 
+    // ========== REGISTRATION TRACKING ==========
+
+    async saveRegistration(registration: Omit<DbRegistration, "id" | "created_at">): Promise<DbRegistration> {
+        const pool = await this.getPool();
+        const id = `reg-${registration.cycle_id}-${registration.fid}-${Date.now()}`;
+        
+        try {
+            await pool.query(
+                `INSERT INTO game_registrations (id, cycle_id, fid, wallet_address, arbitrum_tx_hash)
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [id, registration.cycle_id, registration.fid, registration.wallet_address, registration.arbitrum_tx_hash]
+            );
+            return { ...registration, id, created_at: new Date() };
+        } catch (error: any) {
+            if (error.code === '23505') { // UNIQUE constraint violation
+                throw new Error(`Duplicate registration: FID ${registration.fid} already registered for cycle ${registration.cycle_id}`);
+            }
+            throw error;
+        }
+    }
+
+    async getRegistrationByTxHash(cycleId: string, txHash: string): Promise<DbRegistration | null> {
+        const pool = await this.getPool();
+        const result = await pool.query(
+            `SELECT id, cycle_id, fid, wallet_address, arbitrum_tx_hash, created_at
+             FROM game_registrations
+             WHERE cycle_id = $1 AND arbitrum_tx_hash = $2`,
+            [cycleId, txHash]
+        );
+        return result.rows[0] || null;
+    }
+
+    async getRegistrationByFid(cycleId: string, fid: number): Promise<DbRegistration | null> {
+        const pool = await this.getPool();
+        const result = await pool.query(
+            `SELECT id, cycle_id, fid, wallet_address, arbitrum_tx_hash, created_at
+             FROM game_registrations
+             WHERE cycle_id = $1 AND fid = $2`,
+            [cycleId, fid]
+        );
+        return result.rows[0] || null;
+    }
+
     async close(): Promise<void> {
         if (this.pool) {
             await this.pool.end();
@@ -895,6 +991,9 @@ export interface IDatabase {
     getLeaderboardNearPlayer(fid: number, chain?: string, limit?: number): Promise<DbLeaderboardEntry[]>;
     getTopPlayers(chain?: string, limit?: number): Promise<DbLeaderboardEntry[]>;
     getFriendsLeaderboard(fid: number, chain?: string, limit?: number): Promise<DbLeaderboardEntry[]>;
+    saveRegistration(registration: Omit<DbRegistration, "id" | "created_at">): Promise<DbRegistration>;
+    getRegistrationByTxHash(cycleId: string, txHash: string): Promise<DbRegistration | null>;
+    getRegistrationByFid(cycleId: string, fid: number): Promise<DbRegistration | null>;
     getCurrentGameLeaderboard(chain?: string, limit?: number): Promise<DbLeaderboardEntry[]>;
     getSeasonLeaderboard(chain?: string, timeframe?: string, limit?: number): Promise<DbLeaderboardEntry[]>;
     getAllTimeLeaderboard(chain?: string, limit?: number): Promise<DbLeaderboardEntry[]>;
