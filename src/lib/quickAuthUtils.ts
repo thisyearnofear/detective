@@ -9,7 +9,7 @@
  * Reference: https://docs.farcaster.xyz/auth-kit/client/introduction
  */
 
-import { createAppClient, viemConnector } from '@farcaster/auth-client';
+import { createAppClient } from '@farcaster/auth-client';
 
 /**
  * Extract Bearer token from Authorization header
@@ -68,18 +68,9 @@ export async function verifyQuickAuthToken(
  * Used for web-based Sign In With Farcaster flows
  */
 export function createFarcasterAuthClient() {
-  // Only call viemConnector() in browser context after window.ethereum is available
-  // This avoids conflicts with MetaMask's read-only ethereum property
-  if (typeof window === 'undefined') {
-    throw new Error('SIWF client can only be created in browser context');
-  }
-
-  if (!window.ethereum) {
-    throw new Error('Ethereum provider not available. Please install MetaMask.');
-  }
-
+  // Create app client with relay only
+  // Ethereum provider is managed separately via window.ethereum for wallet interaction
   return createAppClient({
     relay: 'https://relay.farcaster.xyz',
-    ethereum: viemConnector(),
   });
 }
