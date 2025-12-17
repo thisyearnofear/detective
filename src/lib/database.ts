@@ -12,16 +12,15 @@
  * For production, consider using Prisma, Drizzle, or Kysely.
  */
 
-// Check if database is configured
+// Database configuration - PostgreSQL is REQUIRED in production
 const DATABASE_URL = process.env.DATABASE_URL;
-const USE_DATABASE = process.env.USE_DATABASE === "true" && DATABASE_URL;
+if (!DATABASE_URL) {
+  throw new Error(
+    `[Database] FATAL: DATABASE_URL not set. PostgreSQL is required. Set DATABASE_URL in .env`
+  );
+}
 
-// Log startup configuration
-console.log(`[Database] Configuration check:`, {
-  DATABASE_URL: DATABASE_URL ? `${DATABASE_URL.substring(0, 60)}...` : "NOT SET",
-  USE_DATABASE: process.env.USE_DATABASE,
-  willUsePostgres: USE_DATABASE,
-});
+console.log(`[Database] PostgreSQL configured: ${DATABASE_URL.substring(0, 60)}...`);
 
 // Helper to convert PostgreSQL DECIMAL strings to numbers
 function convertAccuracy(entry: any): any {
@@ -114,256 +113,7 @@ export interface DbRegistration {
     created_at: Date;
 }
 
-/**
- * In-memory database fallback for development
- */
-class InMemoryDatabase {
-    private cycles: Map<string, DbGameCycle> = new Map();
-    private matches: Map<string, DbMatch> = new Map();
-    private playerStats: Map<number, DbPlayerStats> = new Map();
-    private gameResults: DbGameResult[] = [];
-    private gameResultIdCounter = 1;
-    private registrations: Map<string, DbRegistration> = new Map();
-    private registrationIdCounter = 1;
 
-    async saveGameCycle(cycle: Omit<DbGameCycle, "created_at">): Promise<void> {
-        this.cycles.set(cycle.id, {
-            ...cycle,
-            created_at: new Date(),
-        });
-    }
-
-    async getGameCycle(id: string): Promise<DbGameCycle | null> {
-        return this.cycles.get(id) || null;
-    }
-
-    async saveMatch(match: Omit<DbMatch, "created_at">): Promise<void> {
-        this.matches.set(match.id, {
-            ...match,
-            created_at: new Date(),
-        });
-    }
-
-    async getMatch(id: string): Promise<DbMatch | null> {
-        return this.matches.get(id) || null;
-    }
-
-    async getMatchesByPlayer(fid: number, limit: number = 50): Promise<DbMatch[]> {
-        return Array.from(this.matches.values())
-            .filter(m => m.player_fid === fid)
-            .sort((a, b) => b.started_at.getTime() - a.started_at.getTime())
-            .slice(0, limit);
-    }
-
-    async getMatchesByCycle(cycleId: string): Promise<DbMatch[]> {
-        return Array.from(this.matches.values())
-            .filter(m => m.cycle_id === cycleId);
-    }
-
-    async updatePlayerStats(
-        fid: number,
-        username: string,
-        displayName: string,
-        pfpUrl: string,
-        matchResult: { correct: boolean; speedMs: number }
-    ): Promise<void> {
-        const existing = this.playerStats.get(fid);
-
-        if (existing) {
-            existing.total_matches++;
-            if (matchResult.correct) {
-                existing.correct_votes++;
-            }
-            existing.accuracy = (existing.correct_votes / existing.total_matches) * 100;
-            existing.avg_speed_ms = Math.round(
-                (existing.avg_speed_ms * (existing.total_matches - 1) + matchResult.speedMs) /
-                existing.total_matches
-            );
-            existing.last_played_at = new Date();
-            existing.updated_at = new Date();
-        } else {
-            this.playerStats.set(fid, {
-                fid,
-                username,
-                display_name: displayName,
-                pfp_url: pfpUrl,
-                total_games: 1,
-                total_matches: 1,
-                correct_votes: matchResult.correct ? 1 : 0,
-                accuracy: matchResult.correct ? 100 : 0,
-                avg_speed_ms: matchResult.speedMs,
-                best_streak: matchResult.correct ? 1 : 0,
-                last_played_at: new Date(),
-                created_at: new Date(),
-                updated_at: new Date(),
-            });
-        }
-    }
-
-    async getPlayerStats(fid: number): Promise<DbPlayerStats | null> {
-        return this.playerStats.get(fid) || null;
-    }
-
-    async getGlobalLeaderboard(limit: number = 100): Promise<DbLeaderboardEntry[]> {
-        const stats = Array.from(this.playerStats.values())
-            .filter(s => s.total_matches >= 5) // Minimum 5 matches to qualify
-            .sort((a, b) => {
-                if (b.accuracy !== a.accuracy) {
-                    return b.accuracy - a.accuracy;
-                }
-                return a.avg_speed_ms - b.avg_speed_ms;
-            })
-            .slice(0, limit);
-
-        return stats.map((s, index) => ({
-            fid: s.fid,
-            username: s.username,
-            display_name: s.display_name,
-            pfp_url: s.pfp_url,
-            accuracy: s.accuracy,
-            avg_speed_ms: s.avg_speed_ms,
-            total_matches: s.total_matches,
-            total_games: s.total_games,
-            total_wins: 0, // In-memory doesn't track wins yet
-            rank: index + 1,
-        }));
-    }
-
-    async incrementPlayerGames(fid: number): Promise<void> {
-        const stats = this.playerStats.get(fid);
-        if (stats) {
-            stats.total_games++;
-            stats.updated_at = new Date();
-        }
-    }
-
-    async saveGameResult(result: Omit<DbGameResult, "id" | "created_at">): Promise<void> {
-        this.gameResults.push({
-            ...result,
-            id: this.gameResultIdCounter++,
-            created_at: new Date(),
-        });
-
-        // Update total_wins if player won (rank 1)
-        if (result.rank === 1) {
-            const stats = this.playerStats.get(result.player_fid);
-            if (stats) {
-                (stats as any).total_wins = ((stats as any).total_wins || 0) + 1;
-            }
-        }
-    }
-
-    async getGameResultsByCycle(cycleId: string): Promise<DbGameResult[]> {
-        return this.gameResults
-            .filter(r => r.cycle_id === cycleId)
-            .sort((a, b) => a.rank - b.rank);
-    }
-
-    async getGameResultsByPlayer(fid: number, limit: number = 50): Promise<DbGameResult[]> {
-        return this.gameResults
-            .filter(r => r.player_fid === fid)
-            .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())
-            .slice(0, limit);
-    }
-
-    async getLeaderboardNearPlayer(fid: number, chain?: string, limit: number = 10): Promise<DbLeaderboardEntry[]> {
-        // In-memory implementation doesn't support chain filtering
-        console.log(`[InMemoryDB] getLeaderboardNearPlayer called with chain: ${chain || 'all'}`);
-        const allEntries = await this.getGlobalLeaderboard(1000); // Get all entries to find the player's position
-        const playerIndex = allEntries.findIndex(entry => entry.fid === fid);
-
-        if (playerIndex === -1) {
-            // If player not found, return empty array or top entries
-            return allEntries.slice(0, limit);
-        }
-
-        // Calculate start index to center the player in the results
-        const startIndex = Math.max(0, playerIndex - Math.floor(limit / 2));
-        const endIndex = Math.min(allEntries.length, startIndex + limit);
-
-        return allEntries.slice(startIndex, endIndex);
-    }
-
-    async getTopPlayers(chain?: string, limit: number = 100): Promise<DbLeaderboardEntry[]> {
-        // For in-memory implementation, chain is ignored
-        console.log(`[InMemoryDB] getTopPlayers called with chain: ${chain || 'all'}`);
-        return await this.getGlobalLeaderboard(limit);
-    }
-
-    // ========== REGISTRATION TRACKING ==========
-
-    async saveRegistration(registration: Omit<DbRegistration, "id" | "created_at">): Promise<DbRegistration> {
-        const id = `reg-${registration.cycle_id}-${registration.fid}-${this.registrationIdCounter++}`;
-        const record: DbRegistration = {
-            ...registration,
-            id,
-            created_at: new Date(),
-        };
-        this.registrations.set(id, record);
-        return record;
-    }
-
-    async getRegistrationByTxHash(cycleId: string, txHash: string): Promise<DbRegistration | null> {
-        for (const reg of this.registrations.values()) {
-            if (reg.cycle_id === cycleId && reg.arbitrum_tx_hash === txHash) {
-                return reg;
-            }
-        }
-        return null;
-    }
-
-    async getRegistrationByFid(cycleId: string, fid: number): Promise<DbRegistration | null> {
-        for (const reg of this.registrations.values()) {
-            if (reg.cycle_id === cycleId && reg.fid === fid) {
-                return reg;
-            }
-        }
-        return null;
-    }
-
-    async getFriendsLeaderboard(fid: number, chain?: string, limit: number = 100): Promise<DbLeaderboardEntry[]> {
-        // For in-memory implementation, return empty array or global leaderboard
-        // Note: fid is used for API compatibility but not implemented in in-memory version
-        console.log(`[InMemoryDB] getFriendsLeaderboard called for fid: ${fid}, chain: ${chain || 'all'}`);
-        return await this.getGlobalLeaderboard(limit);
-    }
-
-    async getCurrentGameLeaderboard(chain?: string, limit: number = 100): Promise<DbLeaderboardEntry[]> {
-        // In-memory implementation uses global leaderboard as fallback
-        console.log(`[InMemoryDB] getCurrentGameLeaderboard called with chain: ${chain || 'all'}`);
-        return await this.getGlobalLeaderboard(limit);
-    }
-
-    async getSeasonLeaderboard(chain?: string, timeframe?: string, limit: number = 100): Promise<DbLeaderboardEntry[]> {
-        // In-memory implementation uses global leaderboard as fallback
-        console.log(`[InMemoryDB] getSeasonLeaderboard called with chain: ${chain || 'all'}, timeframe: ${timeframe || 'all'}`);
-        return await this.getGlobalLeaderboard(limit);
-    }
-
-    async getAllTimeLeaderboard(chain?: string, limit: number = 100): Promise<DbLeaderboardEntry[]> {
-        // In-memory implementation uses global leaderboard as fallback
-        console.log(`[InMemoryDB] getAllTimeLeaderboard called with chain: ${chain || 'all'}`);
-        return await this.getGlobalLeaderboard(limit);
-    }
-
-    async getNFTHolderLeaderboard(chain?: string, timeframe?: string, limit: number = 100): Promise<DbLeaderboardEntry[]> {
-        // In-memory implementation uses global leaderboard as fallback
-        console.log(`[InMemoryDB] getNFTHolderLeaderboard called with chain: ${chain || 'all'}, timeframe: ${timeframe || 'all'}`);
-        return await this.getGlobalLeaderboard(limit);
-    }
-
-    async getTokenHolderLeaderboard(chain?: string, timeframe?: string, limit: number = 100): Promise<DbLeaderboardEntry[]> {
-        // In-memory implementation uses global leaderboard as fallback
-        console.log(`[InMemoryDB] getTokenHolderLeaderboard called with chain: ${chain || 'all'}, timeframe: ${timeframe || 'all'}`);
-        return await this.getGlobalLeaderboard(limit);
-    }
-
-    async getCrossChainLeaderboard(limit: number = 100): Promise<DbLeaderboardEntry[]> {
-        // In-memory implementation uses global leaderboard as fallback
-        console.log('[InMemoryDB] getCrossChainLeaderboard called');
-        return await this.getGlobalLeaderboard(limit);
-    }
-}
 
 /**
  * PostgreSQL database client
@@ -1002,20 +752,13 @@ export interface IDatabase {
     getCrossChainLeaderboard(limit?: number): Promise<DbLeaderboardEntry[]>;
 }
 
-// Create database instance
-let dbInstance: IDatabase;
+// Initialize database
+const dbInstance = new PostgresDatabase();
+dbInstance.initialize().catch(err => {
+    console.error("[Database] Failed to initialize PostgreSQL:", err);
+    process.exit(1); // Fail fast - database is required
+});
 
-if (USE_DATABASE) {
-    console.log("[Database] Using PostgreSQL for persistence");
-    dbInstance = new PostgresDatabase();
-    // Initialize tables
-    (dbInstance as PostgresDatabase).initialize().catch(err => {
-        console.error("[Database] Failed to initialize:", err);
-    });
-} else {
-    console.log("[Database] Using in-memory storage (no persistence)");
-    dbInstance = new InMemoryDatabase();
-}
-
-export const database: IDatabase = dbInstance;
-export default database;
+export const db: IDatabase = dbInstance;
+export const database: IDatabase = dbInstance; // Backwards compatibility
+export default dbInstance;
