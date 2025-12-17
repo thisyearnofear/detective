@@ -18,41 +18,20 @@ pragma solidity 0.8.20;
  */
 
 contract DetectiveGameEntry {
-    /// @dev wallet → fid → registered (prevent duplicate registrations)
-    mapping(address wallet => mapping(uint256 fid => bool)) public registered;
-    
     /// @dev Emitted when a wallet registers with a Farcaster FID
+    /// Backend uses this as proof of registration intent
     event PlayerRegistered(address indexed wallet, uint256 indexed fid, uint256 timestamp);
-    
-    address public admin;
-    
-    constructor() {
-        admin = msg.sender;
-    }
     
     /**
      * @dev Register wallet with Farcaster FID
      * @param fid Farcaster ID to associate with this wallet
      * 
-     * REQUIREMENTS:
-     * - fid > 0 (valid Farcaster ID)
-     * - This wallet hasn't registered this FID before
+     * This is a proof-of-intent mechanism only. The contract does not enforce
+     * uniqueness - that is handled by the backend. This allows the same wallet+FID
+     * to register in different game cycles.
      */
     function registerForGame(uint256 fid) external payable {
         require(fid > 0, "Invalid FID");
-        require(!registered[msg.sender][fid], "Already registered");
-        
-        registered[msg.sender][fid] = true;
         emit PlayerRegistered(msg.sender, fid, block.timestamp);
-    }
-    
-    /**
-     * @dev Check if a wallet has registered with a FID
-     * @param wallet The wallet to check
-     * @param fid The FID to check
-     * @return true if wallet has registered with this FID
-     */
-    function hasRegistered(address wallet, uint256 fid) external view returns (bool) {
-        return registered[wallet][fid];
     }
 }
