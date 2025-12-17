@@ -121,6 +121,25 @@ class GameManager {
         };
         console.log(`[GameManager] Loaded cycle ${stateMeta.cycleId} from Redis`);
         
+        // Ensure cycle exists in database (for foreign key constraints)
+        try {
+          await database.saveGameCycle({
+            id: stateMeta.cycleId,
+            chain: "local",
+            state: stateMeta.state,
+            started_at: new Date(stateMeta.registrationEnds - REGISTRATION_COUNTDOWN),
+            ended_at: stateMeta.finishedAt ? new Date(stateMeta.finishedAt) : null,
+            player_count: players.size,
+            entry_fee_wei: null,
+            prize_pool_wei: null,
+          });
+        } catch (dbError: any) {
+          // Ignore duplicate key error (cycle already exists)
+          if (!dbError.message?.includes('duplicate key')) {
+            console.error(`[GameManager] Failed to save cycle to database:`, dbError);
+          }
+        }
+        
         // Mark cache as fresh - version is loaded from Redis
         const version = await stateConsistency.loadStateVersion();
         stateConsistency.markCacheFresh(version || 0);
@@ -133,7 +152,24 @@ class GameManager {
           registrationEnds: this.state.registrationEnds,
           gameEnds: this.state.gameEnds,
         });
-        console.log(`[GameManager] Created new cycle ${this.state.cycleId}`);
+        
+        // Save cycle to database for foreign key constraint (game_registrations)
+        try {
+          await database.saveGameCycle({
+            id: this.state.cycleId,
+            chain: "local",
+            state: this.state.state,
+            started_at: new Date(),
+            ended_at: null,
+            player_count: 0,
+            entry_fee_wei: null,
+            prize_pool_wei: null,
+          });
+          console.log(`[GameManager] Created new cycle ${this.state.cycleId} (saved to DB)`);
+        } catch (dbError) {
+          console.error(`[GameManager] Failed to save cycle to database:`, dbError);
+          // Continue anyway - cycle is in Redis, registrations will fail but game can still work
+        }
         
         // Mark cache as fresh (version 0 for new cycle)
         stateConsistency.markCacheFresh(0);
