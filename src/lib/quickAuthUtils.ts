@@ -9,7 +9,7 @@
  * Reference: https://docs.farcaster.xyz/auth-kit/client/introduction
  */
 
-import { createAppClient, viemConnector } from '@farcaster/auth-client';
+import { createAppClient } from '@farcaster/auth-client';
 
 /**
  * Extract Bearer token from Authorization header
@@ -68,8 +68,13 @@ export async function verifyQuickAuthToken(
  * Used for web-based Sign In With Farcaster flows
  */
 export function createFarcasterAuthClient() {
+  // Use the existing window.ethereum instead of viemConnector() to avoid read-only property conflicts
+  if (typeof window === 'undefined' || !window.ethereum) {
+    throw new Error('Ethereum provider not available. Please install MetaMask.');
+  }
+
   return createAppClient({
     relay: 'https://relay.farcaster.xyz',
-    ethereum: viemConnector(),
+    ethereum: window.ethereum,
   });
 }
