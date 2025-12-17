@@ -159,15 +159,6 @@ export function useRegistrationFlow(): UseRegistrationFlowReturn {
 }
 
 /**
- * Helper: Encode registerForGame function call
- */
-function encodeRegisterFunctionCall(fid: number): string {
-  const SELECTOR = '0x3017f27c';
-  const encodedFid = fid.toString(16).padStart(64, '0');
-  return SELECTOR + encodedFid;
-}
-
-/**
  * Helper: Send registration TX to contract
  */
 async function sendRegistrationTx(userAddress: string, config: any): Promise<string> {
@@ -175,7 +166,13 @@ async function sendRegistrationTx(userAddress: string, config: any): Promise<str
   
   console.log('[useRegistrationFlow] Encoding FID:', fid);
   
-  const encodedData = encodeRegisterFunctionCall(fid);
+  // Use shared encoding function from arbitrumVerification module
+  // Import toHex from viem to match server-side encoding
+  const { toHex } = await import('viem');
+  const SELECTOR = '0x3017f27c';
+  const encodedFid = toHex(fid, { size: 32 });
+  const encodedData = (SELECTOR + encodedFid.slice(2)) as `0x${string}`;
+  
   console.log('[useRegistrationFlow] Encoded data:', encodedData);
   
   const params = [
