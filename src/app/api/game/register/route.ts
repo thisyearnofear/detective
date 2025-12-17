@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
 import { getFarcasterUserData } from "@/lib/neynar";
 import { verifyArbitrumTx, getArbitrumConfig } from "@/lib/arbitrumVerification";
+import { db } from "@/lib/database";
 
 /**
  * API route to register a user for the current game cycle.
@@ -61,6 +62,26 @@ export async function POST(request: Request) {
         );
       }
 
+      // Check: TX hash not already used (replay attack prevention)
+      const existingReg = await db.getRegistrationByTxHash(gameState.cycleId, arbitrumTxHash);
+      if (existingReg) {
+        console.log(`[Registration] TX hash already used: ${arbitrumTxHash}`);
+        return NextResponse.json(
+          { error: "This transaction has already been used for registration." },
+          { status: 403 }
+        );
+      }
+
+      // Check: FID not already registered for this game
+      const fidReg = await db.getRegistrationByFid(gameState.cycleId, fid);
+      if (fidReg) {
+        console.log(`[Registration] FID ${fid} already registered for cycle ${gameState.cycleId}`);
+        return NextResponse.json(
+          { error: "You have already registered for this game." },
+          { status: 403 }
+        );
+      }
+
       // Verify TX on-chain
       const txValid = await verifyArbitrumTx(arbitrumTxHash, arbitrumWalletAddress, fid);
       if (!txValid) {
@@ -74,6 +95,24 @@ export async function POST(request: Request) {
       }
 
       console.log(`[Registration] Arbitrum TX verified for FID ${fid}: ${arbitrumTxHash}`);
+
+      // Record registration in database
+      try {
+        await db.saveRegistration({
+          cycle_id: gameState.cycleId,
+          fid,
+          wallet_address: arbitrumWalletAddress,
+          arbitrum_tx_hash: arbitrumTxHash,
+        });
+      } catch (dbError: any) {
+        if (dbError.message.includes("Duplicate registration")) {
+          return NextResponse.json(
+            { error: "You have already registered for this game." },
+            { status: 403 }
+          );
+        }
+        throw dbError;
+      }
     }
 
     // ========== STEP 4: FETCH FARCASTER USER DATA ==========
