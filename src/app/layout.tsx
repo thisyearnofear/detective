@@ -60,6 +60,9 @@ export const metadata: Metadata = {
   },
 };
 
+// Ensure Farcaster always gets latest version (60s cache max)
+export const revalidate = 60;
+
 export default function RootLayout({
   children,
 }: {
