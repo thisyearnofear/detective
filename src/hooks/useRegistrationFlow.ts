@@ -121,14 +121,24 @@ export function useRegistrationFlow(): UseRegistrationFlowReturn {
 
         console.log('[useRegistrationFlow] TX signed:', txHash);
 
-        // Step 3: Confirm on-chain
+        // Step 3: Confirm on-chain (skip for Farcaster native wallet)
         setCurrentStep('confirming');
-
-        // Poll for TX confirmation (with timeout)
-        const confirmed = await waitForConfirmation(txHash, 30000); // 30s timeout
         
-        if (!confirmed) {
-          throw new Error('Transaction confirmation timeout. Please check your wallet.');
+        // Check if we're using Farcaster wallet (doesn't support eth_getTransactionReceipt)
+        const { isFarcasterMiniApp } = await import('@/lib/farcasterAuth');
+        const isFarcasterWallet = isFarcasterMiniApp();
+        
+        if (isFarcasterWallet) {
+          console.log('[useRegistrationFlow] Skipping confirmation check (Farcaster wallet)');
+          // Backend will verify the transaction, just proceed
+        } else {
+          // Poll for TX confirmation (with timeout) for MetaMask/other wallets
+          const confirmed = await waitForConfirmation(txHash, 30000); // 30s timeout
+          
+          if (!confirmed) {
+            throw new Error('Transaction confirmation timeout. Please check your wallet.');
+          }
+          console.log('[useRegistrationFlow] TX confirmed on-chain');
         }
 
         // Success
