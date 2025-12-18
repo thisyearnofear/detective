@@ -46,39 +46,19 @@ export async function getEthereumProvider(): Promise<EthereumProvider | null> {
   // Check if we're in a Farcaster miniapp context
   if (isFarcasterMiniApp()) {
     try {
-      console.log('[FarcasterWalletProvider] Attempting to get Farcaster wallet provider');
-      
-      // Try to get provider with retries (handles initialization timing)
-      let provider = null;
-      let attempts = 0;
-      const maxAttempts = 3;
-      
-      while (!provider && attempts < maxAttempts) {
-        attempts++;
-        console.log(`[FarcasterWalletProvider] Attempt ${attempts}/${maxAttempts}`);
-        
-        try {
-          provider = await miniApp.wallet.getEthereumProvider();
-        } catch (err) {
-          console.warn(`[FarcasterWalletProvider] Attempt ${attempts} failed:`, err);
-        }
-        
-        if (!provider && attempts < maxAttempts) {
-          // Wait a bit before retrying
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-      }
+      console.log('[FarcasterWalletProvider] Getting Farcaster wallet provider');
+      const provider = await miniApp.wallet.getEthereumProvider();
       
       if (provider) {
-        console.log('[FarcasterWalletProvider] Using Farcaster wallet provider');
+        console.log('[FarcasterWalletProvider] ✓ Farcaster wallet connected');
         cachedProvider = provider as EthereumProvider;
         cacheTime = now;
         return cachedProvider;
       } else {
-        console.warn('[FarcasterWalletProvider] Farcaster wallet provider not available after retries');
+        console.warn('[FarcasterWalletProvider] No wallet connected in Farcaster app');
       }
     } catch (error) {
-      console.error('[FarcasterWalletProvider] Failed to get Farcaster wallet provider:', error);
+      console.error('[FarcasterWalletProvider] Error getting wallet:', error);
     }
   }
 
