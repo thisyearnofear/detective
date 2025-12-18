@@ -1,7 +1,7 @@
 // src/app/api/profiles/by-address/route.ts
 import { NextResponse } from "next/server";
 import { getFarcasterUserByAddress } from "@/lib/neynar";
-import { createAuthToken } from "@/lib/authUtils";
+import { createAuthToken } from "@/lib/auth";
 
 /**
  * API route to fetch Farcaster profile by wallet address

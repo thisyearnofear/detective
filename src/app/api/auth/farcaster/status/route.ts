@@ -15,7 +15,7 @@
 
 import { NextResponse } from "next/server";
 import { getFarcasterUserData } from "@/lib/neynar";
-import { createAuthToken } from "@/lib/authUtils";
+import { createAuthToken } from "@/lib/auth";
 
 const FARCASTER_CONNECT_URL = "https://connect.farcaster.xyz/api/auth";
 

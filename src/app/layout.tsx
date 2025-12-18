@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import '@farcaster/auth-kit/styles.css';
-import BottomLinks from '@/components/BottomLinks';
 import { RootProviders } from '@/components/Providers';
 
 const miniAppEmbed = {
@@ -80,7 +79,6 @@ export default function RootLayout({
       <body className="text-white">
         <RootProviders>
           {children}
-          <BottomLinks />
         </RootProviders>
         {/* SVG Filter for Gooey Effect */}
         <svg className="svg-filters" xmlns="http://www.w3.org/2000/svg" version="1.1">

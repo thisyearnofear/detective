@@ -9,6 +9,7 @@ import { fetcher } from '@/lib/fetcher';
 import { GAME_CONSTANTS } from '@/lib/gameConstants';
 import ErrorCard from '../ErrorCard';
 import ArbitrumRegistrationModal from '../ArbitrumRegistrationModal';
+import DetectiveToast from '../DetectiveToast';
 
 type Props = {
   currentPlayer: UserProfile;
@@ -195,6 +196,9 @@ export default function BriefingRoom({ currentPlayer, isRegistrationOpen = true,
   // Only show Briefing Room during REGISTRATION - parent GameStateView will switch to GameActiveView when LIVE
   return (
     <>
+      {/* Detective Toast - Rotating trivia during briefing wait */}
+      <DetectiveToast isVisible={isRegistrationOpen} />
+
       {/* Registration Status Header */}
       <div className="text-center">
         <h2 className="hero-title text-2xl md:text-3xl font-black text-stroke mb-2">
