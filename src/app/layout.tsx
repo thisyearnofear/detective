@@ -8,7 +8,7 @@ const miniAppEmbed = {
   version: '1',
   imageUrl: 'https://detectiveproof.vercel.app/og-image.png',
   button: {
-    title: '🔍 Start Playing',
+    title: '🔍 Join Investigation',
     action: {
       type: 'launch_miniapp',
       url: 'https://detectiveproof.vercel.app',
