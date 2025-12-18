@@ -75,8 +75,9 @@ export default function DetectiveToast({
   }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-center pb-6 px-4 pointer-events-none">
-      <div className="pointer-events-auto">
+    <div className="fixed inset-0 bottom-0 left-0 right-0 pointer-events-none" style={{ zIndex: 9999 }}>
+      <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center pb-6 px-4 pointer-events-none">
+        <div className="pointer-events-auto">
         {/* Toast Container */}
         <div
           className={`
@@ -159,6 +160,7 @@ export default function DetectiveToast({
         <p className="text-xs text-gray-600 text-center mt-2">
           Auto-rotates • Click action buttons to interact
         </p>
+        </div>
       </div>
     </div>
   );
