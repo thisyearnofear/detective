@@ -13,7 +13,7 @@
  * Reference: https://miniapps.farcaster.xyz/docs/guides/wallets
  */
 
-import { miniApp, isFarcasterMiniApp } from './farcasterAuth';
+import { miniApp } from './farcasterAuth';
 
 export interface EthereumProvider {
   request: (args: { method: string; params?: any[] }) => Promise<any>;
@@ -43,23 +43,21 @@ export async function getEthereumProvider(): Promise<EthereumProvider | null> {
     return cachedProvider;
   }
 
-  // Check if we're in a Farcaster miniapp context
-  if (isFarcasterMiniApp()) {
-    try {
-      console.log('[FarcasterWalletProvider] Getting Farcaster wallet provider');
-      const provider = await miniApp.wallet.getEthereumProvider();
-      
-      if (provider) {
-        console.log('[FarcasterWalletProvider] ✓ Farcaster wallet connected');
-        cachedProvider = provider as EthereumProvider;
-        cacheTime = now;
-        return cachedProvider;
-      } else {
-        console.warn('[FarcasterWalletProvider] No wallet connected in Farcaster app');
-      }
-    } catch (error) {
-      console.error('[FarcasterWalletProvider] Error getting wallet:', error);
+  // Try Farcaster SDK wallet first (works if available, regardless of context)
+  try {
+    console.log('[FarcasterWalletProvider] Attempting Farcaster SDK wallet...');
+    const provider = await miniApp.wallet.getEthereumProvider();
+    
+    if (provider) {
+      console.log('[FarcasterWalletProvider] ✓ Farcaster SDK wallet available');
+      cachedProvider = provider as EthereumProvider;
+      cacheTime = now;
+      return cachedProvider;
+    } else {
+      console.log('[FarcasterWalletProvider] Farcaster SDK returned null, trying fallback');
     }
+  } catch (error) {
+    console.log('[FarcasterWalletProvider] Farcaster SDK unavailable, trying fallback:', error);
   }
 
   // Fallback to window.ethereum (MetaMask, etc.)
@@ -86,12 +84,7 @@ export async function requestAccounts(): Promise<string[] | null> {
   const provider = await getEthereumProvider();
   
   if (!provider) {
-    const inMiniApp = isFarcasterMiniApp();
-    if (inMiniApp) {
-      throw new Error('Farcaster wallet not ready. Please ensure your wallet is connected in the Farcaster app.');
-    } else {
-      throw new Error('Wallet not found. Please install MetaMask or another Web3 wallet.');
-    }
+    throw new Error('No wallet provider available. If in Farcaster, ensure your wallet is connected. Otherwise, install MetaMask or another Web3 wallet.');
   }
 
   try {
