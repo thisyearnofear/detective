@@ -47,14 +47,35 @@ export async function getEthereumProvider(): Promise<EthereumProvider | null> {
   if (isFarcasterMiniApp()) {
     try {
       console.log('[FarcasterWalletProvider] Attempting to get Farcaster wallet provider');
-      const provider = await miniApp.wallet.getEthereumProvider();
+      
+      // Try to get provider with retries (handles initialization timing)
+      let provider = null;
+      let attempts = 0;
+      const maxAttempts = 3;
+      
+      while (!provider && attempts < maxAttempts) {
+        attempts++;
+        console.log(`[FarcasterWalletProvider] Attempt ${attempts}/${maxAttempts}`);
+        
+        try {
+          provider = await miniApp.wallet.getEthereumProvider();
+        } catch (err) {
+          console.warn(`[FarcasterWalletProvider] Attempt ${attempts} failed:`, err);
+        }
+        
+        if (!provider && attempts < maxAttempts) {
+          // Wait a bit before retrying
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+      
       if (provider) {
         console.log('[FarcasterWalletProvider] Using Farcaster wallet provider');
         cachedProvider = provider as EthereumProvider;
         cacheTime = now;
         return cachedProvider;
       } else {
-        console.warn('[FarcasterWalletProvider] Farcaster wallet provider not ready yet');
+        console.warn('[FarcasterWalletProvider] Farcaster wallet provider not available after retries');
       }
     } catch (error) {
       console.error('[FarcasterWalletProvider] Failed to get Farcaster wallet provider:', error);
@@ -85,7 +106,12 @@ export async function requestAccounts(): Promise<string[] | null> {
   const provider = await getEthereumProvider();
   
   if (!provider) {
-    throw new Error('Wallet not found');
+    const inMiniApp = isFarcasterMiniApp();
+    if (inMiniApp) {
+      throw new Error('Farcaster wallet not ready. Please ensure your wallet is connected in the Farcaster app.');
+    } else {
+      throw new Error('Wallet not found. Please install MetaMask or another Web3 wallet.');
+    }
   }
 
   try {
