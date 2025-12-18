@@ -4,6 +4,21 @@ import '@farcaster/auth-kit/styles.css';
 import BottomLinks from '@/components/BottomLinks';
 import { RootProviders } from '@/components/Providers';
 
+const miniAppEmbed = {
+  version: '1',
+  imageUrl: 'https://detectiveproof.vercel.app/og-image.png',
+  button: {
+    title: '🔍 Start Playing',
+    action: {
+      type: 'launch_miniapp',
+      url: 'https://detectiveproof.vercel.app',
+      name: 'Detective',
+      splashImageUrl: 'https://detectiveproof.vercel.app/detective.png',
+      splashBackgroundColor: '#0f172a',
+    },
+  },
+};
+
 export const metadata: Metadata = {
   title: 'Detective - Is That You?',
   description: 'AI-powered social deduction game on Farcaster. Can you tell if you\'re chatting with a real person or an AI bot?',
@@ -19,7 +34,7 @@ export const metadata: Metadata = {
     title: 'Detective - Is That You?',
     description: 'Can you tell if you are chatting with a real person or an AI bot?',
     type: 'website',
-    url: 'https://detective.app', // Update with your actual domain
+    url: 'https://detectiveproof.vercel.app',
     images: [
       {
         url: '/og-image.png', // 1200x630px recommended
@@ -36,6 +51,12 @@ export const metadata: Metadata = {
     title: 'Detective - Is That You?',
     description: 'Can you tell if you are chatting with a real person or an AI bot?',
     images: ['/og-image.png'],
+  },
+
+  // Farcaster Mini App Embed
+  other: {
+    'fc:miniapp': JSON.stringify(miniAppEmbed),
+    'fc:frame': JSON.stringify(miniAppEmbed), // For backward compatibility
   },
 };
 
