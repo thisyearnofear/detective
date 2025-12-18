@@ -52,10 +52,10 @@ export default function ArbitrumRegistrationModal({
     'wallet-check': {
       icon: '👛',
       title: 'Connecting Wallet',
-      description: 'Looking for your Arbitrum wallet...',
+      description: 'Looking for your wallet...',
       details: [
-        'If a popup doesn\'t appear, make sure MetaMask is installed',
-        'You\'ll approve one transaction to register',
+        'Approve the connection request',
+        'You\'ll sign one transaction to register',
       ],
       ctaLabel: 'Waiting for wallet...',
       ctaPrimary: false,
@@ -104,12 +104,11 @@ export default function ArbitrumRegistrationModal({
     },
     'error': {
       icon: '⚠️',
-      title: 'Transaction Failed',
+      title: 'Registration Failed',
       description: error || 'Something went wrong. Please try again.',
       details: [
-        'Make sure you have MetaMask installed',
-        'Ensure you\'re on the Arbitrum network',
-        'Check that you have enough funds',
+        'Check your wallet connection',
+        'Ensure you have funds for gas',
       ],
       ctaLabel: 'Try Again',
       ctaPrimary: true,
@@ -181,8 +180,8 @@ export default function ArbitrumRegistrationModal({
             </span>
             <span className={walletConnected ? 'text-green-300' : 'text-yellow-300'}>
               {walletConnected 
-                ? 'MetaMask connected and ready'
-                : 'Make sure MetaMask is installed and unlocked'}
+                ? 'Wallet connected'
+                : 'Make sure your wallet is unlocked'}
             </span>
           </div>
         )}

@@ -49,14 +49,11 @@ export function useRegistrationFlow(): UseRegistrationFlowReturn {
         // Step 1: Request wallet connection
         setCurrentStep('wallet-check');
         
-        if (!window.ethereum) {
-          throw new Error('MetaMask or Arbitrum-compatible wallet not found. Please install MetaMask.');
-        }
+        // Import Farcaster-aware wallet provider (works in both contexts)
+        const { requestAccounts, switchChain, addChain, sendTransaction } = await import('@/lib/farcasterWalletProvider');
 
-        // Detect wallet connection (this will show MetaMask popup)
-        const accounts = (await window.ethereum.request({
-          method: 'eth_requestAccounts',
-        })) as string[];
+        // Request account access (works in miniapp and browser)
+        const accounts = await requestAccounts();
 
         if (!accounts || accounts.length === 0) {
           throw new Error('No wallet accounts available. Please connect your wallet.');
@@ -71,40 +68,47 @@ export function useRegistrationFlow(): UseRegistrationFlowReturn {
 
         // Switch to Arbitrum network
         try {
-          await window.ethereum.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: '0xa4b1' }], // Arbitrum mainnet
-          });
+          await switchChain('0xa4b1'); // Arbitrum mainnet
         } catch (switchError: any) {
-          if (switchError.code === 4902) {
-            const config = process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL || 'https://arb1.arbitrum.io/rpc';
-            await window.ethereum.request({
-              method: 'wallet_addEthereumChain',
-              params: [
-                {
-                  chainId: '0xa4b1',
-                  chainName: 'Arbitrum One',
-                  rpcUrls: [config],
-                  nativeCurrency: {
-                    name: 'Ether',
-                    symbol: 'ETH',
-                    decimals: 18,
-                  },
-                  blockExplorerUrls: ['https://arbiscan.io'],
-                },
-              ],
+          // Chain not found, try to add it
+          if (switchError.message?.includes('not found')) {
+            const rpcUrl = process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL || 'https://arb1.arbitrum.io/rpc';
+            await addChain({
+              chainId: '0xa4b1',
+              chainName: 'Arbitrum One',
+              rpcUrls: [rpcUrl],
+              nativeCurrency: {
+                name: 'Ether',
+                symbol: 'ETH',
+                decimals: 18,
+              },
+              blockExplorerUrls: ['https://arbiscan.io'],
             });
           } else {
             throw switchError;
           }
         }
 
-        // Import verification module to get config and send TX
+        // Get the FID for encoding
+        const fid = parseInt(localStorage.getItem('userFid') || '0', 10);
+        if (fid <= 0) {
+          throw new Error('User FID not found');
+        }
+
+        // Get contract config
         const { getArbitrumConfig } = await import('@/lib/arbitrumVerification');
+        const { encodeRegisterFunctionCall } = await import('@/lib/arbitrumVerification');
         const config = getArbitrumConfig();
 
         // Encode and send the registration TX
-        const txHash = await sendRegistrationTx(userAddress, config);
+        const encodedData = encodeRegisterFunctionCall(fid);
+        const txHash = await sendTransaction({
+          from: userAddress,
+          to: config.contractAddress,
+          value: '0x0',
+          data: encodedData,
+          gas: '0x186a0',
+        });
 
         if (!txHash) {
           throw new Error('Failed to get transaction hash from wallet');
@@ -133,13 +137,15 @@ export function useRegistrationFlow(): UseRegistrationFlowReturn {
       } catch (err: any) {
         console.error('[useRegistrationFlow] Registration error:', err);
         
-        // Handle specific wallet rejection
-        if (err.code === 4001) {
-          setError('You rejected the transaction. Please try again if you want to register.');
+        // Handle specific wallet errors
+        if (err.message?.includes('rejected')) {
+          setError('Transaction rejected. Try again if you want to register.');
+        } else if (err.message?.includes('not found')) {
+          setError(err.message);
         } else if (err.code === -32002) {
-          setError('MetaMask is already processing a request. Please check your wallet.');
+          setError('Wallet is busy. Try again.');
         } else {
-          setError(err.message || 'Registration failed. Please try again.');
+          setError(err.message || 'Registration failed');
         }
         
         setCurrentStep('error');
@@ -159,60 +165,17 @@ export function useRegistrationFlow(): UseRegistrationFlowReturn {
 }
 
 /**
- * Helper: Send registration TX to contract
- */
-async function sendRegistrationTx(userAddress: string, config: any): Promise<string> {
-  const fid = parseInt(localStorage.getItem('userFid') || '0', 10);
-  
-  console.log('[useRegistrationFlow] Encoding FID:', fid);
-  
-  // Use shared encoding function from arbitrumVerification module
-  // Import toHex from viem to match server-side encoding
-  const { toHex } = await import('viem');
-  const SELECTOR = '0x3017f27c';
-  const encodedFid = toHex(fid, { size: 32 });
-  const encodedData = (SELECTOR + encodedFid.slice(2)) as `0x${string}`;
-  
-  console.log('[useRegistrationFlow] Encoded data:', encodedData);
-  
-  const params = [
-    {
-      from: userAddress,
-      to: config.contractAddress,
-      value: '0x0', // No fee required
-      data: encodedData,
-      gas: '0x186a0',
-    },
-  ];
-
-  console.log('[useRegistrationFlow] Sending TX to contract:', config.contractAddress);
-  console.log('[useRegistrationFlow] TX params:', JSON.stringify(params[0], null, 2));
-
-  const txHash = (await window.ethereum!.request({
-    method: 'eth_sendTransaction',
-    params,
-  })) as string;
-
-  if (!txHash || typeof txHash !== 'string') {
-    throw new Error('Invalid TX hash returned from wallet');
-  }
-
-  return txHash;
-}
-
-/**
  * Helper: Wait for TX confirmation with timeout
+ * Uses Farcaster-aware wallet provider for both contexts
  */
 async function waitForConfirmation(txHash: string, timeoutMs: number): Promise<boolean> {
   const startTime = Date.now();
   const pollInterval = 2000; // Poll every 2s
+  const { getTransactionReceipt } = await import('@/lib/farcasterWalletProvider');
 
   while (Date.now() - startTime < timeoutMs) {
     try {
-      const receipt = await window.ethereum!.request({
-        method: 'eth_getTransactionReceipt',
-        params: [txHash],
-      }) as any;
+      const receipt = await getTransactionReceipt(txHash);
 
       if (receipt && receipt.status !== null) {
         // TX is mined
@@ -220,7 +183,7 @@ async function waitForConfirmation(txHash: string, timeoutMs: number): Promise<b
           console.log('[useRegistrationFlow] TX confirmed on-chain');
           return true;
         } else {
-          throw new Error('Transaction failed on-chain');
+          throw new Error('Transaction failed');
         }
       }
 
