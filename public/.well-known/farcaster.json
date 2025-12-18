@@ -11,12 +11,5 @@
     "header": "eyJmaWQiOjUyNTQsInR5cGUiOiJjdXN0b2R5Iiwia2V5IjoiMHg4QjAzQTJDMzY1YzI2MUFlQmU2ODQyMjREQkI2Qzk1OTJhQkNkRkIyIn0",
     "payload": "eyJkb21haW4iOiJkZXRlY3RpdmVwcm9vZi52ZXJjZWwuYXBwIn0",
     "signature": "f7lWtqKqtnnvuX4R3uCsMoEGurVprKqLcx25HsebwwAHgPxMXpfndM3DIKuOToeybb8NuSQ421bsDs9nRhukthw=="
-  },
-  "frames": [
-    {
-      "label": "Start Snooping",
-      "action": "post",
-      "target": "https://detectiveproof.vercel.app/api/game"
-    }
-  ]
+  }
 }
