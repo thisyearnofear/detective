@@ -63,6 +63,8 @@ function getArbitrumClient() {
 /**
  * Request Arbitrum wallet connection and TX signature from user
  * 
+ * IMPORTANT: Works in both browser and Farcaster miniapp contexts
+ * 
  * @param userFid The Farcaster FID to register
  * @returns TX hash if successful, null if user rejects
  */
@@ -74,15 +76,12 @@ export async function requestArbitrumRegistrationTx(userFid: number): Promise<st
     return null;
   }
   
-  if (!window.ethereum) {
-    throw new Error('MetaMask or Arbitrum-compatible wallet not found. Please install MetaMask.');
-  }
-  
   try {
-    // Request account access
-    const accounts = (await window.ethereum.request({
-      method: 'eth_requestAccounts',
-    })) as string[];
+    // Import the Farcaster-aware wallet provider
+    const { requestAccounts, switchChain, addChain, sendTransaction } = await import('./farcasterWalletProvider');
+    
+    // Step 1: Request account access (works in both miniapp and browser contexts)
+    const accounts = await requestAccounts();
     
     if (!accounts || accounts.length === 0) {
       throw new Error('No wallet accounts available');
@@ -96,37 +95,38 @@ export async function requestArbitrumRegistrationTx(userFid: number): Promise<st
       localStorage.setItem('arbitrumWalletAddress', userAddress);
     }
     
-    // Switch to Arbitrum network
+    // Step 2: Switch to Arbitrum network
     try {
-      await window.ethereum.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: '0xa4b1' }], // Arbitrum mainnet
-      });
+      await switchChain('0xa4b1'); // Arbitrum mainnet
     } catch (switchError: any) {
-      if (switchError.code === 4902) {
-        await window.ethereum.request({
-          method: 'wallet_addEthereumChain',
-          params: [
-            {
-              chainId: '0xa4b1',
-              chainName: 'Arbitrum One',
-              rpcUrls: [config.rpcUrl],
-              nativeCurrency: {
-                name: 'Ether',
-                symbol: 'ETH',
-                decimals: 18,
-              },
-              blockExplorerUrls: ['https://arbiscan.io'],
-            },
-          ],
+      // Chain not found, try to add it
+      if (switchError.message?.includes('not found')) {
+        await addChain({
+          chainId: '0xa4b1',
+          chainName: 'Arbitrum One',
+          rpcUrls: [config.rpcUrl],
+          nativeCurrency: {
+            name: 'Ether',
+            symbol: 'ETH',
+            decimals: 18,
+          },
+          blockExplorerUrls: ['https://arbiscan.io'],
         });
       } else {
         throw switchError;
       }
     }
     
-    // Send TX to contract
-    const txHash = await sendRegistrationTx(userAddress, userFid, config);
+    // Step 3: Encode and send TX to contract
+    const encodedData = encodeRegisterFunctionCall(userFid);
+    const txHash = await sendTransaction({
+      from: userAddress,
+      to: config.contractAddress,
+      value: '0x0', // No fee required
+      data: encodedData,
+      gas: '0x186a0', // ~100k gas estimate
+    });
+    
     return txHash;
   } catch (error) {
     console.error('[ArbitrumVerification] TX request failed:', error);
@@ -134,47 +134,7 @@ export async function requestArbitrumRegistrationTx(userFid: number): Promise<st
   }
 }
 
-/**
- * Send TX to contract
- * 
- * @internal Used by requestArbitrumRegistrationTx
- */
-async function sendRegistrationTx(
-  userAddress: string,
-  userFid: number,
-  config: ArbitrumConfig
-): Promise<string> {
-  console.log('[ArbitrumVerification] Encoding FID:', userFid);
-  
-  const encodedData = encodeRegisterFunctionCall(userFid);
-  console.log('[ArbitrumVerification] Encoded data:', encodedData);
-  
-  const method = 'eth_sendTransaction';
-  const params = [
-    {
-      from: userAddress,
-      to: config.contractAddress,
-      value: '0x0', // No fee required
-      data: encodedData,
-      gas: '0x186a0', // ~100k gas estimate
-    },
-  ];
-  
-  console.log('[ArbitrumVerification] Sending TX to contract:', config.contractAddress);
-  console.log('[ArbitrumVerification] TX params:', JSON.stringify(params[0], null, 2));
-  
-  const txHash = (await window.ethereum!.request({
-    method,
-    params,
-  })) as string;
-  
-  if (!txHash || typeof txHash !== 'string') {
-    throw new Error('Invalid TX hash returned from wallet');
-  }
-  
-  console.log('[ArbitrumVerification] TX sent:', txHash);
-  return txHash;
-}
+
 
 // ========== TX VERIFICATION (SERVER-SIDE) ==========
 
@@ -307,8 +267,10 @@ export async function verifyArbitrumTx(
  * 
  * Function signature: registerForGame(uint256)
  * Selector: keccak256("registerForGame(uint256)") = 0x3017f27c
+ * 
+ * EXPORTED: Used by useRegistrationFlow and requestArbitrumRegistrationTx
  */
-function encodeRegisterFunctionCall(fid: number): string {
+export function encodeRegisterFunctionCall(fid: number): string {
   const SELECTOR = '0x3017f27c';
   const encodedFid = toHex(fid, { size: 32 });
   return (SELECTOR + encodedFid.slice(2)) as `0x${string}`;
