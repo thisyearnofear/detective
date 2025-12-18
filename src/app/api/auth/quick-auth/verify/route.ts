@@ -17,8 +17,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyQuickAuthToken, getTokenFromHeader } from '@/lib/quickAuthUtils';
-import { createAuthToken } from '@/lib/authUtils';
+import { verifyQuickAuthToken, getTokenFromHeader, createAuthToken } from '@/lib/auth';
 
 // Fetch user data from Neynar
 async function fetchFarcasterUserData(fid: number) {

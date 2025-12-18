@@ -4,10 +4,11 @@
  * Unified Authentication Component (December 2025)
  * 
  * Smart routing based on context:
- * - MiniApp: Auto-connects via Quick Auth
- * - Web: Shows @farcaster/auth-kit SignInButton (handles button + QR UI)
+ * - MiniApp: Auto-connects via Quick Auth SDK
+ * - Web: Shows SignInButton with QR code flow
  * 
- * Both converge at single server verification endpoint.
+ * Both paths converge at single server verification endpoint.
+ * Reference: https://miniapps.farcaster.xyz/docs/sdk/quick-auth
  */
 
 import { useEffect, useState } from 'react';
@@ -25,6 +26,7 @@ export type AuthUser = {
 type Props = {
   onAuthSuccess: (user: AuthUser, token: string) => void;
   onError?: (error: string) => void;
+  onExploreWithoutAuth?: () => void;
 };
 
 type VerifyResponse = {
@@ -34,11 +36,14 @@ type VerifyResponse = {
   pfpUrl?: string;
 };
 
-export default function UnifiedAuthComponent({
+type AuthStep = 'detecting' | 'authenticating' | 'webauth' | 'error';
+
+export default function AuthComponent({
   onAuthSuccess,
   onError,
+  onExploreWithoutAuth,
 }: Props) {
-  const [step, setStep] = useState<'detecting' | 'authenticating' | 'webauth' | 'error'>('detecting');
+  const [step, setStep] = useState<AuthStep>('detecting');
   const [error, setError] = useState<string | null>(null);
 
   /**
@@ -64,11 +69,13 @@ export default function UnifiedAuthComponent({
   };
 
   /**
-   * Handle successful authentication from either source
+   * Handle successful authentication from either MiniApp or Web source
    * DRY: Single path for all auth success cases
    */
   const handleAuthSuccess = async (token: string) => {
     try {
+      setStep('authenticating');
+      
       // Verify token on server
       const userData = await verifyTokenOnServer(token);
 
@@ -96,7 +103,7 @@ export default function UnifiedAuthComponent({
       try {
         await sdk.actions.ready();
       } catch {
-        // Not critical - will fail if not in MiniApp context
+        // Not in MiniApp context - that's fine
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Authentication failed';
@@ -107,20 +114,18 @@ export default function UnifiedAuthComponent({
   };
 
   /**
-   * MiniApp Quick Auth flow
-   * Only runs on initial mount; detects context and either authenticates or shows web UI
+   * Detect context and initiate appropriate auth flow
+   * Only runs on initial mount
    */
   useEffect(() => {
     const detectContextAndAuth = async () => {
       try {
         setError(null);
-
-        // Try Quick Auth (only available in MiniApp)
         let token: string | null = null;
         let inMiniApp = false;
 
+        // Try Quick Auth (only available in MiniApp)
         try {
-          setStep('authenticating');
           const result = await Promise.race([
             sdk.quickAuth.getToken(),
             new Promise((_, reject) => 
@@ -132,22 +137,18 @@ export default function UnifiedAuthComponent({
           token = quickAuthResult?.token || null;
           inMiniApp = !!token;
         } catch {
-          // Not in MiniApp - show web auth instead
+          // Not in MiniApp - will show web auth
           inMiniApp = false;
         }
 
-        // If not in MiniApp, show web auth UI
-        if (!inMiniApp) {
-          setStep('webauth');
+        // If in MiniApp and got token, authenticate
+        if (inMiniApp && token) {
+          await handleAuthSuccess(token);
           return;
         }
 
-        if (!token) {
-          throw new Error('Failed to get authentication token');
-        }
-
-        // Got token - proceed to verification
-        await handleAuthSuccess(token);
+        // Not in MiniApp - show web auth UI
+        setStep('webauth');
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Authentication failed';
         setError(errorMessage);
@@ -159,7 +160,9 @@ export default function UnifiedAuthComponent({
     detectContextAndAuth();
   }, [onAuthSuccess, onError]);
 
-  // Detecting MiniApp context
+  // =========================================================================
+  // RENDER: Detecting
+  // =========================================================================
   if (step === 'detecting') {
     return (
       <div className="flex flex-col items-center justify-center space-y-6">
@@ -172,7 +175,9 @@ export default function UnifiedAuthComponent({
     );
   }
 
-  // MiniApp authenticating via Quick Auth
+  // =========================================================================
+  // RENDER: Authenticating (MiniApp Quick Auth)
+  // =========================================================================
   if (step === 'authenticating') {
     return (
       <div className="flex flex-col items-center justify-center space-y-6">
@@ -185,8 +190,9 @@ export default function UnifiedAuthComponent({
     );
   }
 
-  // Web: Show native SignInButton from @farcaster/auth-kit
-  // This component handles the button + QR code UI automatically
+  // =========================================================================
+  // RENDER: Web Auth (Browser QR Code Flow)
+  // =========================================================================
   if (step === 'webauth') {
     return (
       <div className="space-y-6">
@@ -213,13 +219,12 @@ export default function UnifiedAuthComponent({
             interval={1500}
             onSuccess={async (res) => {
               try {
-                // res contains the SIWF signature and user profile data
                 if (!res.signature || !res.message || !res.fid) {
                   throw new Error('Invalid sign-in response: missing signature, message, or FID');
                 }
 
                 // Create a temporary token from the signature and profile data
-                // Include FID so server doesn't need to verify signature (auth-kit already did)
+                // auth-kit has already verified the signature on client side
                 const tempToken = btoa(
                   JSON.stringify({
                     fid: res.fid,
@@ -251,11 +256,22 @@ export default function UnifiedAuthComponent({
         <p className="text-xs text-gray-400 text-center">
           Don't have Farcaster? Download the app or visit farcaster.xyz
         </p>
+
+        {onExploreWithoutAuth && (
+          <button
+            onClick={onExploreWithoutAuth}
+            className="w-full bg-white/10 hover:bg-white/15 border border-white/20 rounded-xl px-4 py-3 text-white font-semibold transition-colors text-sm"
+          >
+            Continue Without Auth
+          </button>
+        )}
       </div>
     );
   }
 
-  // Error state
+  // =========================================================================
+  // RENDER: Error State
+  // =========================================================================
   if (step === 'error') {
     return (
       <div className="space-y-6">
@@ -264,12 +280,22 @@ export default function UnifiedAuthComponent({
           <p>{error}</p>
         </div>
 
-        <button
-          onClick={() => window.location.reload()}
-          className="w-full bg-blue-600 hover:bg-blue-700 rounded-xl px-4 py-3 text-white font-semibold transition-colors text-sm"
-        >
-          Try Again
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => window.location.reload()}
+            className="flex-1 bg-blue-600 hover:bg-blue-700 rounded-xl px-4 py-3 text-white font-semibold transition-colors text-sm"
+          >
+            Try Again
+          </button>
+          {onExploreWithoutAuth && (
+            <button
+              onClick={onExploreWithoutAuth}
+              className="flex-1 bg-white/10 hover:bg-white/15 border border-white/20 rounded-xl px-4 py-3 text-white font-semibold transition-colors text-sm"
+            >
+              Continue Without Auth
+            </button>
+          )}
+        </div>
       </div>
     );
   }

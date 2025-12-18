@@ -1,23 +1,18 @@
-// src/lib/farcasterAuth.ts
+/**
+ * Farcaster Mini App SDK Utilities
+ * 
+ * This module provides SDK context detection and utilities.
+ * Authentication flows are consolidated in src/lib/auth.ts
+ * 
+ * MANIFEST NOTE:
+ * Your Mini App needs a Farcaster manifest at `/public/.well-known/farcaster.json`
+ * with an `accountAssociation` signature to link your domain to your FID.
+ * Generate at: https://warpcast.com/~/developers/manifests
+ */
 
-// Farcaster Mini App Manifest (`/public/.well-known/farcaster.json`)
-// This file is crucial for Farcaster clients to identify and display your Mini App.
-// It includes metadata like the app name, icon, and supported actions.
-//
-// IMPORTANT: To prove ownership of your domain, you must generate and include
-// an `accountAssociation` signature in your `farcaster.json` manifest.
-// This signature links your app's domain to your Farcaster account (FID).
-//
-// You can generate this signature using tools like:
-// - Farcaster's official manifest tool: https://warpcast.com/~/developers/manifests
-// - `npx create-onchain-manifest` CLI tool.
-//
-// Once generated, add the `accountAssociation` object to your `farcaster.json`.
-
-// Import the modern Farcaster MiniApp SDK (2025 standard)
 import { sdk } from '@farcaster/miniapp-sdk';
 
-// Export the SDK for use throughout the app
+// Export SDK for use throughout the app
 export const miniApp = sdk;
 
 export type FarcasterUser = {

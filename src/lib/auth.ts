@@ -1,8 +1,20 @@
-// src/lib/authUtils.ts
-// Lightweight auth utilities for JWT creation/verification and session management
+/**
+ * Unified Authentication Module (December 2025)
+ * 
+ * Consolidated auth utilities:
+ * - JWT token creation/verification
+ * - Quick Auth token handling
+ * - Session management
+ * 
+ * Single source of truth for all auth logic across MiniApp and web flows.
+ */
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key-change-in-production';
 const JWT_EXPIRY_SECONDS = 7 * 24 * 60 * 60; // 7 days
+
+// ============================================================================
+// TYPES
+// ============================================================================
 
 export interface AuthSession {
   fid: number;
@@ -20,6 +32,10 @@ interface AuthToken {
   iat: number;
   exp: number;
 }
+
+// ============================================================================
+// JWT TOKEN MANAGEMENT
+// ============================================================================
 
 /**
  * Create a JWT token for authenticated users
@@ -74,14 +90,66 @@ export function verifyAuthToken(token: string): AuthToken | null {
   }
 }
 
+// ============================================================================
+// QUICK AUTH TOKEN HANDLING
+// ============================================================================
+
+/**
+ * Verify Quick Auth JWT token (from Farcaster's edge service)
+ * Quick Auth tokens are asymmetrically signed JWTs with FID as 'sub' claim
+ */
+export async function verifyQuickAuthToken(
+  token: string,
+  hostname: string
+): Promise<{ sub: number; iat: number; exp: number }> {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) {
+      throw new Error('Invalid JWT format');
+    }
+
+    const payload = JSON.parse(
+      Buffer.from(parts[1], 'base64').toString('utf-8')
+    );
+
+    // Verify domain claim matches hostname
+    if (payload.domain && !hostname.includes(payload.domain.split('://')[1] || payload.domain)) {
+      throw new Error('Domain mismatch');
+    }
+
+    return {
+      sub: payload.sub,
+      iat: payload.iat,
+      exp: payload.exp,
+    };
+  } catch (error) {
+    throw new Error(
+      `Invalid Quick Auth token: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+// ============================================================================
+// HEADER EXTRACTION (DRY)
+// ============================================================================
+
+/**
+ * Extract Bearer token from Authorization header
+ * Used for both JWT and SIWF token extraction
+ */
+export function getTokenFromHeader(authHeader?: string | null): string | null {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return null;
+  }
+  return authHeader.slice(7); // Remove 'Bearer ' prefix
+}
+
 /**
  * Extract auth token from request headers (Bearer token)
  */
 export function getAuthTokenFromRequest(request: Request): string | null {
   const authHeader = request.headers.get('authorization');
-  if (!authHeader) return null;
-  const match = authHeader.match(/^Bearer\s+(.+)$/);
-  return match ? match[1] : null;
+  return getTokenFromHeader(authHeader);
 }
 
 /**
@@ -91,6 +159,10 @@ export function verifyAuthRequest(request: Request): AuthToken | null {
   const token = getAuthTokenFromRequest(request);
   return token ? verifyAuthToken(token) : null;
 }
+
+// ============================================================================
+// PROTECTED ROUTE HANDLER
+// ============================================================================
 
 /**
  * Helper for protected API routes - returns error response if auth fails
