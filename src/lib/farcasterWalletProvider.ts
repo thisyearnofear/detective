@@ -22,7 +22,8 @@ export interface EthereumProvider {
 }
 
 let cachedProvider: EthereumProvider | null = null;
-let isInitialized = false;
+let cacheTime = 0;
+const CACHE_DURATION = 5000; // 5 second cache to handle timing issues
 
 /**
  * Get the appropriate Ethereum provider based on context
@@ -30,24 +31,30 @@ let isInitialized = false;
  * In Farcaster miniapp: Uses sdk.wallet.getEthereumProvider()
  * Outside miniapp: Falls back to window.ethereum
  * 
+ * Re-attempts fetch if cache is stale (handles initialization timing on mobile)
+ * 
  * @returns EthereumProvider or null if none available
  */
 export async function getEthereumProvider(): Promise<EthereumProvider | null> {
-  // Return cached provider if already initialized
-  if (isInitialized) {
+  const now = Date.now();
+  
+  // Return cached provider if still valid (within 5s)
+  if (cachedProvider && now - cacheTime < CACHE_DURATION) {
     return cachedProvider;
   }
 
   // Check if we're in a Farcaster miniapp context
   if (isFarcasterMiniApp()) {
     try {
-      console.log('[FarcasterWalletProvider] Detected Farcaster miniapp context');
+      console.log('[FarcasterWalletProvider] Attempting to get Farcaster wallet provider');
       const provider = await miniApp.wallet.getEthereumProvider();
       if (provider) {
         console.log('[FarcasterWalletProvider] Using Farcaster wallet provider');
         cachedProvider = provider as EthereumProvider;
-        isInitialized = true;
+        cacheTime = now;
         return cachedProvider;
+      } else {
+        console.warn('[FarcasterWalletProvider] Farcaster wallet provider not ready yet');
       }
     } catch (error) {
       console.error('[FarcasterWalletProvider] Failed to get Farcaster wallet provider:', error);
@@ -58,12 +65,12 @@ export async function getEthereumProvider(): Promise<EthereumProvider | null> {
   if (typeof window !== 'undefined' && (window as any).ethereum) {
     console.log('[FarcasterWalletProvider] Using window.ethereum provider');
     cachedProvider = (window as any).ethereum;
-    isInitialized = true;
+    cacheTime = now;
     return cachedProvider;
   }
 
   console.warn('[FarcasterWalletProvider] No wallet provider available');
-  isInitialized = true;
+  cachedProvider = null;
   return null;
 }
 
@@ -240,6 +247,6 @@ export async function getTransactionReceipt(txHash: string): Promise<any | null>
  */
 export function resetProvider(): void {
   cachedProvider = null;
-  isInitialized = false;
+  cacheTime = 0;
   console.log('[FarcasterWalletProvider] Provider cache reset');
 }

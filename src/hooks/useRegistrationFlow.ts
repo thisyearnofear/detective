@@ -50,7 +50,10 @@ export function useRegistrationFlow(): UseRegistrationFlowReturn {
         setCurrentStep('wallet-check');
         
         // Import Farcaster-aware wallet provider (works in both contexts)
-        const { requestAccounts, switchChain, addChain, sendTransaction } = await import('@/lib/farcasterWalletProvider');
+        const { requestAccounts, switchChain, addChain, sendTransaction, resetProvider } = await import('@/lib/farcasterWalletProvider');
+        
+        // Reset provider cache to ensure fresh fetch (handles mobile timing issues)
+        resetProvider();
 
         // Request account access (works in miniapp and browser)
         const accounts = await requestAccounts();
