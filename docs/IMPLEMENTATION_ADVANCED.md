@@ -1,4 +1,4 @@
-# Detective Advanced Features & Implementation
+# Detective Implementation & Advanced Features
 
 ## Timer & State Management (Dec 2024)
 
@@ -11,7 +11,7 @@ Fixed timer reset issues and state flashing during round transitions:
 
 **Files modified:**
 - `src/components/MobileAppContainer.tsx`
-- `src/components/ProgressRingTimer.tsx` 
+- `src/components/ProgressRingTimer.tsx`
 - `src/components/MultiChatContainer.tsx`
 - `src/hooks/useCountdown.ts`
 
@@ -40,7 +40,7 @@ Your current setup uses **HTTP polling** with the following characteristics:
 For a **50-player game** with **5 rounds**:
 - **Per player**: 2 simultaneous matches
 - **Total concurrent matches**: ~50 matches (25 pairs)
-- **Polling frequency**: 
+- **Polling frequency**:
   - Match polling: 1 req/sec per player = **50 req/sec**
   - Chat polling: 2 req/sec per player (2 chats) = **100 req/sec**
   - **Total: ~150 requests/second** during active gameplay
@@ -48,40 +48,6 @@ For a **50-player game** with **5 rounds**:
 **Per 4-minute match:**
 - 240 seconds × 150 req/sec = **36,000 requests**
 - With 5 rounds: **180,000 requests per game cycle**
-
----
-
-## Problem Analysis
-
-### Why Polling is Causing Issues
-1. **Server Load**
-   - 150 req/sec creates significant CPU overhead
-   - Each request requires:
-     - HTTP connection establishment
-     - Authentication/validation
-     - Game state lookup
-     - JSON serialization
-     - Response transmission
-
-2. **Network Inefficiency**
-   - 95%+ of polls return "no new data"
-   - Wasted bandwidth on HTTP headers (300-500 bytes per request)
-   - Unnecessary round-trip latency
-
-3. **Client Performance**
-   - Multiple `useSWR` hooks competing for resources
-   - React re-renders on every poll response
-   - Battery drain on mobile devices
-
-4. **Race Conditions**
-   - Polling at different intervals (1s vs 2s) can cause state inconsistencies
-   - Message ordering issues when multiple polls overlap
-   - Vote state synchronization problems
-
-5. **Scalability Ceiling**
-   - Current architecture won't scale beyond 50-100 concurrent players
-   - Vercel serverless functions have cold start issues
-   - API rate limits become problematic
 
 ---
 
@@ -205,7 +171,7 @@ That's it! Your chat now uses WebSockets. 🎉
 - Zero breaking changes to existing functionality
 - Polling mode still works exactly as before
 
-**Before**: Would have created `ChatWindowWS.tsx` (400+ lines of duplicate code)  
+**Before**: Would have created `ChatWindowWS.tsx` (400+ lines of duplicate code)
 **After**: Enhanced `ChatWindow.tsx` with ~100 lines of new logic
 
 #### 2. AGGRESSIVE CONSOLIDATION ✅
@@ -244,7 +210,7 @@ That's it! Your chat now uses WebSockets. 🎉
 - **RegistrationLobby**: Real-time player lobby with progress tracking and countdown
 - **GameStartSequence**: Three-phase game start (bot generation → player reveal → countdown)
 - **Mobile Optimization**: Responsive design for all registration components
-- **Platform Detection**: Smart detection of Farcaster vs web vs mobile contexts
+- **Platform Detection**: Smart detection of Farcaster app context
 
 #### ✅ **Completed: Farcaster SDK Integration**
 - **Real Authentication**: Actual Farcaster miniapp SDK integration (not mocks)
@@ -304,180 +270,6 @@ That's it! Your chat now uses WebSockets. 🎉
 
 ---
 
-## Roadmap & Future Vision
-
-### Product Vision Alignment
-Detective demonstrates the convergence of **synthetic identity**, **onchain economics**, and **social graphs** in a Farcaster-native gaming environment.
-
-### Current Phase: Access Gating & Economic Foundation
-
-#### **Week 1-2: Foundation**
-- [x] **NFT Contract Integration**: Arbitrum early access NFT verification
-- [x] **Token Balance Checking**: Monad token balance verification
-- [x] **Access Gate UI**: User-friendly access control interface
-- [x] **Whitelist Management**: Manual approval system for special cases
-
-#### **Week 3-4: User Experience**
-- [x] **Upgrade Flows**: Guide users to meet access requirements
-- [x] **Error Handling**: Clear messaging for access issues
-- [x] **Mobile Optimization**: Access flow optimized for Farcaster mobile
-- [x] **Analytics Integration**: Track conversion and user behavior
-
-#### **Week 5-6: Launch Preparation**
-- [x] **Soft Launch**: Existing users with grace period
-- [x] **Community Communication**: Educational content and announcements
-- [x] **Documentation**: User guides and FAQ
-- [x] **Support Systems**: Discord channels and help resources
-
----
-
-## Week 2-4: Complete Codebase Audit & Polish (100% Complete)
-
-### Week 2-3 Audit Results Summary
-- **Status**: ✅ HEALTHY CODEBASE
-- **Consolidation**: 30+ LOC of duplicate code eliminated (centralized fetcher)
-- **Performance**: 6 low-priority optimizations identified and documented
-- **Test Coverage**: 0% (deferred to Phase 4)
-- **Build Quality**: TypeScript strict mode ✅ | Zero unused imports ✅
-- **See**: `docs/CODEBASE_AUDIT.md` for full analysis
-
-### Week 4 Polish & Optimization (100% Complete)
-1. **Type Definition Consolidation** (4 components)
-   - ChatWindow.tsx: Updated to use `UserProfile` type
-   - MultiChatContainer.tsx: Updated to use `UserProfile` in BatchReveal type
-   - OpponentCard.tsx: Updated to use `UserProfile` type
-   - RoundTransition.tsx: Updated to use `UserProfile` in RevealData type
-   - **Result**: -20 LOC, improved consistency
-
-2. **Anti-Pattern Fix**
-   - CaseStatusCard.tsx: Removed `mounted` state anti-pattern
-   - Replaced useState with no-op (component always renders on client)
-   - **Result**: Eliminated unnecessary state update on mount
-
-3. **API Consolidation**
-   - Enhanced `/api/game/status` to return players list + phase info
-   - BriefingRoom.tsx: Consolidated 2 polling requests into 1
-   - **Result**: 50% reduction in polling requests (2/2s → 1/2s)
-
-#### **Week 1: Critical Blockers (100% Complete)**
-- [x] **Server-Driven Phase Transitions**: BriefingRoom now polls `/api/game/phase` every 1s instead of using client-side timeouts
-- [x] **Modal Management System**: Created ModalStack context provider with automatic z-index management
-- [x] **Loader Consolidation**: Created LoadingOverlay component merging RegistrationLoader + RoundStartLoader
-- [x] **Auth UI Clarification**: Removed TODO comments and simplified to single clear authentication flow
-
-#### **Week 2: Polish & Consistency (100% Complete)**
-- [x] **Timer Consistency**: Created `useCountdown` custom hook for all countdown timers
-- [x] **VoteToggle Warnings**: Added critical/warning states for <3s and 3-10s before vote lock
-- [x] **Leaderboard Consolidation**: Merged 4 leaderboard modes into unified component with DRY helpers and shared table rendering
-- [x] **Mobile Device Testing**: Verified responsive design across all consolidated components
-
-## Week 2 Consolidation: Leaderboard Refactor
-
-### Problem Identified
-Three separate leaderboard implementations with significant duplication:
-- `/leaderboard/page.tsx`: Global table (211 LOC)
-- `Leaderboard.tsx`: 4-mode mega-component (926 LOC)
-- `/api/leaderboard/mobile`: Separate endpoint for mobile context
-
-### Solution Applied
-**CONSOLIDATION + DRY Principles**:
-1. **Extracted `helpers` object** with 7 shared utility functions (getRankColor, getRankMedal, getTrendIcon, getTrendColor, getStrengthEmoji, getChainBadge, getLeaderboardTitle)
-2. **Created `LeaderboardTable` component** for unified table rendering with `showStatus` variant
-3. **Enhanced `/leaderboard/page.tsx`** to use `Leaderboard` in multi-chain mode instead of duplicating API logic
-4. **Removed 79 lines** of duplicate table code across two implementations
-
-### Results
-- **Leaderboard.tsx**: Reduced from 926 to 898 LOC (internal consolidation)
-- **page.tsx**: Reduced from 211 to 45 LOC (78% reduction)
-- **Total elimination**: ~165 lines of duplicate/redundant code
-- **API separation preserved**: Different endpoints serve distinct purposes (current/career/insights/multi-chain)
-- **Build quality**: TypeScript strict mode passing, zero regressions
-
----
-
-## Week 3: Full Codebase Audit (100% Complete)
-
-### Audit Scope
-Comprehensive analysis of 28 components, 7,000+ LOC across:
-- Consolidation opportunities (duplicate code, types, utilities)
-- Performance bottlenecks (re-renders, state management, polling)
-- Unused code and dead patterns
-- Test coverage gaps
-
-### Consolidation Completed
-1. **Centralized Fetcher Library** (`src/lib/fetcher.ts`)
-   - Consolidated 5 duplicate `fetcher` functions into single source of truth
-   - Added special handling for 403 responses (game not live)
-   - Updated all 5 calling files to import from library
-   - **Savings**: 30 LOC eliminated
-
-2. **Type Definition Audit**
-   - Identified `UserProfile` type already exists in `lib/types.ts`
-   - Found 4 components redefining same shape locally
-   - **Recommendation**: Update these 4 files to use `UserProfile` type (20 LOC potential savings)
-
-3. **Large Components Analysis**
-   - 7 components analyzed (> 200 LOC)
-   - 898 LOC (Leaderboard) acceptable - serves 4 distinct modes
-   - Others have clear justification or targeted refactoring opportunities
-   - **Assessment**: No urgent bloat; component sizes justified by functionality
-
-### Performance Analysis
-Identified 6 optimization opportunities (all LOW-MEDIUM priority):
-1. VirtualizedMessageList memo comparison overhead (optimize string join)
-2. MultiChatContainer dual polling pattern (consolidate endpoints)
-3. Leaderboard over-fetching (more aggressive conditional fetching)
-4. BriefingRoom phase sync race condition (already mostly handled)
-5. CaseStatusCard mounted flag anti-pattern (useRef vs useState)
-6. MobileAppContainer mock data regeneration (memoize or remove)
-
-**Assessment**: No critical performance issues. All components perform well under normal load.
-
-### Unused Code Audit
-- ✅ No unused imports detected (verified via `tsc --noUnusedLocals`)
-- ✅ No deprecated patterns found
-- ✅ All TODOs removed (completed Week 1)
-- ✅ No dead code branches identified
-
-### Test Coverage Analysis
-**Current**: 0 test files found
-**Critical paths identified** (no tests):
-1. Authentication flow (Farcaster SDK fallback)
-2. Game state management (all game logic)
-3. Vote processing (leaderboard accuracy)
-4. Message synchronization (game experience)
-
-**Recommendation**: Add tests in Phase 4 (pre-launch)
-
-### Codebase Health Summary
-| Metric | Status | Notes |
-|--------|--------|-------|
-| **TypeScript Strict** | ✅ PASS | All types properly checked |
-| **Unused Variables** | ✅ PASS | Zero unused declarations |
-| **Unused Imports** | ✅ PASS | All imports referenced |
-| **Duplicate Code** | ✅ RESOLVED | Fetcher consolidated |
-| **Component Sizes** | ✅ HEALTHY | No excessive bloat |
-| **Performance** | ⚠️ GOOD | 6 minor optimizations noted |
-| **Test Coverage** | ⚠️ NONE | Deferred to Phase 4 |
-
-### Recommendations by Category
-**IMMEDIATE** (completed this sprint):
-- [x] Create centralized fetcher library
-- [x] Document audit findings
-
-**NEXT SPRINT** (Week 4):
-- [ ] Update 4 components to use UserProfile type
-- [ ] Fix CaseStatusCard mounted anti-pattern  
-- [ ] Consolidate BriefingRoom polling
-
-**PHASE 4** (Pre-launch):
-- [ ] Add unit tests for GameState
-- [ ] Add integration tests for vote flow
-- [ ] Performance profiling with React DevTools
-- [ ] Load testing for 50-100 concurrent players
-
----
-
 ## Farcaster Authentication Flow Fix
 
 ### Problem Fixed
@@ -518,7 +310,7 @@ Implemented the proper **Sign In with Farcaster** standard with professional wal
 ### Files Deleted (AGGRESSIVE CONSOLIDATION)
 - ✅ `src/components/AuthInput.tsx` - Replaced by FarcasterAuthKit + RainbowKit
 - ✅ `src/components/FarcasterSetupModal.tsx` - Fake QR modal (no longer needed)
-- ✅ `src/app/api/profiles/by-address/route.ts` - Address lookup only (kept for legacy fallback, can deprecate)
+- ✅ `src/app/api/profiles/by-address/route.ts` - Address lookup only (kept for legacy fallback)
 
 ### Auth Flow Improvements (Polling Optimization)
 Despite Ably's historical issues, we optimized polling to eliminate outdated practices:
@@ -564,11 +356,6 @@ Despite Ably's historical issues, we optimized polling to eliminate outdated pra
 ✅ src/app/api/auth/farcaster/status/route.ts (poll signin completion)
 ```
 
-### Documentation Created (1):
-```
-✅ docs/CODEBASE_AUDIT.md (comprehensive audit report)
-```
-
 ### Modified Files (15):
 ```
 ✅ src/app/layout.tsx (ModalProvider wrapper)
@@ -584,34 +371,7 @@ Despite Ably's historical issues, we optimized polling to eliminate outdated pra
 ✅ src/components/game/GameFinishedView.tsx (import centralized fetcher)
 ```
 
-### Future Phases: Ecosystem Development
-
-#### **Phase 5: Tournament & Competition System** (Q1 2025)
-- **Scheduled Events**: Daily/weekly competitive tournaments
-- **Bracket System**: Single/double elimination tournaments
-- **Prize Pools**: Community-funded and protocol-sponsored rewards
-- **Skill-Based Matching**: ELO rating system for balanced matchups
-
-#### **Phase 6: Creator Economy & AI Training** (Q2 2025)
-- **Training Interface**: Users train their own synthetic identity models
-- **Model Marketplace**: Buy/sell/license AI personality models
-- **Quality Assurance**: Community voting on model accuracy
-- **Revenue Sharing**: Creators earn from their AI model usage
-
-#### **Phase 7: DAO Governance & Economics** (Q2-Q3 2025)
-- **Proposal System**: Community governance for game changes
-- **Voting Weight**: Leaderboard ranking affects governance power
-- **Treasury Management**: Community control over protocol funds
-- **Staking Mechanisms**: Stake tokens for enhanced rewards
-
-#### **Phase 8: Platform Expansion** (Q3-Q4 2025)
-- **Multi-Platform Integration**: Lens Protocol, Base Ecosystem, ENS integration
-- **Ecosystem Partnerships**: Farcaster Frames, wallet partnerships, AI partnerships
-- **Cross-Chain Bridge**: Native bridge between Arbitrum and Monad
-
----
-
-## Implementation Quality
+### Implementation Quality
 
 ### Code Quality
 - ✅ TypeScript strict mode passing
@@ -631,31 +391,6 @@ Despite Ably's historical issues, we optimized polling to eliminate outdated pra
 - ✅ Easy to test (modular design)
 - ✅ Easy to extend (feature flag pattern)
 - ✅ Easy to rollback (one env variable)
-
----
-
-## Success Metrics & Milestones
-
-### Phase 5 Metrics (Tournament System)
-- **Daily Active Users**: 500+ concurrent players
-- **Tournament Participation**: 70%+ of active users join tournaments
-- **Prize Pool Growth**: Community funding exceeds protocol funding
-- **Retention Rate**: 60%+ monthly active user retention
-
-### Phase 6 Metrics (Creator Economy)
-- **User-Generated Models**: 100+ community-created AI models
-- **Creator Revenue**: $10k+ monthly revenue for top creators
-- **Model Quality**: 85%+ accuracy rating for marketplace models
-- **Training Engagement**: 30%+ of users create custom AI models
-
-### Long-Term Vision (2026+)
-Detective becomes the standard for **synthetic identity verification** across web3:
-- **Identity Verification**: Prove you're human through Detective challenges
-- **Reputation System**: Detective scores as universal reputation metric
-- **AI Detection Service**: API for other platforms to detect synthetic users
-- **Social Infrastructure**: Detective as proof-of-humanity for social platforms
-
-This roadmap balances **immediate user value** with **long-term ecosystem vision**, ensuring Detective remains at the forefront of synthetic identity innovation while delivering compelling gameplay today.
 
 ---
 

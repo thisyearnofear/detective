@@ -2,8 +2,8 @@
 
 ## Contract Information
 
-**Network**: Arbitrum One (mainnet)  
-**Address**: `0xa879B5CbD12b6137fCcf70669D48F55666296357`  
+**Network**: Arbitrum One (mainnet)
+**Address**: `0xa879B5CbD12b6137fCcf70669D48F55666296357`
 **Status**: ✅ Deployed & Verified
 
 ## Verification Links
@@ -41,12 +41,12 @@
 
 ### View Functions
 
-**`admin()`** - Current admin address  
-**`isPaused()`** - Registration pause status  
-**`minEntryFee()`** - Current minimum entry fee in wei  
-**`registrationCount()`** - Total registrations recorded  
-**`hasRegistered(address player)`** - Check if wallet has registered  
-**`playerFid(address player)`** - Get FID for registered wallet  
+**`admin()`** - Current admin address
+**`isPaused()`** - Registration pause status
+**`minEntryFee()`** - Current minimum entry fee in wei
+**`registrationCount()`** - Total registrations recorded
+**`hasRegistered(address player)`** - Check if wallet has registered
+**`playerFid(address player)`** - Get FID for registered wallet
 
 ### Events
 
@@ -132,7 +132,7 @@ if (isValid) {
 **Contract ABI**: Use TypeScript-generated types
 
 ```typescript
-import { 
+import {
   DETECTIVE_GAME_ENTRY_ABI,
   DetectiveGameEntryEvents,
   DetectiveGameEntryErrors,
@@ -218,6 +218,6 @@ curl "https://api.arbiscan.io/api?module=logs&action=getLogs&address=0x2d0B651fE
 
 ---
 
-**Last Updated**: December 2025  
-**Deployment Tx**: Check contract creation on Blockscout  
+**Last Updated**: December 2025
+**Deployment Tx**: Check contract creation on Blockscout
 **Admin**: Multi-sig or governance address (see contract details)
