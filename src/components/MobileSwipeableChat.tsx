@@ -27,6 +27,7 @@ interface MobileSwipeableChatProps {
     onRefresh: () => Promise<void>;
     currentRound: number;
     totalRounds: number;
+    monetizationEnabled?: boolean;
 }
 
 export default function MobileSwipeableChat({
@@ -41,6 +42,7 @@ export default function MobileSwipeableChat({
     onRefresh,
     currentRound,
     totalRounds,
+    monetizationEnabled = true,
 }: MobileSwipeableChatProps) {
     const { isMobile } = useViewport();
     const haptics = useHaptics();
@@ -219,6 +221,7 @@ export default function MobileSwipeableChat({
                             onRefresh={onRefresh}
                             isOpponentTyping={typingIndicators[match1.id] || false}
                             onTypingStart={onTypingStart}
+                            monetizationEnabled={monetizationEnabled}
                         />
                     ) : (
                         <EmptySlot slotNumber={1} />
@@ -251,6 +254,7 @@ export default function MobileSwipeableChat({
                             onRefresh={onRefresh}
                             isOpponentTyping={typingIndicators[match2.id] || false}
                             onTypingStart={onTypingStart}
+                            monetizationEnabled={monetizationEnabled}
                         />
                     ) : (
                         <EmptySlot slotNumber={2} />

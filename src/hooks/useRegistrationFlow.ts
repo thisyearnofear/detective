@@ -16,14 +16,17 @@ interface UseRegistrationFlowReturn {
   currentStep: RegistrationStep;
   error: string | null;
   walletConnected: boolean;
-  executeRegistration: (onBeforeWallet: () => void) => Promise<string | null>;
+  executeRegistration: (
+    onBeforeWallet: () => void, 
+    options?: { skipPermissions?: boolean }
+  ) => Promise<{ txHash: string; permissions?: { hasPermission: boolean; expiry: number } } | null>;
   reset: () => void;
 }
 
 /**
  * Hook to manage Arbitrum registration flow with proper step progression
  * 
- * Tracks: wallet connection → signing → confirming → success/error
+ * Tracks: wallet connection → signing → confirming → request-permissions → success/error
  * Orchestrates the async progression of requestArbitrumRegistrationTx
  */
 export function useRegistrationFlow(): UseRegistrationFlowReturn {
@@ -38,24 +41,19 @@ export function useRegistrationFlow(): UseRegistrationFlowReturn {
   }, []);
 
   const executeRegistration = useCallback(
-    async (onBeforeWallet: () => void): Promise<string | null> => {
+    async (
+      onBeforeWallet: () => void, 
+      options?: { skipPermissions?: boolean }
+    ): Promise<{ txHash: string; permissions?: { hasPermission: boolean; expiry: number } } | null> => {
       setCurrentStep('idle');
       setError(null);
 
       try {
-        // Call parent's pre-wallet hook (set loading, etc)
+        // ... (existing wallet and TX logic)
         onBeforeWallet();
-
-        // Step 1: Request wallet connection
         setCurrentStep('wallet-check');
-        
-        // Import Farcaster-aware wallet provider (works in both contexts)
-        const { requestAccounts, switchChain, addChain, sendTransaction, resetProvider } = await import('@/lib/farcasterWalletProvider');
-        
-        // Reset provider cache to ensure fresh fetch (handles mobile timing issues)
+        const { requestAccounts, switchChain, addChain, sendTransaction, resetProvider, requestPermissions } = await import('@/lib/farcasterWalletProvider');
         resetProvider();
-
-        // Request account access (works in miniapp and browser)
         const accounts = await requestAccounts();
 
         if (!accounts || accounts.length === 0) {
@@ -66,14 +64,11 @@ export function useRegistrationFlow(): UseRegistrationFlowReturn {
         const userAddress = accounts[0];
         console.log('[useRegistrationFlow] Wallet connected:', userAddress);
 
-        // Step 2: Sign transaction
         setCurrentStep('signing');
-
-        // Switch to Arbitrum network
         try {
           await switchChain('0xa4b1'); // Arbitrum mainnet
         } catch (switchError: any) {
-          // Chain not found, try to add it
+          // ... (existing switchChain logic)
           if (switchError.message?.includes('not found')) {
             const rpcUrl = process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL || 'https://arb1.arbitrum.io/rpc';
             await addChain({
@@ -92,18 +87,13 @@ export function useRegistrationFlow(): UseRegistrationFlowReturn {
           }
         }
 
-        // Get the FID for encoding
         const fid = parseInt(localStorage.getItem('userFid') || '0', 10);
         if (fid <= 0) {
           throw new Error('User FID not found');
         }
 
-        // Get contract config
-        const { getArbitrumConfig } = await import('@/lib/arbitrumVerification');
-        const { encodeRegisterFunctionCall } = await import('@/lib/arbitrumVerification');
+        const { getArbitrumConfig, encodeRegisterFunctionCall } = await import('@/lib/arbitrumVerification');
         const config = getArbitrumConfig();
-
-        // Encode and send the registration TX
         const encodedData = encodeRegisterFunctionCall(fid);
         const txHash = await sendTransaction({
           from: userAddress,
@@ -117,40 +107,46 @@ export function useRegistrationFlow(): UseRegistrationFlowReturn {
           throw new Error('Failed to get transaction hash from wallet');
         }
 
-        // Store wallet for later verification
         if (typeof window !== 'undefined') {
           localStorage.setItem('arbitrumWalletAddress', userAddress);
         }
 
-        console.log('[useRegistrationFlow] TX signed:', txHash);
-
-        // Step 3: Confirm on-chain (skip for Farcaster native wallet)
         setCurrentStep('confirming');
-        
-        // Check if we're using Farcaster wallet (doesn't support eth_getTransactionReceipt)
         const { isFarcasterMiniApp } = await import('@/lib/farcasterAuth');
-        const isFarcasterWallet = isFarcasterMiniApp();
-        
-        if (isFarcasterWallet) {
-          console.log('[useRegistrationFlow] Skipping confirmation check (Farcaster wallet)');
-          // Backend will verify the transaction, just proceed
-        } else {
-          // Poll for TX confirmation (with timeout) for MetaMask/other wallets
-          const confirmed = await waitForConfirmation(txHash, 30000); // 30s timeout
-          
-          if (!confirmed) {
-            throw new Error('Transaction confirmation timeout. Please check your wallet.');
-          }
-          console.log('[useRegistrationFlow] TX confirmed on-chain');
+        if (!isFarcasterMiniApp()) {
+          const confirmed = await waitForConfirmation(txHash, 30000);
+          if (!confirmed) throw new Error('Transaction confirmation timeout');
         }
 
-        // Success
+        // STEP: Request Session Permissions (ERC-7715)
+        let permissionsInfo = undefined;
+        if (!options?.skipPermissions) {
+          setCurrentStep('request-permissions');
+          try {
+            const { formatGamePermissionRequest, SESSION_DURATION_SECONDS } = await import('@/lib/erc7715');
+            const permissionReq = formatGamePermissionRequest(config.contractAddress as `0x${string}`);
+            
+            const granted = await requestPermissions([permissionReq]);
+            
+            if (granted) {
+              console.log('[useRegistrationFlow] Session permissions granted');
+              permissionsInfo = {
+                hasPermission: true,
+                expiry: Math.floor(Date.now() / 1000) + SESSION_DURATION_SECONDS
+              };
+            }
+          } catch (permError: any) {
+            console.warn('[useRegistrationFlow] Permission request skipped or failed:', permError.message);
+            // Don't fail the whole registration if permissions are skipped, 
+            // just continue without the "Zero-Click" feature.
+          }
+        }
+
         setCurrentStep('success');
-        return txHash;
+        return { txHash, permissions: permissionsInfo };
       } catch (err: any) {
+        // ... (existing error handling)
         console.error('[useRegistrationFlow] Registration error:', err);
-        
-        // Handle specific wallet errors
         if (err.message?.includes('rejected')) {
           setError('Transaction rejected. Try again if you want to register.');
         } else if (err.message?.includes('not found')) {
@@ -160,7 +156,6 @@ export function useRegistrationFlow(): UseRegistrationFlowReturn {
         } else {
           setError(err.message || 'Registration failed');
         }
-        
         setCurrentStep('error');
         return null;
       }

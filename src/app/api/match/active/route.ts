@@ -93,6 +93,8 @@ export async function GET(request: NextRequest) {
       voteHistory,
       // Server time for client synchronization
       serverTime: Date.now(),
+      // Config for feature toggles
+      config: rawState.config,
     });
   } catch (error) {
     console.error("Error fetching active matches:", error);

@@ -25,7 +25,7 @@ import { db } from "@/lib/database";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { fid, arbitrumTxHash, arbitrumWalletAddress } = body;
+    const { fid, arbitrumTxHash, arbitrumWalletAddress, hasPermission, permissionExpiry } = body;
 
     // ========== STEP 1: VALIDATE REQUEST ==========
     if (!fid || typeof fid !== "number" || fid <= 0) {
@@ -145,7 +145,12 @@ export async function POST(request: Request) {
       userProfile.address = arbitrumWalletAddress.toLowerCase();
     }
 
-    const player = await gameManager.registerPlayer(userProfile, recentCasts, style);
+    const player = await gameManager.registerPlayer(
+      userProfile, 
+      recentCasts, 
+      style, 
+      hasPermission ? { hasPermission, expiry: permissionExpiry || 0 } : undefined
+    );
 
     if (!player) {
       return NextResponse.json(

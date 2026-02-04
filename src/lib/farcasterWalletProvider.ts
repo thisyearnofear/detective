@@ -216,6 +216,44 @@ export async function addChain(chainConfig: {
 }
 
 /**
+ * Request ERC-7715 Permissions (Session Keys)
+ * 
+ * Enables "Zero-Click" interactions by requesting a session-based permission
+ * for specific contract calls.
+ * 
+ * @param permissions ERC-7715 permission request object
+ * @returns Granted permissions or null if rejected
+ */
+export async function requestPermissions(permissions: any[]): Promise<any | null> {
+  const provider = await getEthereumProvider();
+  
+  if (!provider) {
+    throw new Error('Wallet not found');
+  }
+
+  try {
+    const granted = await provider.request({
+      method: 'wallet_requestPermissions',
+      params: permissions,
+    });
+    
+    console.log('[FarcasterWalletProvider] Permissions granted:', granted);
+    return granted;
+  } catch (error: any) {
+    if (error.code === 4001) {
+      console.warn('[FarcasterWalletProvider] User rejected permissions');
+      return null;
+    }
+    // Handle case where method is not supported
+    if (error.code === -32601) {
+      console.warn('[FarcasterWalletProvider] wallet_requestPermissions not supported by this wallet');
+      throw new Error('This wallet does not support session permissions (ERC-7715). Please use a smart account wallet like MetaMask Smart Account or Argent.');
+    }
+    throw error;
+  }
+}
+
+/**
  * Get transaction receipt
  * 
  * @param txHash Transaction hash

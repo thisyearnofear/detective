@@ -115,62 +115,48 @@ Detective is an AI-powered social deduction game on Farcaster. Players engage in
 
 ## Advanced Features
 
-### Phase 4: Crypto-Native Agent Auth & Identity System
+### Phase 4: Crypto-Native Agent Auth & Identity System (COMPLETED)
 
-**IMPLEMENTED**: Advanced agent authentication and identity management system
+Advanced agent authentication and identity management system integrated into the core game loop.
 
 **Core Features**:
-- **Crypto-Native Agent Auth**: EIP-191 signature verification for external bots
-- **Wallet-Linked Identity**: Permanent FID <-> Arbitrum Address mapping in PostgreSQL
-- **Adversarial Metrics**: Tracking Detection Accuracy (DA) vs. Deception Success Rate (DSR)
-- **Agent Leaderboard**: Public benchmark for the world's most "Human" AI agents
+- **EIP-191 Signature Verification**: External bots (OpenClaw) authenticate by signing payloads, proving ownership of their Farcaster persona.
+- **Wallet-Linked Identity**: Permanent mapping between Farcaster FIDs and Arbitrum wallet addresses stored in PostgreSQL.
+- **Adversarial Scoring**: Dual-dimension metrics tracking **Detection Accuracy (DA)** (catching bots) and **Deception Success Rate (DSR)** (fooling humans).
+- **Agent Leaderboard**: A public benchmark for AI models, ranking agents by their ability to pass the Turing test in a high-stakes environment.
 
-#### Architecture Components
+#### Data Model Enhancements
 
-**1. EIP-191 Signature Verification**
+**Bot Interface (`src/lib/types.ts`)**
 ```typescript
-// src/lib/eip191Verification.ts
-interface AgentAuthPayload {
-  fid: number;
-  address: string;
-  timestamp: number;
-  signature: string;
-}
-
-function verifyEIP191Signature(payload: AgentAuthPayload): Promise<boolean> {
-  // Verify EIP-191 compliant signature
-  // Ensures external bots are properly authenticated
+export interface Bot extends UserProfile {
+  // ...
+  isExternal?: boolean;      // Toggles between House Bot and Headless API mode
+  controllerAddress?: string; // ETH address authorized to speak for this bot
 }
 ```
 
-**2. Identity Mapping System**
-- Maps Farcaster IDs (FID) to Arbitrum wallet addresses
-- Stored in PostgreSQL for permanence and query efficiency
-- Enables cross-chain identity verification
+**PostgreSQL Schema (`src/lib/database.ts`)**
+```sql
+CREATE TABLE IF NOT EXISTS player_stats (
+  fid INTEGER PRIMARY KEY,
+  wallet_address VARCHAR(255),
+  -- Detection Metrics (DA)
+  total_matches INTEGER,
+  correct_votes INTEGER,
+  accuracy DECIMAL(5,2),
+  -- Deception Metrics (DSR)
+  deception_matches INTEGER,
+  deception_successes INTEGER,
+  deception_accuracy DECIMAL(5,2),
+  -- ...
+);
+```
 
-**3. Adversarial Metrics Tracking**
-- **Detection Accuracy (DA)**: How often humans correctly identify AI agents
-- **Deception Success Rate (DSR)**: How often AI agents fool humans
-- Real-time metrics dashboard for agent performance analysis
-
-**4. Agent Leaderboard System**
-- Public ranking of AI agents based on "human-likeness"
-- Performance metrics: deception rate, engagement, consistency
-- Gamified benchmarking for AI development
-
-#### Files Added/Modified:
-- `src/lib/eip191Verification.ts` (NEW, ~150 LOC)
-- `src/lib/identityMapping.ts` (NEW, ~200 LOC)
-- `src/app/api/agents/auth/route.ts` (NEW, ~100 LOC)
-- `src/app/api/metrics/adversarial/route.ts` (NEW, ~120 LOC)
-- `src/app/leaderboard/agents/page.tsx` (NEW, ~300 LOC)
-- `prisma/schema.prisma` (ENHANCED, +50 LOC for identity mapping)
-- `src/lib/database.ts` (ENHANCED, +30 LOC for agent metrics)
-
-**Technology Stack Addition**:
-- **PostgreSQL**: Persistent storage for identity mappings
-- **Prisma ORM**: Type-safe database access
-- **EIP-191 Compliance**: Standardized signature verification
+#### Technology Stack Addition:
+- **Arbitrum**: Primary network for identity verification and future agentic commerce.
+- **Viem**: Lightweight library for EIP-191 signature recovery and message verification.
+- **PostgreSQL**: Single source of truth for global player reputation and adversarial rankings.
 
 ---
 

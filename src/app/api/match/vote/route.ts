@@ -78,6 +78,8 @@ export async function POST(request: NextRequest) {
       voteLocked: updatedMatch.voteLocked,
       voteChanges: updatedMatch.voteHistory.length,
       isCorrect, // Will be null unless vote was just locked
+      stakedAmount: updatedMatch.stakedAmount,
+      payoutAmount: isCorrect !== null ? (isCorrect ? (BigInt(updatedMatch.stakedAmount || "0") * 2n).toString() : "0") : undefined,
     });
   } catch (error) {
     console.error("Error updating vote:", error);
@@ -143,6 +145,8 @@ export async function PUT(request: NextRequest) {
         actualType,
         finalVote: guess,
         voteLocked: true,
+        stakedAmount: match.stakedAmount,
+        payoutAmount: isCorrect ? (match.stakedAmount ? (BigInt(match.stakedAmount) * 2n).toString() : "0") : "0",
       });
     }
 
@@ -162,6 +166,8 @@ export async function PUT(request: NextRequest) {
       actualType: match.opponent.type,
       finalVote: match.currentVote || "REAL",
       voteLocked: true,
+      stakedAmount: match.stakedAmount,
+      payoutAmount: isCorrect ? (match.stakedAmount ? (BigInt(match.stakedAmount) * 2n).toString() : "0") : "0",
     });
   } catch (error) {
     console.error("Error finalizing vote:", error);

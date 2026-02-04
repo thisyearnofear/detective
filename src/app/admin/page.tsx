@@ -215,6 +215,34 @@ export default function AdminPage() {
         }
     }, [mutate]);
 
+    const handleToggleMonetization = async () => {
+        const currentEnabled = adminData?.gameState?.config?.monetizationEnabled;
+        const newEnabled = !currentEnabled;
+
+        setMessage(null);
+        try {
+            const response = await fetch('/api/admin/state', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    action: 'update-config', 
+                    config: { monetizationEnabled: newEnabled } 
+                }),
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                setMessage({ 
+                    type: 'success', 
+                    text: `Monetization ${newEnabled ? 'enabled' : 'disabled'} successfully.` 
+                });
+                mutate();
+            }
+        } catch (error: any) {
+            setMessage({ type: 'error', text: error.message });
+        }
+    };
+
     // Generate grid images array
     const gridImages = Array.from({ length: 9 }, (_, i) => `/grid-images/${i + 1}.jpg`);
 
@@ -331,6 +359,68 @@ export default function AdminPage() {
                                 </button>
                             </div>
                         )}
+                    </div>
+
+                    {/* System Configuration - NEW */}
+                    <div className="bg-white/5 border border-white/10 rounded-2xl backdrop-blur-sm p-4 sm:p-6">
+                        <h2 className="text-lg sm:text-xl font-light text-white/90 tracking-wide mb-4 sm:mb-6 text-center">System Configuration</h2>
+
+                        <div className="space-y-6">
+                            <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div>
+                                        <p className="text-sm font-medium text-white">Truth Stake Loop (Monetization)</p>
+                                        <p className="text-xs text-white/50">Enable economic staking and ERC-7715 permissions</p>
+                                    </div>
+                                    <button
+                                        onClick={handleToggleMonetization}
+                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                                            adminData?.gameState?.config?.monetizationEnabled 
+                                                ? 'bg-blue-600' 
+                                                : 'bg-slate-700'
+                                        }`}
+                                    >
+                                        <span
+                                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                                adminData?.gameState?.config?.monetizationEnabled 
+                                                    ? 'translate-x-6' 
+                                                    : 'translate-x-1'
+                                            }`}
+                                        />
+                                    </button>
+                                </div>
+
+                                <div className="text-xs text-white/40 space-y-2">
+                                    <div className="flex items-center gap-2">
+                                        <span className={adminData?.gameState?.config?.monetizationEnabled ? 'text-green-400' : 'text-gray-500'}>
+                                            {adminData?.gameState?.config?.monetizationEnabled ? '●' : '○'}
+                                        </span>
+                                        <span>ERC-7715 Permissions Requested</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className={adminData?.gameState?.config?.monetizationEnabled ? 'text-green-400' : 'text-gray-500'}>
+                                            {adminData?.gameState?.config?.monetizationEnabled ? '●' : '○'}
+                                        </span>
+                                        <span>Economic Stakes in Matches</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className={adminData?.gameState?.config?.monetizationEnabled ? 'text-green-400' : 'text-gray-500'}>
+                                            {adminData?.gameState?.config?.monetizationEnabled ? '●' : '○'}
+                                        </span>
+                                        <span>Adversarial Payouts Calculated</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-yellow-900/10 border border-yellow-500/20 rounded-xl p-4">
+                                <h3 className="text-xs font-bold text-yellow-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                    <span>⚠️</span> Testing Mode
+                                </h3>
+                                <p className="text-xs text-yellow-200/70">
+                                    Disabling monetization is recommended for testing core game dynamics (conversation, voting, bot behavior) without requiring a wallet or gas.
+                                </p>
+                            </div>
+                        </div>
                     </div>
 
                     {/* Bulk User Registration - Clean editorial design */}

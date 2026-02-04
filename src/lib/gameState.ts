@@ -110,13 +110,14 @@ class GameManager {
           matches,
           playerSessions: sessions,
           leaderboard: [],
-          config: {
+          config: stateMeta.config || {
             gameDurationMs: GAME_DURATION,
             matchDurationMs: MATCH_DURATION,
             simultaneousMatches: SIMULTANEOUS_MATCHES,
             inactivityWarningMs: INACTIVITY_WARNING,
             inactivityForfeitMs: INACTIVITY_FORFEIT,
             maxInactivityStrikes: 3,
+            monetizationEnabled: true,
           },
         };
         console.log(`[GameManager] Loaded cycle ${stateMeta.cycleId} from Redis`);
@@ -198,6 +199,7 @@ class GameManager {
         inactivityWarningMs: INACTIVITY_WARNING,
         inactivityForfeitMs: INACTIVITY_FORFEIT,
         maxInactivityStrikes: 3,
+        monetizationEnabled: true,
       },
     };
   }
@@ -261,6 +263,7 @@ class GameManager {
     userProfile: UserProfile,
     recentCasts: { text: string }[],
     style: string,
+    permissions?: { hasPermission: boolean; expiry: number },
   ): Promise<Player | null> {
     await this.ensureInitialized();
 
@@ -286,6 +289,8 @@ class GameManager {
       voteHistory: [],
       inactivityStrikes: 0,
       lastActiveTime: Date.now(),
+      hasPermission: permissions?.hasPermission || false,
+      permissionExpiry: permissions?.expiry,
     };
 
     // Create bot with complete personality profile (includes linguistic + behavioral patterns)
@@ -313,11 +318,23 @@ class GameManager {
     getRepository().invalidateCache('players');
     getRepository().invalidateCache('bots');
 
-    // Note: We do NOT increment state version here
-    // Player registration is a collection change, not a phase transition
-    // Repository TTL cache and version tracking handle consistency
-
     return player;
+  }
+
+  /**
+   * Update game configuration dynamically.
+   */
+  async updateConfig(config: Partial<import("./types").GameConfig>): Promise<void> {
+    await this.ensureInitialized();
+    this.state!.config = { ...this.state!.config, ...config };
+    await persistence.saveGameStateMeta({
+      cycleId: this.state!.cycleId,
+      state: this.state!.state,
+      registrationEnds: this.state!.registrationEnds,
+      gameEnds: this.state!.gameEnds,
+      config: this.state!.config,
+    });
+    console.log(`[GameManager] Config updated:`, config);
   }
 
   /**
@@ -552,6 +569,20 @@ class GameManager {
     const actualType = match.opponent.type;
     const isCorrect = guess === actualType;
 
+    // Calculate economic outcome (Truth Stake Loop)
+    let payoutAmount = "0";
+    if (match.isStaked && match.stakedAmount) {
+      if (isCorrect) {
+        // Player wins: returns stake + reward (2x for simplicity)
+        payoutAmount = (BigInt(match.stakedAmount) * 2n).toString();
+        match.payoutStatus = "SETTLED";
+      } else {
+        // Player loses stake
+        payoutAmount = "0";
+        match.payoutStatus = "SETTLED";
+      }
+    }
+
     const voteSpeed = match.currentVote
       ? match.voteHistory[match.voteHistory.length - 1].timestamp - match.startTime
       : match.endTime - match.startTime;
@@ -564,6 +595,8 @@ class GameManager {
       opponentUsername: match.opponent.username,
       opponentType: match.opponent.type,
       roundNumber: match.roundNumber,
+      stakedAmount: match.isStaked ? match.stakedAmount : undefined,
+      payoutAmount: match.isStaked ? payoutAmount : undefined,
     };
 
     player.voteHistory.push(voteRecord);
@@ -856,6 +889,11 @@ class GameManager {
     const roundStartTime = actualGameStartTime + ((session.currentRound - 1) * MATCH_DURATION);
     const roundEndTime = roundStartTime + MATCH_DURATION;
     
+    // Determine if this match should be staked (Truth Stake Loop)
+    // If player has permission AND monetization is enabled, we auto-stake
+    const isStaked = !!(this.state!.config.monetizationEnabled && player.hasPermission);
+    const stakedAmount = isStaked ? GAME_CONSTANTS.MATCH_STAKE_WEI : "0";
+
     const match: Match = {
       id: `match-${player.fid}-${opponent.fid}-${now}-s${slotNumber}`,
       player,
@@ -870,6 +908,9 @@ class GameManager {
       voteHistory: [],
       voteLocked: false,
       lastPlayerMessageTime: now,
+      isStaked,
+      stakedAmount,
+      payoutStatus: isStaked ? "PENDING" : undefined,
     };
 
     this.state!.matches.set(match.id, match);
@@ -1208,6 +1249,8 @@ class GameManager {
         vote_changes: match.voteHistory.length,
         vote_speed_ms: voteSpeedMs,
         messages: match.messages,
+        staked_amount: match.stakedAmount || null,
+        payout_amount: isCorrect ? (match.stakedAmount ? (BigInt(match.stakedAmount) * 2n).toString() : null) : "0",
         started_at: new Date(match.startTime),
         ended_at: new Date(match.endTime),
       });

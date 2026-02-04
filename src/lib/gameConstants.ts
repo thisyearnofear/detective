@@ -15,6 +15,9 @@ export const GAME_CONSTANTS = {
   FIXED_ROUNDS: 5, // Total rounds
   INACTIVITY_WARNING: 30 * 1000, // 30 seconds
   INACTIVITY_FORFEIT: 45 * 1000, // 45 seconds
+
+  // Economic Stakes (Arbitrum Native)
+  MATCH_STAKE_WEI: "1000000000000000", // 0.001 ARB/ETH per match
 } as const;
 
 // Computed values

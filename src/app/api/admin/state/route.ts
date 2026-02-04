@@ -34,6 +34,15 @@ export async function POST(request: Request) {
             });
         }
 
+        if (action === "update-config" && body.config) {
+            await gameManager.updateConfig(body.config);
+            return NextResponse.json({
+                success: true,
+                message: "Config updated successfully",
+                gameState: await gameManager.getGameState(),
+            });
+        }
+
         return NextResponse.json(
             { error: "Invalid action" },
             { status: 400 }
@@ -62,6 +71,7 @@ export async function GET() {
                 playerCount: players.length,
                 botCount: bots.length,
                 matchCount: matches.length,
+                config: gameState.config,
             },
             players,
             bots,
