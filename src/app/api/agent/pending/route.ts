@@ -11,11 +11,13 @@ export const dynamic = 'force-dynamic';
  * Optional query param: ?fid=<bot_fid> to filter for a specific bot.
  */
 export async function GET(request: NextRequest) {
-  if (!validateAgentRequest(request)) {
+  // 1. Authenticate Request
+  const auth = await validateAgentRequest(request);
+  if (!auth.authorized) {
     return unauthorizedResponse();
   }
 
-  // Rate Limiting: 60 requests per minute per IP
+  // 2. Rate Limiting: 60 requests per minute per IP
   const ip = request.headers.get("x-forwarded-for") || "unknown";
   const limit = await checkRateLimit(`pending:${ip}`, 60, 60);
   
@@ -30,11 +32,34 @@ export async function GET(request: NextRequest) {
   const targetFid = searchParams.get("fid") ? parseInt(searchParams.get("fid")!, 10) : null;
 
   try {
+    // 3. Authorization: If polling for a specific FID, ensure signer is the controller
+    // (We'll check this again inside the filter loop for safety)
+
     // Use optimized method in GameManager
     const pendingMatches = await gameManager.getPendingExternalBotMatches(targetFid);
 
+    // 4. Filter by Signer: Only return matches for bots the signer controls
+    // If auth.address is present, we filter by controllerAddress.
+    // If using legacy secret, we return everything (backwards compat).
+    const filteredMatches = pendingMatches.filter(m => {
+      const bot = m.opponent as any;
+      
+      // If bot has an owner, and we have a signer, they must match
+      if (bot.controllerAddress && auth.address) {
+        return bot.controllerAddress.toLowerCase() === auth.address.toLowerCase();
+      }
+      
+      // If bot has an owner but we used legacy secret, hide it (upgrade required)
+      if (bot.controllerAddress && !auth.address) {
+        return false;
+      }
+
+      // If bot has no owner, legacy secret can see it
+      return true;
+    });
+
     // Format for the agent
-    const response = pendingMatches.map(m => {
+    const response = filteredMatches.map(m => {
       // We filtered inside GameManager, so we know opponent is a Bot
       const bot = m.opponent as any; // Type assertion for Bot properties
       
