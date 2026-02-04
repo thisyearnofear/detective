@@ -66,18 +66,25 @@ export default function BriefingRoom({ currentPlayer, isRegistrationOpen = true,
     setError(null);
 
     // Execute the wallet + TX flow
-    const txHash = await flow.executeRegistration(() => {
-      setIsLoading(true);
-    });
+    const flowResult = await flow.executeRegistration(
+      () => {
+        setIsLoading(true);
+      },
+      { 
+        skipPermissions: statusData?.config && !statusData.config.monetizationEnabled 
+      }
+    );
 
-    if (!txHash) {
+    if (!flowResult) {
       // Flow hook will have set the error state
       setIsLoading(false);
       return;
     }
 
+    const { txHash, permissions } = flowResult;
+
     try {
-      // Step 2: Send registration request with TX hash
+      // Step 2: Send registration request with TX hash and permissions
       console.log('[BriefingRoom] Sending investigation join request with TX:', txHash);
       const arbitrumWalletAddress = localStorage.getItem('arbitrumWalletAddress');
 
@@ -86,6 +93,12 @@ export default function BriefingRoom({ currentPlayer, isRegistrationOpen = true,
       if (txHash && arbitrumWalletAddress) {
         registrationBody.arbitrumTxHash = txHash;
         registrationBody.arbitrumWalletAddress = arbitrumWalletAddress;
+      }
+
+      // Add session permissions if granted
+      if (permissions?.hasPermission) {
+        registrationBody.hasPermission = true;
+        registrationBody.permissionExpiry = permissions.expiry;
       }
 
       const response = await fetch('/api/game/register', {

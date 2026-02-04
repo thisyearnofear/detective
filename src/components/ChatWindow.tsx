@@ -28,6 +28,7 @@ type Props = {
     slotNumber?: number;
     messages?: any[];
     voteLocked?: boolean;
+    stakedAmount?: string;
   };
   currentVote?: "REAL" | "BOT";
   isNewMatch?: boolean;
@@ -38,6 +39,7 @@ type Props = {
   onRefresh?: () => Promise<void>; // Callback to refresh match data
   isOpponentTyping?: boolean; // Typing indicator state from parent
   onTypingStart?: (matchId: string, duration: number) => void; // Callback to start typing indicator
+  monetizationEnabled?: boolean; // Toggle for staking UI
 };
 
 export default function ChatWindow({
@@ -52,6 +54,7 @@ export default function ChatWindow({
   onRefresh,
   isOpponentTyping = false,
   onTypingStart,
+  monetizationEnabled = true,
 }: Props) {
   const { isFarcasterFrame } = useViewport();
   const { safeSetState } = useMemoryOptimization();
@@ -226,8 +229,13 @@ export default function ChatWindow({
       }`,
     chatHeight: isFarcasterFrame ? "h-32" : variant === "compact" ? "h-48" : "h-80",
     spacing: isFarcasterFrame ? "mb-2" : variant === "compact" ? "mb-3" : "mb-4",
-    messageSpacing: isFarcasterFrame ? "space-y-2" : variant === "compact" ? "space-y-3" : "space-y-4",
+    matchSpacing: isFarcasterFrame ? "space-y-2" : variant === "compact" ? "space-y-3" : "space-y-4",
   };
+
+  // Convert staked amount to readable format (wei to ETH/ARB)
+  const stakedDisplay = match.stakedAmount && match.stakedAmount !== "0" 
+    ? `${(Number(match.stakedAmount) / 1e18).toFixed(3)} ARB`
+    : null;
 
   return (
     <div
@@ -245,6 +253,16 @@ export default function ChatWindow({
           : {}
       }
     >
+      {/* Stake Indicator Badge */}
+      {monetizationEnabled && stakedDisplay && (
+        <div className="absolute top-2 right-2 z-10">
+          <div className="bg-gradient-to-r from-blue-600/90 to-purple-600/90 backdrop-blur-md border border-white/20 rounded-full px-2 py-0.5 shadow-lg flex items-center gap-1.5 animate-in fade-in zoom-in duration-300">
+            <span className="text-[10px] text-blue-100 font-black uppercase tracking-tighter">Stake</span>
+            <span className="text-[10px] text-white font-black">{stakedDisplay}</span>
+          </div>
+        </div>
+      )}
+
       {warningLevel !== "none" && !isTimeUp && (
         <div
           className={`absolute top-0 left-0 right-0 p-3 text-center text-sm rounded-t-lg font-semibold transition-all ${warningLevel === "warning"

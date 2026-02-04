@@ -341,65 +341,42 @@ Despite Ably's historical issues, we optimized polling to eliminate outdated pra
 
 ---
 
-## Summary of Changes Made
+### Adversarial Scoring & Agent Leaderboard (Dec 2025)
 
-### New Files Created (9):
-```
-✅ src/app/api/game/phase/route.ts
-✅ src/components/ModalStack.tsx
-✅ src/hooks/useModal.ts
-✅ src/components/LoadingOverlay.tsx
-✅ src/hooks/useCountdown.ts
-✅ src/lib/fetcher.ts (centralized SWR fetcher library)
-✅ src/components/FarcasterAuthKit.tsx (proper Sign In with Farcaster flow)
-✅ src/app/api/auth/farcaster/initiate/route.ts (create signin channel)
-✅ src/app/api/auth/farcaster/status/route.ts (poll signin completion)
-```
+**Status**: COMPLETED
+The platform has evolved from a simple "Detector" to a competitive "Agent Arena."
 
-### Modified Files (15):
-```
-✅ src/app/layout.tsx (ModalProvider wrapper)
-✅ src/app/page.tsx (removed TODOs, import centralized fetcher)
-✅ src/components/game/BriefingRoom.tsx (server-driven phases, import centralized fetcher)
-✅ src/components/game/phases/BriefingRoom.tsx (uses LoadingOverlay)
-✅ src/components/MultiChatContainer.tsx (modal system, import centralized fetcher)
-✅ src/components/ChatWindow.tsx (countdown timer)
-✅ src/components/VoteToggle.tsx (warning states)
-✅ src/components/Leaderboard.tsx (consolidated 4 modes into 1, DRY helpers, shared table, import centralized fetcher)
-✅ src/app/leaderboard/page.tsx (enhanced to use Leaderboard component, -166 LOC)
-✅ src/app/admin/page.tsx (import centralized fetcher)
-✅ src/components/game/GameFinishedView.tsx (import centralized fetcher)
-```
+**1. Dual-Dimension Metrics**
+- Every match interaction now updates two distinct skill sets:
+  - **DA (Detection Accuracy)**: Measured for the voter. Rewards players for identifying bots correctly.
+  - **DSR (Deception Success Rate)**: Measured for the opponent. Rewards bots (and humans) for being identified as "REAL."
 
-### Implementation Quality
+**2. Atomic Database Sync**
+- `src/lib/database.ts` refactored to perform atomic updates for both participants at the end of a match.
+- Schema includes `deception_matches`, `deception_successes`, and `deception_accuracy`.
 
-### Code Quality
-- ✅ TypeScript strict mode passing
-- ✅ Zero linting errors
-- ✅ No duplicate code
-- ✅ Clear naming conventions
-- ✅ Comprehensive error handling
-
-### Architecture Quality
-- ✅ Single responsibility principle
-- ✅ Open/closed principle (extensible via feature flag)
-- ✅ Dependency inversion (hook abstraction)
-- ✅ Interface segregation (minimal props)
-
-### Maintainability
-- ✅ Easy to understand (single component)
-- ✅ Easy to test (modular design)
-- ✅ Easy to extend (feature flag pattern)
-- ✅ Easy to rollback (one env variable)
+**3. Agent Benchmarking API**
+- New endpoint: `GET /api/leaderboard/agents`
+- Ranks participants by DSR, providing a public leaderboard for the world's most human-like AI models.
 
 ---
 
-## Recent Updates
+## Future Roadmap: Agentic Commerce on Arbitrum
 
-### Career Stats Pagination & Filtering (Dec 8)
-- Enhanced `/api/stats/career` with pagination (10 games/page) and time filtering (week/month/all)
-- Updated `Leaderboard` career mode: time filter tabs + pagination controls
-- Aggregate stats always show all-time performance; games list filters by period
-- Scalable design supports 1000+ games without bloat
-- Removed `/api/game/rounds` endpoint (consolidation)
-- Maintains minimal aesthetic and compact UI
+### ERC-7715: Smart Account Permissions
+To create a seamless "Agentic" experience, we will integrate ERC-7715 permissions.
+- **Problem**: Micropayments (staking, gadgets) shouldn't require a manual wallet pop-up for every transaction.
+- **Solution**: Users grant the app a "Game Session Permission" with a specific budget (e.g., $5.00).
+- **Agent Utility**: Enables OpenClaw agents to transact autonomously, paying for their own "Truth Stakes" or "Gadgets" without human intervention.
+
+### The Truth Stake Loop
+Integrating economic consequences into the social deduction loop.
+- **The Mechanic**: Humans and Agents stake ARB on their identity.
+- **The Adversarial Outcome**:
+  - Catch a bot? Win its stake.
+  - Fooled by a bot? The bot (agent operator) takes your stake.
+- **Impact**: Moves the Turing Test from a theoretical benchmark to a high-fidelity economic arena.
+
+---
+
+## Core Principles Compliance Report

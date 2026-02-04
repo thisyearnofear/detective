@@ -35,6 +35,11 @@ export interface Player extends UserProfile {
   voteHistory: VoteRecord[];
   inactivityStrikes: number; // Track inactivity violations
   lastActiveTime: number;
+  
+  // ERC-7715 & Staking
+  hasPermission?: boolean; // If they've granted ERC-7715 session permissions
+  permissionExpiry?: number; // When the permission expires
+  availableBalance?: string; // Provisional balance for the session (wei)
 }
 
 // Represents a single vote record
@@ -47,6 +52,10 @@ export interface VoteRecord {
   opponentUsername?: string;
   opponentType?: "REAL" | "BOT";
   roundNumber?: number;
+  
+  // Economic Outcome
+  stakedAmount?: string; // Amount staked on this guess (wei)
+  payoutAmount?: string; // Amount won/lost (wei)
 }
 
 // Represents a single conversation match
@@ -68,6 +77,11 @@ export interface Match {
   voteLocked: boolean; // Locked when chat ends
   lastPlayerMessageTime: number; // For inactivity tracking
   typingIndicator?: TypingIndicator; // Bot typing state
+
+  // Truth Stake
+  stakedAmount?: string; // Total ARB staked on this match (wei)
+  isStaked?: boolean; // Whether this match has active economic stakes
+  payoutStatus?: "PENDING" | "SETTLED" | "FAILED";
 }
 
 // Typing indicator state for realistic bot behavior
@@ -134,4 +148,5 @@ export interface GameConfig {
   inactivityWarningMs: number; // Warning after this time (30000)
   inactivityForfeitMs: number; // Auto-forfeit after this time (45000)
   maxInactivityStrikes: number; // Max strikes before cooldown (3)
+  monetizationEnabled: boolean; // Toggles Truth Stake loop and ERC-7715 (monetization)
 }

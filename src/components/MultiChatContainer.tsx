@@ -578,6 +578,7 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
           setVotes({});
           mutate();
         }}
+        monetizationEnabled={matchData?.config?.monetizationEnabled}
       />
     );
   }
@@ -641,6 +642,7 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
             }}
             currentRound={currentRound}
             totalRounds={totalRounds}
+            monetizationEnabled={matchData?.config?.monetizationEnabled}
           />
         ) : (
           <>
@@ -707,6 +709,7 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
                       }}
                       isOpponentTyping={typingIndicators[match.id] || false}
                       onTypingStart={handleTypingStart}
+                      monetizationEnabled={matchData?.config?.monetizationEnabled}
                     />
                   </div>
                 );

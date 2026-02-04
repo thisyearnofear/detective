@@ -151,10 +151,18 @@ const LeaderboardTable = ({ entries, showStatus = false }: {
 interface GameResultsProps {
   isGameEnd?: boolean;
   accuracy?: number;
-  roundResults?: Array<{ roundNumber: number; correct: boolean; opponentUsername: string; opponentType: "REAL" | "BOT" }>;
+  roundResults?: Array<{ 
+    roundNumber: number; 
+    correct: boolean; 
+    opponentUsername: string; 
+    opponentType: "REAL" | "BOT";
+    stakedAmount?: string;
+    payoutAmount?: string;
+  }>;
   playerRank?: number;
   totalPlayers?: number;
   onPlayAgain?: () => void;
+  monetizationEnabled?: boolean;
 }
 
 interface PlayerInsights {
@@ -206,6 +214,7 @@ export default function Leaderboard({
   totalPlayers = 1,
   onPlayAgain,
   chain = 'arbitrum',
+  monetizationEnabled = true,
 }: { fid?: number; mode?: LeaderboardMode; chain?: Chain } & GameResultsProps = {}) {
   const [mode, setMode] = useState<LeaderboardMode>(initialMode);
   const [selectedChain, setSelectedChain] = useState<Chain>(chain);
@@ -302,10 +311,31 @@ export default function Leaderboard({
               <div className="space-y-2">
                 {roundResults.map((result, idx) => (
                   <div key={idx} className="flex items-center justify-between p-3 bg-slate-800/50 rounded border border-slate-700/50">
-                    <div className="text-sm text-gray-400">
-                      Round {result.roundNumber} <span className="text-gray-600">vs @{result.opponentUsername}</span> <span className={result.opponentType === 'BOT' ? 'text-red-400' : 'text-green-400'}>{result.opponentType}</span>
+                    <div className="flex-1">
+                      <div className="text-sm text-gray-300">
+                        Round {result.roundNumber} <span className="text-gray-500">vs @{result.opponentUsername}</span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className={`text-[10px] uppercase font-bold ${result.opponentType === 'BOT' ? 'text-red-400' : 'text-green-400'}`}>
+                          {result.opponentType}
+                        </span>
+                        {monetizationEnabled && result.stakedAmount && result.stakedAmount !== "0" && (
+                          <span className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 rounded">
+                            Stake: {(Number(result.stakedAmount) / 1e18).toFixed(3)}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-lg">{result.correct ? '✅' : '❌'}</div>
+
+                    <div className="flex items-center gap-4">
+                      {monetizationEnabled && result.payoutAmount && result.payoutAmount !== "0" && (
+                        <div className="text-right">
+                          <div className="text-xs text-green-400 font-bold">+{(Number(result.payoutAmount) / 1e18).toFixed(3)} ARB</div>
+                          <div className="text-[10px] text-gray-500">reward</div>
+                        </div>
+                      )}
+                      <div className="text-lg">{result.correct ? '✅' : '❌'}</div>
+                    </div>
                   </div>
                 ))}
               </div>

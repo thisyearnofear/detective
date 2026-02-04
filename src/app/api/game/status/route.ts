@@ -73,6 +73,9 @@ export async function GET(request: Request) {
       phaseEndTime,
       reason,
 
+      // Configuration (for toggling features like monetization)
+      config: rawState.config,
+
       // Players list (replaces separate /api/game/players call)
       players,
     };

@@ -2,7 +2,7 @@
 
 import SpinningDetective from './SpinningDetective';
 
-export type RegistrationStep = 'idle' | 'wallet-check' | 'signing' | 'confirming' | 'success' | 'error';
+export type RegistrationStep = 'idle' | 'wallet-check' | 'signing' | 'confirming' | 'request-permissions' | 'success' | 'error';
 
 interface ArbitrumRegistrationModalProps {
   isVisible: boolean;
@@ -88,6 +88,20 @@ export default function ArbitrumRegistrationModal({
       ctaPrimary: false,
       showWalletHint: false,
       showProgress: true,
+    },
+    'request-permissions': {
+      icon: '⚡',
+      title: 'Enable Fast Play',
+      description: 'Enable session permissions for a seamless experience.',
+      details: [
+        '✓ Enable Zero-Click staking',
+        '✓ No more wallet pop-ups during play',
+        '✓ Automated adversarial payouts',
+      ],
+      ctaLabel: 'Enable & Finish',
+      ctaPrimary: true,
+      showWalletHint: false,
+      showProgress: false,
     },
     'success': {
       icon: '✨',
