@@ -18,7 +18,7 @@ Detective is a social deduction game where players chat with opponents and try t
 ## Game Flow & Mechanics
 
 ### State Management Architecture
-**Single Source of Truth**: Server state (`REGISTRATION` → `LIVE` → `FINISHED`) drives all client transitions. 
+**Single Source of Truth**: Server state (`REGISTRATION` → `LIVE` → `FINISHED`) drives all client transitions.
 - When 3+ players register, server starts 30s countdown
 - Client polls every 2s and updates UI accordingly
 - When countdown expires, server transitions to LIVE and client switches from BriefingRoom to GameActiveView
@@ -77,7 +77,7 @@ async function registerWithPayment(fid: number, chain: 'arbitrum') {
     value: ENTRY_FEE
   });
   await tx.wait();
-  
+
   await fetch('/api/game/register', {
     method: 'POST',
     body: JSON.stringify({ fid, chain, txHash: tx.hash })
@@ -90,15 +90,15 @@ async function registerWithPayment(fid: number, chain: 'arbitrum') {
 async function registerWithNFT(fid: number, chain: 'monad') {
   const signer = await provider.getSigner();
   const address = await signer.getAddress();
-  
+
   const balance = await detectivePassNFT.balanceOf(address);
   if (balance === 0n) {
     throw new Error("Detective Pass NFT required");
   }
-  
+
   const message = `Register for Detective Game\nFID: ${fid}\nTimestamp: ${Date.now()}`;
   const signature = await signer.signMessage(message);
-  
+
   await fetch('/api/game/register', {
     method: 'POST',
     body: JSON.stringify({ fid, chain, signature, address })
@@ -258,7 +258,7 @@ Shows live game state to unauthenticated users, creating FOMO and urgency.
 Join now and compete • 45 seconds left
 X players registered
 
-🎮 GAME LIVE  
+🎮 GAME LIVE
 X players are competing right now • 2:30 remaining
 (Live indicator with pulsing dot)
 

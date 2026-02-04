@@ -6,24 +6,26 @@ Can you tell if you're chatting with a real person or an AI bot trained on their
 
 ## Documentation
 
-The documentation has been consolidated into 4 comprehensive guides covering all aspects of the Detective project:
+The documentation has been consolidated into 5 comprehensive guides covering all aspects of the Detective project:
 
-### **📋 Core Documentation (4 Consolidated Guides)**
-1. [**ARCHITECTURE.md**](docs/ARCHITECTURE.md) - System architecture, development phases, and scaling guide
-2. [**GAME_DESIGN.md**](docs/GAME_DESIGN.md) - Game mechanics, UI/UX enhancements, and user experience design
-3. [**ADVANCED.md**](docs/ADVANCED.md) - WebSocket implementation, progress log, and future roadmap
-4. [**ACCESS.md**](docs/ACCESS.md) - Access control strategy, security features, and deployment scenarios
+### **📋 Core Documentation (5 Consolidated Guides)**
+1. [**CORE_ARCHITECTURE.md**](docs/CORE_ARCHITECTURE.md) - System architecture, advanced features, and scaling guide
+2. [**GAME_DESIGN_UIUX.md**](docs/GAME_DESIGN_UIUX.md) - Game mechanics, UI/UX enhancements, and user experience design
+3. [**IMPLEMENTATION_ADVANCED.md**](docs/IMPLEMENTATION_ADVANCED.md) - WebSocket implementation, progress log, and advanced features
+4. [**ACCESS_CONTROL_SECURITY.md**](docs/ACCESS_CONTROL_SECURITY.md) - Access control strategy, security features, and deployment scenarios
+5. [**CONTRACT_DEPLOYMENT.md**](docs/CONTRACT_DEPLOYMENT.md) - Smart contract deployment, verification, and operational procedures
 
 ### **📖 What Each Guide Covers**
 
 #### **Core Architecture Guide**
 - High-level system design and technology stack
 - Game mechanics and bot intelligence
+- Advanced features: Crypto-Native Agent Auth, Wallet-Linked Identity, Adversarial Metrics, Agent Leaderboard
 - Development phases (MVP → production)
 - Scaling from single server to horizontal architecture
 - Performance optimization and cost analysis
 
-#### **Game Design & UI Guide**  
+#### **Game Design & UI/UX Guide**
 - Game flow with blockchain integration
 - UI/UX enhancement (gradients, animations, VoteToggle)
 - Homepage redesign and opponent reveal flow
@@ -37,12 +39,18 @@ The documentation has been consolidated into 4 comprehensive guides covering all
 - Development progress and current status
 - Long-term roadmap and ecosystem vision
 
-#### **Access Control Guide**
+#### **Access Control & Security Guide**
 - Multi-chain access requirements (Arbitrum NFT, Monad token, whitelist)
 - Quick activation scripts and configuration
 - Security features and edge case handling
 - Monitoring, analytics, and community communication
 - Implementation timeline and deployment scenarios
+
+#### **Contract Deployment Guide**
+- Smart contract deployment on Arbitrum
+- Verification procedures and operational guidelines
+- Configuration and integration steps
+- Emergency procedures and maintenance
 
 ## About
 

@@ -12,7 +12,7 @@ Detective's access control system is **ready to activate instantly** but current
 # Activate NFT gating only
 node scripts/activate-access-gating.js nft
 
-# Activate token gating only  
+# Activate token gating only
 node scripts/activate-access-gating.js token
 
 # Activate both (users need NFT OR token)
@@ -28,7 +28,7 @@ node scripts/activate-access-gating.js off
 NEXT_PUBLIC_ACCESS_GATING_ENABLED=true
 NEXT_PUBLIC_ARBITRUM_NFT_ENABLED=true
 NEXT_PUBLIC_ARBITRUM_NFT_CONTRACT=0xYourNFTContract
-NEXT_PUBLIC_MONAD_TOKEN_ENABLED=true  
+NEXT_PUBLIC_MONAD_TOKEN_ENABLED=true
 NEXT_PUBLIC_MONAD_TOKEN_CONTRACT=0xYourTokenContract
 ```
 
@@ -70,7 +70,7 @@ scripts/activate-access-gating.js  # Quick activation script
 NEXT_PUBLIC_ARBITRUM_NFT_CONTRACT=0x1234...    # Your NFT contract
 NEXT_PUBLIC_ARBITRUM_NFT_MIN_BALANCE=1         # Minimum NFTs required
 
-# Monad Token Configuration  
+# Monad Token Configuration
 NEXT_PUBLIC_MONAD_TOKEN_CONTRACT=0xabcd...     # Your token contract
 NEXT_PUBLIC_MONAD_TOKEN_MIN_BALANCE=1000000000000000000  # 1 token (18 decimals)
 NEXT_PUBLIC_MONAD_TOKEN_DECIMALS=18            # Token decimals
@@ -117,13 +117,13 @@ Users need **any one** of the following to access Detective:
 ##### **1. Arbitrum NFT Holder** 🔷
 - **Contract**: `0x...` (Detective Early Access NFT)
 - **Requirement**: Minimum 1 NFT balance
-- **Benefits**: 
+- **Benefits**:
   - Permanent access (no minimum token balance)
   - Genesis Detective badge
   - Enhanced leaderboard multipliers
   - Priority tournament entry
 
-##### **2. Monad Token Holder** 🟣  
+##### **2. Monad Token Holder** 🟣
 - **Contract**: `0x...` (Detective Token via Clanker)
 - **Requirement**: Minimum token balance (TBD based on fair launch)
 - **Benefits**:
@@ -180,137 +180,6 @@ GET /api/access/requirements
 
 // Admin: Update whitelist
 POST /api/admin/whitelist
-```
-
-### 🎨 **User Experience Design**
-
-#### **Access Gate Component**
-```
-🔍 Detective Access Required
-
-Choose your path to join Detective:
-
-🔷 Hold Detective NFT on Arbitrum
-   [Check NFT Balance] → ❌ Not Found
-   
-🟣 Hold Detective Tokens on Monad  
-   [Check Token Balance] → ❌ Insufficient
-   
-⭐ Whitelist Access
-   [Check Status] → ❌ Not Whitelisted
-   
-[How to Get Access] [Learn More]
-```
-
-#### **Upgrade Flow UX**
-
-##### **For NFT Path:**
-```
-🔷 Get Detective NFT Access
-
-Early Access Benefits:
-• Permanent platform access
-• Genesis Detective badge  
-• Enhanced leaderboard ranking
-• Priority in tournaments
-
-[Buy NFT on OpenSea] [Learn More]
-```
-
-##### **For Token Path:**
-```
-🟣 Get Detective Token Access
-
-Token Holder Benefits:
-• Platform access while held
-• Governance voting rights
-• Tournament prize eligibility
-• Weighted leaderboard ranking
-
-Minimum Required: 1,000 DETECTIVE
-Your Balance: 0 DETECTIVE
-
-[Buy on Uniswap] [Get via Clanker] [Learn More]
-```
-
-#### **Graceful Degradation**
-
-##### **Existing Users (Before Gating)**
-- **Grace Period**: 2 weeks notice before enforcement
-- **Grandfathering**: Existing accounts get temporary access
-- **Guided Upgrade**: Personal recommendations for access path
-- **Progress Preservation**: All stats and progress maintained
-
-##### **New Users (After Gating)**
-- **Clear Requirements**: Upfront communication about access needs
-- **Multiple Paths**: Choice between NFT, token, or earning whitelist
-- **Help Resources**: Guides for token/NFT acquisition
-- **Community Support**: Discord channels for assistance
-
----
-
-## 🚀 **Deployment Scenarios**
-
-### **Scenario 1: NFT Launch**
-```bash
-# Step 1: Deploy NFT on Arbitrum
-# Step 2: Activate gating
-node scripts/activate-access-gating.js nft
-NEXT_PUBLIC_ARBITRUM_NFT_CONTRACT=0xYourContract
-
-# Step 3: Deploy and announce
-```
-
-### **Scenario 2: Token Fair Launch**
-```bash
-# Step 1: Deploy token on Monad via Clanker
-# Step 2: Activate gating
-node scripts/activate-access-gating.js token  
-NEXT_PUBLIC_MONAD_TOKEN_CONTRACT=0xYourContract
-
-# Step 3: Set minimum balance
-NEXT_PUBLIC_MONAD_TOKEN_MIN_BALANCE=1000000000000000000  # 1 token
-```
-
-### **Scenario 3: Gradual Rollout**
-```bash
-# Phase 1: Whitelist only (beta testers)
-NEXT_PUBLIC_WHITELIST_ENABLED=true
-WHITELISTED_FIDS=1,2,3,100
-
-# Phase 2: Add NFT holders
-node scripts/activate-access-gating.js both
-NEXT_PUBLIC_ARBITRUM_NFT_ENABLED=true
-
-# Phase 3: Full multi-chain access
-NEXT_PUBLIC_MONAD_TOKEN_ENABLED=true
-```
-
----
-
-## 🔍 **Monitoring & Testing**
-
-### **Admin Endpoint**
-```bash
-# Check current configuration
-curl -H "Authorization: Bearer your_admin_secret" \
-  https://your-domain.com/api/admin/access
-
-# Test user access
-curl -H "Authorization: Bearer your_admin_secret" \
-  -X POST https://your-domain.com/api/admin/access \
-  -d '{"action":"test_access","data":{"walletAddress":"0x...","fid":123}}'
-```
-
-### **Manual Testing**
-```bash
-# Test access verification
-curl -X POST https://your-domain.com/api/access/verify \
-  -d '{"walletAddress":"0x...","fid":123}'
-
-# Check whitelist status
-curl -X POST https://your-domain.com/api/access/whitelist/check \
-  -d '{"walletAddress":"0x...","fid":123}'
 ```
 
 ---
@@ -393,7 +262,7 @@ curl -X POST https://your-domain.com/api/access/whitelist/check \
 ```bash
 # ✅ Ready to go commands:
 node scripts/activate-access-gating.js nft     # NFT only
-node scripts/activate-access-gating.js token   # Token only  
+node scripts/activate-access-gating.js token   # Token only
 node scripts/activate-access-gating.js both    # NFT OR token
 node scripts/activate-access-gating.js off     # Open access
 
@@ -426,8 +295,8 @@ node scripts/activate-access-gating.js off
 ```
 🔍 Detective Access Evolution
 
-Detective is transitioning from open beta to our sustainable 
-economic model. This change ensures long-term game quality 
+Detective is transitioning from open beta to our sustainable
+economic model. This change ensures long-term game quality
 and rewards early supporters.
 
 ✅ Current Players: 2-week grace period
