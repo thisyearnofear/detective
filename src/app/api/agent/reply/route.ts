@@ -11,11 +11,24 @@ export const dynamic = 'force-dynamic';
  * Body: { matchId: string, botFid: number, text: string }
  */
 export async function POST(request: NextRequest) {
-  if (!validateAgentRequest(request)) {
+  const body = await request.json();
+  const { matchId, botFid, text } = body;
+
+  // Validation: Required fields
+  if (!matchId || !botFid || !text) {
+    return NextResponse.json(
+      { error: "matchId, botFid, and text are required." },
+      { status: 400 }
+    );
+  }
+
+  // 1. Authenticate Request (Supports Signature or Legacy Secret)
+  const auth = await validateAgentRequest(request, body);
+  if (!auth.authorized) {
     return unauthorizedResponse();
   }
 
-  // Rate Limiting: 60 requests per minute per IP (shared with pending)
+  // 2. Rate Limiting: 60 requests per minute per IP
   const ip = request.headers.get("x-forwarded-for") || "unknown";
   const limit = await checkRateLimit(`reply:${ip}`, 60, 60);
   
@@ -27,35 +40,44 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { matchId, botFid, text } = await request.json();
-
-    if (!matchId || !botFid || !text) {
-      return NextResponse.json(
-        { error: "matchId, botFid, and text are required." },
-        { status: 400 }
-      );
-    }
-
     const match = await gameManager.getMatch(matchId);
     if (!match) {
       return NextResponse.json({ error: "Match not found." }, { status: 404 });
     }
 
-    // Validation: Ensure the bot is actually the participant
-    if (match.opponent.fid !== botFid) {
+    // 3. Authorization: Ensure the bot is actually the participant
+    const opponent = match.opponent as any; // Cast to Bot
+    if (opponent.fid !== botFid) {
       return NextResponse.json(
         { error: "The specified botFid is not part of this match." },
         { status: 403 }
       );
     }
 
-    // Validation: Ensure it's an external bot
-    const opponent = match.opponent as any; // Cast to access Bot properties safely after checks
-    if (match.opponent.type !== "BOT" || !opponent.isExternal) {
+    // 4. Mode Check: Ensure it's an external bot
+    if (opponent.type !== "BOT" || !opponent.isExternal) {
       return NextResponse.json(
         { error: "This bot is not configured for external control." },
         { status: 400 }
       );
+    }
+
+    // 5. Crypto Verification: If bot has a controllerAddress, enforce signature match
+    if (opponent.controllerAddress && auth.address) {
+      if (opponent.controllerAddress.toLowerCase() !== auth.address.toLowerCase()) {
+        return unauthorizedResponse("Signature address does not match Bot controller address.");
+      }
+    } else if (opponent.controllerAddress && !auth.address) {
+      // Bot has an owner, but agent used legacy secret or didn't provide address
+      return unauthorizedResponse("Bot requires cryptographic signature for control.");
+    }
+
+    // 6. Turn Validation: Ensure it is the bot's turn
+    if (match.messages.length > 0) {
+      const lastMessage = match.messages[match.messages.length - 1];
+      if (lastMessage.sender.fid === botFid) {
+        return NextResponse.json({ error: "It is not your turn to speak." }, { status: 403 });
+      }
     }
 
     // Post the message

@@ -22,6 +22,7 @@ export interface Bot extends UserProfile {
   style: string; // Inferred writing style
   personality?: any; // Complete behavioral + linguistic patterns from botProactive.ts
   isExternal?: boolean; // If true, native inference is skipped and an external agent must reply
+  controllerAddress?: string; // ETH address authorized to speak for this bot
 }
 
 // Represents a real player in the game
