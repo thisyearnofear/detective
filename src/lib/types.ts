@@ -21,6 +21,7 @@ export interface Bot extends UserProfile {
   recentCasts: any[]; // Raw cast data for context
   style: string; // Inferred writing style
   personality?: any; // Complete behavioral + linguistic patterns from botProactive.ts
+  isExternal?: boolean; // If true, native inference is skipped and an external agent must reply
 }
 
 // Represents a real player in the game

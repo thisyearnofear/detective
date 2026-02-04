@@ -757,6 +757,47 @@ class GameManager {
   }
 
   /**
+   * Get all active matches where an external bot needs to reply.
+   * Optimized to avoid route-level filtering.
+   */
+  async getPendingExternalBotMatches(targetBotFid: number | null): Promise<Match[]> {
+    await this.ensureInitialized();
+    
+    const activeMatches: Match[] = [];
+    const now = Date.now();
+
+    for (const match of this.state!.matches.values()) {
+      // 1. Must be active
+      if (match.isFinished || match.voteLocked || match.endTime < now) continue;
+      
+      // 2. Opponent must be a BOT
+      if (match.opponent.type !== "BOT") continue;
+      
+      // 3. Bot must be marked as EXTERNAL
+      const bot = match.opponent as any;
+      if (!bot.isExternal) continue;
+
+      // 4. Filter by FID if requested
+      if (targetBotFid && match.opponent.fid !== targetBotFid) continue;
+
+      // 5. Check if it's bot's turn
+      if (match.messages.length === 0) {
+        // Empty match = bot usually opens
+        activeMatches.push(match);
+        continue;
+      }
+
+      const lastMessage = match.messages[match.messages.length - 1];
+      // If last message was from the bot, we are waiting for user
+      if (lastMessage.sender.fid === match.opponent.fid) continue;
+
+      activeMatches.push(match);
+    }
+
+    return activeMatches;
+  }
+
+  /**
    * Reset the entire game (admin/testing only).
    */
   async resetGame(): Promise<void> {

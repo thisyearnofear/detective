@@ -49,6 +49,13 @@ export async function POST(request: Request) {
       const freshBots = await getRepository().getBots();
       const bot = freshBots.get(match.opponent.fid) as Bot || match.opponent;
 
+      // EXTERNAL AGENT BYPASS
+      if (bot.isExternal) {
+        console.log(`[chat/send] External bot ${bot.fid} will reply asynchronously via Agent API`);
+        // We return success immediately. The external agent is responsible for polling /api/agent/pending
+        return NextResponse.json({ success: true, message, typingIndicator: null });
+      }
+
       console.log(`[chat/send] User FID ${senderFid} sent message to match ${matchId}, opponent is bot FID ${bot.fid}`);
 
       try {

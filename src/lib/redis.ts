@@ -108,6 +108,10 @@ class UpstashRedisClient {
     return this.command<number>("TTL", key);
   }
 
+  async incr(key: string): Promise<number> {
+    return this.command<number>("INCR", key);
+  }
+
   async keys(pattern: string): Promise<string[]> {
     return this.command<string[]>("KEYS", pattern);
   }
