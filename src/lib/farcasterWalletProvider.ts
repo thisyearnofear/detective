@@ -224,30 +224,49 @@ export async function addChain(chainConfig: {
  * @param permissions ERC-7715 permission request object
  * @returns Granted permissions or null if rejected
  */
-export async function requestPermissions(permissions: any[]): Promise<any | null> {
+export async function requestPermissions(permissions: any[] | any): Promise<any | null> {
   const provider = await getEthereumProvider();
   
   if (!provider) {
     throw new Error('Wallet not found');
   }
 
+  // ERC-7715 uses 'wallet_grantPermissions'
+  // Some older implementations might use 'wallet_requestPermissions'
+  const method = 'wallet_grantPermissions';
+  
   try {
-    const granted = await provider.request({
-      method: 'wallet_requestPermissions',
-      params: permissions,
+    console.log(`[FarcasterWalletProvider] Requesting permissions via ${method}...`);
+    
+    // Ensure params is an array. wallet_grantPermissions usually takes [requestObject]
+    const params = Array.isArray(permissions) ? permissions : [permissions];
+    
+    const response = await provider.request({
+      method,
+      params,
     });
     
-    console.log('[FarcasterWalletProvider] Permissions granted:', granted);
-    return granted;
+    console.log('[FarcasterWalletProvider] Permissions granted:', response);
+    return response;
   } catch (error: any) {
     if (error.code === 4001) {
       console.warn('[FarcasterWalletProvider] User rejected permissions');
       return null;
     }
-    // Handle case where method is not supported
+    
+    // Fallback for wallets that might not support the new method yet
     if (error.code === -32601) {
-      console.warn('[FarcasterWalletProvider] wallet_requestPermissions not supported by this wallet');
-      throw new Error('This wallet does not support session permissions (ERC-7715). Please use a smart account wallet like MetaMask Smart Account or Argent.');
+      console.warn(`[FarcasterWalletProvider] ${method} not supported, trying fallback...`);
+      try {
+        const fallbackResponse = await provider.request({
+          method: 'wallet_requestPermissions',
+          params: Array.isArray(permissions) ? permissions : [permissions],
+        });
+        return fallbackResponse;
+      } catch (fallbackError: any) {
+        console.warn('[FarcasterWalletProvider] Fallback also failed:', fallbackError.message);
+        throw new Error('This wallet does not support session permissions (ERC-7715). Please use a smart account wallet.');
+      }
     }
     throw error;
   }
@@ -275,6 +294,83 @@ export async function getTransactionReceipt(txHash: string): Promise<any | null>
     return receipt || null;
   } catch (error) {
     console.error('[FarcasterWalletProvider] Failed to fetch transaction status:', error);
+    throw error;
+  }
+}
+
+/**
+ * Send calls using a session context (ERC-5792 + ERC-7715)
+ * 
+ * This enables background execution of contract calls without user popups,
+ * provided a valid session context is available.
+ * 
+ * @param calls Array of calls to execute
+ * @param permissionsContext The context string returned by wallet_grantPermissions
+ * @returns Call bundle identifier
+ */
+export async function sendSessionCalls(
+  calls: Array<{
+    to: `0x${string}`;
+    data?: `0x${string}`;
+    value?: `0x${string}`;
+  }>,
+  permissionsContext: string
+): Promise<string> {
+  const provider = await getEthereumProvider();
+  
+  if (!provider) {
+    throw new Error('Wallet not found');
+  }
+
+  try {
+    console.log('[FarcasterWalletProvider] Executing session calls with context...');
+    
+    // ERC-5792 wallet_sendCalls
+    const response = await provider.request({
+      method: 'wallet_sendCalls',
+      params: [
+        {
+          version: '1.0',
+          chainId: '0xa4b1', // Arbitrum One
+          calls,
+          capabilities: {
+            permissions: {
+              context: permissionsContext,
+            },
+          },
+        },
+      ],
+    });
+    
+    console.log('[FarcasterWalletProvider] Session calls submitted:', response);
+    return response;
+  } catch (error: any) {
+    console.error('[FarcasterWalletProvider] Session calls failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get the status of a call bundle
+ * 
+ * @param bundleId The identifier returned by wallet_sendCalls
+ */
+export async function getCallsStatus(bundleId: string): Promise<any> {
+  const provider = await getEthereumProvider();
+  
+  if (!provider) {
+    throw new Error('Wallet not found');
+  }
+
+  try {
+    const status = await provider.request({
+      method: 'wallet_getCallsStatus',
+      params: [bundleId],
+    });
+    
+    return status;
+  } catch (error) {
+    console.error('[FarcasterWalletProvider] Failed to get calls status:', error);
     throw error;
   }
 }
