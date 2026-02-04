@@ -123,16 +123,21 @@ export function useRegistrationFlow(): UseRegistrationFlowReturn {
         if (!options?.skipPermissions) {
           setCurrentStep('request-permissions');
           try {
-            const { formatGamePermissionRequest, SESSION_DURATION_SECONDS } = await import('@/lib/erc7715');
+            const { formatGamePermissionRequest, saveSessionPermissions } = await import('@/lib/erc7715');
             const permissionReq = formatGamePermissionRequest(config.contractAddress as `0x${string}`);
             
+            // wallet_grantPermissions usually takes the request object as the first element of an array
             const granted = await requestPermissions([permissionReq]);
             
             if (granted) {
-              console.log('[useRegistrationFlow] Session permissions granted');
+              console.log('[useRegistrationFlow] Session permissions granted:', granted);
+              
+              // Persist for "Zero-Click" background transactions
+              saveSessionPermissions(granted);
+              
               permissionsInfo = {
                 hasPermission: true,
-                expiry: Math.floor(Date.now() / 1000) + SESSION_DURATION_SECONDS
+                expiry: granted.expiry || (Math.floor(Date.now() / 1000) + 4 * 60 * 60)
               };
             }
           } catch (permError: any) {

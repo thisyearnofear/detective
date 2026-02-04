@@ -236,21 +236,59 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
     };
   }, []);
 
-  // Initialize votes from match data and track new matches
-  // Only depend on matches array length and IDs, not the whole matchData object
+  // Track which matches we've already executed background stakes for
+  const executedStakesRef = useRef<Set<string>>(new Set());
+
+  // ERC-7715: Background Staking Effect
   useEffect(() => {
     if (matchData?.matches && Array.isArray(matchData.matches)) {
       const newVotes: VoteState = {};
       const newMatches = new Set<string>();
 
-      matchData.matches.forEach((match: any) => {
-        // Default to REAL (human) for new matches
+      matchData.matches.forEach(async (match: any) => {
+        // Track new matches for UI indicators
         if (!votes[match.id]) {
           newVotes[match.id] = match.currentVote || "REAL";
           newMatches.add(match.id);
         }
+
+        // Only trigger if match is marked as staked, we haven't done it yet, 
+        // and we have session permissions
+        if (
+          match.isStaked && 
+          !executedStakesRef.current.has(match.id) &&
+          !match.voteLocked
+        ) {
+          console.log(`[MultiChatContainer] Detected new staked match: ${match.id}`);
+          
+          try {
+            const { executeSessionStake, getSessionPermissions, isPermissionValid } = await import('@/lib/erc7715');
+            const { context, expiry } = getSessionPermissions();
+            
+            if (context && isPermissionValid(expiry || 0)) {
+              // Mark as executed immediately to prevent duplicate calls during async ops
+              executedStakesRef.current.add(match.id);
+              
+              const currentVote = votes[match.id] || match.currentVote || "REAL";
+              const isBot = currentVote === "BOT";
+              const amountWei = match.stakedAmount || "1000000000000000"; // Default 0.001 ETH if not specified
+              
+              const bundleId = await executeSessionStake(match.id, isBot, amountWei);
+              
+              if (bundleId) {
+                console.log(`[MultiChatContainer] ✓ Background stake submitted for match ${match.id}. Bundle: ${bundleId}`);
+              } else {
+                // If it failed, we might want to try again later or show a hint
+                executedStakesRef.current.delete(match.id);
+              }
+            }
+          } catch (err) {
+            console.error(`[MultiChatContainer] Failed to execute background stake:`, err);
+          }
+        }
       });
 
+      // Update votes and new matches state
       if (Object.keys(newVotes).length > 0) {
         setVotes((prev) => ({ ...prev, ...newVotes }));
         setNewMatchIds(newMatches);
@@ -261,7 +299,7 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
         }, 5000);
       }
     }
-  }, [matchData?.matches?.length, matchData?.matches?.map((m: any) => m.id).join(","), votes]);
+  }, [matchData?.matches, votes]);
 
   // Sync roundResults from server voteHistory
   // Only update if history length or content actually changes
@@ -382,6 +420,23 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
         const result = await response.json();
 
         if (response.ok && result.isCorrect !== undefined) {
+          // ERC-7715: Background On-Chain Vote
+          try {
+            const { executeSessionVote, getSessionPermissions, isPermissionValid } = await import('@/lib/erc7715');
+            const { context, expiry } = getSessionPermissions();
+            
+            if (context && isPermissionValid(expiry || 0)) {
+              const currentVote = votes[matchId] || "REAL";
+              executeSessionVote(matchId, currentVote === "BOT")
+                .then(bundleId => {
+                  if (bundleId) console.log(`[MultiChatContainer] ✓ Background on-chain vote submitted for match ${matchId}`);
+                })
+                .catch(err => console.error(`[MultiChatContainer] Background vote failed:`, err));
+            }
+          } catch (err) {
+            console.warn(`[MultiChatContainer] Background vote skipped:`, err);
+          }
+
           // Get the match to find opponent info
           const match = matchData?.matches.find((m: any) => m.id === matchId);
           if (match) {

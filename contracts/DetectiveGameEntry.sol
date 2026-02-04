@@ -19,19 +19,33 @@ pragma solidity 0.8.20;
 
 contract DetectiveGameEntry {
     /// @dev Emitted when a wallet registers with a Farcaster FID
-    /// Backend uses this as proof of registration intent
     event PlayerRegistered(address indexed wallet, uint256 indexed fid, uint256 timestamp);
     
+    /// @dev Emitted when a stake is placed
+    event StakePlaced(address indexed wallet, bytes32 indexed matchId, bool isBot, uint256 amount);
+    
+    /// @dev Emitted when a vote is submitted
+    event VoteSubmitted(address indexed wallet, bytes32 indexed matchId, bool isBot);
+
     /**
      * @dev Register wallet with Farcaster FID
-     * @param fid Farcaster ID to associate with this wallet
-     * 
-     * This is a proof-of-intent mechanism only. The contract does not enforce
-     * uniqueness - that is handled by the backend. This allows the same wallet+FID
-     * to register in different game cycles.
      */
     function registerForGame(uint256 fid) external payable {
         require(fid > 0, "Invalid FID");
         emit PlayerRegistered(msg.sender, fid, block.timestamp);
+    }
+
+    /**
+     * @dev Stake on a match outcome
+     */
+    function stakeOnMatch(bytes32 matchId, bool isBot) external payable {
+        emit StakePlaced(msg.sender, matchId, isBot, msg.value);
+    }
+
+    /**
+     * @dev Submit a vote/guess for a match
+     */
+    function submitVote(bytes32 matchId, bool isBot) external {
+        emit VoteSubmitted(msg.sender, matchId, isBot);
     }
 }
