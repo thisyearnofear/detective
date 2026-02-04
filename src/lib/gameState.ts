@@ -1218,6 +1218,7 @@ class GameManager {
         player.displayName,
         player.pfpUrl,
         { correct: isCorrect, speedMs: voteSpeedMs },
+        player.address
       );
     } catch (error) {
       console.error(`[saveMatchToDatabase] Failed to save match ${match.id}:`, error);

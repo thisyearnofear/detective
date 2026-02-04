@@ -140,6 +140,11 @@ export async function POST(request: Request) {
     }
 
     // ========== STEP 5: REGISTER PLAYER ==========
+    // Prioritize the Arbitrum wallet address used for gating/signing
+    if (arbitrumWalletAddress) {
+      userProfile.address = arbitrumWalletAddress.toLowerCase();
+    }
+
     const player = await gameManager.registerPlayer(userProfile, recentCasts, style);
 
     if (!player) {

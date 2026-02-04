@@ -189,6 +189,7 @@ class PostgresDatabase {
         username VARCHAR(255) NOT NULL,
         display_name VARCHAR(255),
         pfp_url TEXT,
+        wallet_address VARCHAR(255),
         total_games INTEGER DEFAULT 0,
         total_matches INTEGER DEFAULT 0,
         total_wins INTEGER DEFAULT 0,
@@ -337,19 +338,21 @@ class PostgresDatabase {
         username: string,
         displayName: string,
         pfpUrl: string,
-        matchResult: { correct: boolean; speedMs: number }
+        matchResult: { correct: boolean; speedMs: number },
+        walletAddress?: string
     ): Promise<void> {
         const pool = await this.getPool();
 
         await pool.query(
             `INSERT INTO player_stats (
-        fid, username, display_name, pfp_url, total_matches, correct_votes,
+        fid, username, display_name, pfp_url, wallet_address, total_matches, correct_votes,
         accuracy, avg_speed_ms, last_played_at, updated_at
-      ) VALUES ($1, $2, $3, $4, 1, $5, $6, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ) VALUES ($1, $2, $3, $4, $8, 1, $5, $6, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       ON CONFLICT (fid) DO UPDATE SET
         username = EXCLUDED.username,
         display_name = EXCLUDED.display_name,
         pfp_url = EXCLUDED.pfp_url,
+        wallet_address = COALESCE(EXCLUDED.wallet_address, player_stats.wallet_address),
         total_matches = player_stats.total_matches + 1,
         correct_votes = player_stats.correct_votes + $5,
         accuracy = ((player_stats.correct_votes + $5)::DECIMAL / (player_stats.total_matches + 1)) * 100,
@@ -360,7 +363,8 @@ class PostgresDatabase {
                 fid, username, displayName, pfpUrl,
                 matchResult.correct ? 1 : 0,
                 matchResult.correct ? 100 : 0,
-                matchResult.speedMs
+                matchResult.speedMs,
+                walletAddress?.toLowerCase() || null
             ]
         );
     }
@@ -730,7 +734,8 @@ export interface IDatabase {
         username: string,
         displayName: string,
         pfpUrl: string,
-        matchResult: { correct: boolean; speedMs: number }
+        matchResult: { correct: boolean; speedMs: number },
+        walletAddress?: string
     ): Promise<void>;
     getPlayerStats(fid: number): Promise<DbPlayerStats | null>;
     getGlobalLeaderboard(limit?: number): Promise<DbLeaderboardEntry[]>;
@@ -812,10 +817,11 @@ class DatabaseProxy implements IDatabase {
         username: string,
         displayName: string,
         pfpUrl: string,
-        matchResult: { correct: boolean; speedMs: number }
+        matchResult: { correct: boolean; speedMs: number },
+        walletAddress?: string
     ): Promise<void> {
         const db = await getDbInstance();
-        return db.updatePlayerStats(fid, username, displayName, pfpUrl, matchResult);
+        return db.updatePlayerStats(fid, username, displayName, pfpUrl, matchResult, walletAddress);
     }
 
     async getPlayerStats(fid: number): Promise<DbPlayerStats | null> {

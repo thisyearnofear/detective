@@ -12,6 +12,7 @@ export interface UserProfile {
   username: string;
   displayName: string;
   pfpUrl: string;
+  address?: string; // Linked Arbitrum/ETH wallet address
 }
 
 // Represents an AI bot, including its training data
