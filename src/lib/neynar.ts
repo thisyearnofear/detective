@@ -143,6 +143,7 @@ export async function getFarcasterUserData(
       username: user.username,
       displayName: user.display_name,
       pfpUrl: user.pfp_url,
+      address: user.verified_addresses?.eth_addresses?.[0] || null,
     };
 
     // 3. Fetch user's recent casts (more data for better impersonation)
