@@ -1212,13 +1212,25 @@ class GameManager {
         ended_at: new Date(match.endTime),
       });
 
+      // 1. Update Voter Stats (Detection Accuracy)
       await database.updatePlayerStats(
         player.fid,
         player.username,
         player.displayName,
         player.pfpUrl,
-        { correct: isCorrect, speedMs: voteSpeedMs },
+        { detection: { correct: isCorrect, speedMs: voteSpeedMs } },
         player.address
+      );
+
+      // 2. Update Opponent Stats (Deception Success Rate)
+      // If the voter was incorrect, the opponent successfully deceived them.
+      await database.updatePlayerStats(
+        match.opponent.fid,
+        match.opponent.username,
+        match.opponent.displayName,
+        match.opponent.pfpUrl,
+        { deception: { successful: !isCorrect } },
+        match.opponent.address
       );
     } catch (error) {
       console.error(`[saveMatchToDatabase] Failed to save match ${match.id}:`, error);

@@ -197,6 +197,9 @@ class PostgresDatabase {
         accuracy DECIMAL(5,2) DEFAULT 0,
         avg_speed_ms INTEGER DEFAULT 0,
         best_streak INTEGER DEFAULT 0,
+        deception_matches INTEGER DEFAULT 0,
+        deception_successes INTEGER DEFAULT 0,
+        deception_accuracy DECIMAL(5,2) DEFAULT 0,
         last_played_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -250,6 +253,15 @@ class PostgresDatabase {
         END IF;
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'game_cycles' AND column_name = 'prize_pool_wei') THEN
           ALTER TABLE game_cycles ADD COLUMN prize_pool_wei VARCHAR(78);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'player_stats' AND column_name = 'deception_matches') THEN
+          ALTER TABLE player_stats ADD COLUMN deception_matches INTEGER DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'player_stats' AND column_name = 'deception_successes') THEN
+          ALTER TABLE player_stats ADD COLUMN deception_successes INTEGER DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'player_stats' AND column_name = 'deception_accuracy') THEN
+          ALTER TABLE player_stats ADD COLUMN deception_accuracy DECIMAL(5,2) DEFAULT 0;
         END IF;
       END $$;
     `);
@@ -338,33 +350,61 @@ class PostgresDatabase {
         username: string,
         displayName: string,
         pfpUrl: string,
-        matchResult: { correct: boolean; speedMs: number },
+        metrics: {
+            detection?: { correct: boolean; speedMs: number };
+            deception?: { successful: boolean };
+        },
         walletAddress?: string
     ): Promise<void> {
         const pool = await this.getPool();
 
+        const d_inc = metrics.detection ? 1 : 0;
+        const d_correct = metrics.detection?.correct ? 1 : 0;
+        const d_speed = metrics.detection?.speedMs || 0;
+
+        const s_inc = metrics.deception ? 1 : 0;
+        const s_success = metrics.deception?.successful ? 1 : 0;
+
         await pool.query(
             `INSERT INTO player_stats (
-        fid, username, display_name, pfp_url, wallet_address, total_matches, correct_votes,
-        accuracy, avg_speed_ms, last_played_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $8, 1, $5, $6, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        fid, username, display_name, pfp_url, wallet_address, 
+        total_matches, correct_votes, accuracy, avg_speed_ms,
+        deception_matches, deception_successes, deception_accuracy,
+        last_played_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       ON CONFLICT (fid) DO UPDATE SET
         username = EXCLUDED.username,
         display_name = EXCLUDED.display_name,
         pfp_url = EXCLUDED.pfp_url,
         wallet_address = COALESCE(EXCLUDED.wallet_address, player_stats.wallet_address),
-        total_matches = player_stats.total_matches + 1,
-        correct_votes = player_stats.correct_votes + $5,
-        accuracy = ((player_stats.correct_votes + $5)::DECIMAL / (player_stats.total_matches + 1)) * 100,
-        avg_speed_ms = ((player_stats.avg_speed_ms * player_stats.total_matches) + $7) / (player_stats.total_matches + 1),
+        
+        total_matches = player_stats.total_matches + $6,
+        correct_votes = player_stats.correct_votes + $7,
+        accuracy = CASE 
+            WHEN (player_stats.total_matches + $6) > 0 
+            THEN ((player_stats.correct_votes + $7)::DECIMAL / (player_stats.total_matches + $6)) * 100 
+            ELSE 0 
+        END,
+        avg_speed_ms = CASE 
+            WHEN (player_stats.total_matches + $6) > 0 
+            THEN ((player_stats.avg_speed_ms * player_stats.total_matches) + $9) / (player_stats.total_matches + $6)
+            ELSE 0 
+        END,
+
+        deception_matches = player_stats.deception_matches + $10,
+        deception_successes = player_stats.deception_successes + $11,
+        deception_accuracy = CASE 
+            WHEN (player_stats.deception_matches + $10) > 0 
+            THEN ((player_stats.deception_successes + $11)::DECIMAL / (player_stats.deception_matches + $10)) * 100 
+            ELSE 0 
+        END,
+
         last_played_at = CURRENT_TIMESTAMP,
         updated_at = CURRENT_TIMESTAMP`,
             [
-                fid, username, displayName, pfpUrl,
-                matchResult.correct ? 1 : 0,
-                matchResult.correct ? 100 : 0,
-                matchResult.speedMs,
-                walletAddress?.toLowerCase() || null
+                fid, username, displayName, pfpUrl, walletAddress?.toLowerCase() || null,
+                d_inc, d_correct, (d_inc > 0 ? (d_correct * 100) : 0), d_speed,
+                s_inc, s_success, (s_inc > 0 ? (s_success * 100) : 0)
             ]
         );
     }
@@ -392,6 +432,25 @@ class PostgresDatabase {
             [limit]
         );
         return result.rows;
+    }
+
+    async getAgentLeaderboard(limit: number = 100): Promise<any[]> {
+        const pool = await this.getPool();
+        const result = await pool.query(
+            `SELECT
+        fid, username, display_name, pfp_url, deception_accuracy as dsr, 
+        deception_matches as total_deceptions, deception_successes as total_successes,
+        ROW_NUMBER() OVER (ORDER BY deception_accuracy DESC, deception_matches DESC) as rank
+       FROM player_stats
+       WHERE deception_matches >= 5
+       ORDER BY deception_accuracy DESC, deception_matches DESC
+       LIMIT $1`,
+            [limit]
+        );
+        return result.rows.map((row: any) => ({
+            ...row,
+            dsr: parseFloat(row.dsr)
+        }));
     }
 
     async incrementPlayerGames(fid: number): Promise<void> {
@@ -734,11 +793,15 @@ export interface IDatabase {
         username: string,
         displayName: string,
         pfpUrl: string,
-        matchResult: { correct: boolean; speedMs: number },
+        metrics: {
+            detection?: { correct: boolean; speedMs: number };
+            deception?: { successful: boolean };
+        },
         walletAddress?: string
     ): Promise<void>;
     getPlayerStats(fid: number): Promise<DbPlayerStats | null>;
     getGlobalLeaderboard(limit?: number): Promise<DbLeaderboardEntry[]>;
+    getAgentLeaderboard(limit?: number): Promise<any[]>;
     incrementPlayerGames(fid: number): Promise<void>;
     saveGameResult(result: Omit<DbGameResult, "id" | "created_at">): Promise<void>;
     getGameResultsByCycle(cycleId: string): Promise<DbGameResult[]>;
@@ -817,11 +880,14 @@ class DatabaseProxy implements IDatabase {
         username: string,
         displayName: string,
         pfpUrl: string,
-        matchResult: { correct: boolean; speedMs: number },
+        metrics: {
+            detection?: { correct: boolean; speedMs: number };
+            deception?: { successful: boolean };
+        },
         walletAddress?: string
     ): Promise<void> {
         const db = await getDbInstance();
-        return db.updatePlayerStats(fid, username, displayName, pfpUrl, matchResult, walletAddress);
+        return db.updatePlayerStats(fid, username, displayName, pfpUrl, metrics, walletAddress);
     }
 
     async getPlayerStats(fid: number): Promise<DbPlayerStats | null> {
@@ -832,6 +898,11 @@ class DatabaseProxy implements IDatabase {
     async getGlobalLeaderboard(limit?: number): Promise<DbLeaderboardEntry[]> {
         const db = await getDbInstance();
         return db.getGlobalLeaderboard(limit);
+    }
+
+    async getAgentLeaderboard(limit?: number): Promise<any[]> {
+        const db = await getDbInstance();
+        return db.getAgentLeaderboard(limit);
     }
 
     async incrementPlayerGames(fid: number): Promise<void> {
