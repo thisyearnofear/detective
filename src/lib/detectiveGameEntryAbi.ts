@@ -375,11 +375,11 @@ export const DETECTIVE_GAME_ENTRY_ABI = [
 
 // Contract addresses by network
 export const DETECTIVE_GAME_ENTRY_ADDRESSES = {
-  arbitrumOne: '0x0000000000000000000000000000000000000000' as const, // Update after deployment
+  arbitrumOne: '0xF3f9e93B0bdd7C87B261F30eC6a697fAf50f4460' as const,
   arbitrumSepolia: '0x0000000000000000000000000000000000000000' as const, // Update after testnet deployment
 } as const;
 
-// Default to mainnet (update after deployment)
+// Default to mainnet
 export const CONTRACT_ADDRESS = DETECTIVE_GAME_ENTRY_ADDRESSES.arbitrumOne;
 
 // Stake limits for client-side validation
