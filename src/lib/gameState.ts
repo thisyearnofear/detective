@@ -237,13 +237,13 @@ class GameManager {
       await stateConsistency.markVersionAsRead();
     }
     
-    // Update state based on timers every time it's requested
-    await this.updateCycleState();
-    await this.cleanupOldMatches();
-
-    // Get player count from repository (may be cached)
+    // Get player count from repository FIRST (needed for phase transitions)
     const players = await getRepository().getPlayers();
     this.state!.players = players;
+
+    // Update state based on timers (needs player count for countdown logic)
+    await this.updateCycleState();
+    await this.cleanupOldMatches();
 
     return {
       cycleId: this.state!.cycleId,
