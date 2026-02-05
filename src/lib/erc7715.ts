@@ -4,13 +4,19 @@
  * Logic for requesting and validating session-based permissions from 
  * Arbitrum Smart Accounts. This enables "Zero-Click" staking by 
  * allowing the app to execute specific contract calls within a budget.
+ * 
+ * Supports both native (ETH/ARB) and USDC staking.
  */
 
 import { parseEther } from "viem";
+import { GAME_CONSTANTS, type StakeCurrency } from "@/lib/gameConstants";
 
 // Constants for the Detective Game
 export const DEFAULT_SESSION_BUDGET = parseEther("0.01"); // ~0.01 ETH/ARB limit per session
 export const SESSION_DURATION_SECONDS = 4 * 60 * 60; // 4 hours
+
+// USDC token address on Arbitrum One
+export const USDC_ADDRESS = GAME_CONSTANTS.ECONOMY.STAKES.USDC.tokenAddress;
 
 /**
  * Interface for ERC-7715 Permission Request (wallet_grantPermissions)
@@ -134,16 +140,21 @@ export function clearSessionPermissions(): void {
 
 /**
  * Executes a background stake for a match using session permissions
+ * Supports both native (ETH/ARB) and USDC currencies
  * 
  * @param matchId The match ID to stake on
  * @param isBot The player's current guess
- * @param amountWei The amount to stake in wei
+ * @param amount The amount to stake in base units
+ * @param currency The stake currency (NATIVE or USDC)
+ * @param deadline Optional deadline timestamp (defaults to 5 minutes from now)
  * @returns Call bundle ID or null if session is invalid
  */
 export async function executeSessionStake(
   matchId: string,
   isBot: boolean,
-  amountWei: string
+  amount: string,
+  currency: StakeCurrency = "NATIVE",
+  deadline?: number
 ): Promise<string | null> {
   const { context, expiry } = getSessionPermissions();
   
@@ -163,32 +174,66 @@ export async function executeSessionStake(
     const hashedMatchId = matchId.startsWith('0x') && matchId.length === 66 
       ? matchId 
       : keccak256(toHex(matchId)) as `0x${string}`;
+    
+    // Set deadline (5 minutes from now if not provided)
+    const stakeDeadline = deadline || Math.floor(Date.now() / 1000) + 300;
 
-    // Minimal ABI for stakeOnMatch
-    const abi = [{
+    if (currency === "USDC") {
+      // USDC staking requires approve + stakeOnMatchUSDC
+      // For session-based calls, user must have pre-approved the contract
+      const usdcAbi = [{
+        name: 'stakeOnMatchUSDC',
+        type: 'function',
+        stateMutability: 'nonpayable',
+        inputs: [
+          { name: 'matchId', type: 'bytes32' },
+          { name: 'isBot', type: 'bool' },
+          { name: 'amount', type: 'uint256' },
+          { name: 'deadline', type: 'uint256' }
+        ],
+        outputs: []
+      }];
+
+      const callData = encodeFunctionData({
+        abi: usdcAbi,
+        functionName: 'stakeOnMatchUSDC',
+        args: [hashedMatchId, isBot, BigInt(amount), BigInt(stakeDeadline)]
+      });
+
+      console.log(`[ERC-7715] Executing USDC stake for match ${matchId}...`);
+      
+      return await sendSessionCalls(
+        [{ to: config.contractAddress, data: callData }],
+        context
+      );
+    }
+
+    // Native (ETH/ARB) staking
+    const nativeAbi = [{
       name: 'stakeOnMatch',
       type: 'function',
       stateMutability: 'payable',
       inputs: [
         { name: 'matchId', type: 'bytes32' },
-        { name: 'isBot', type: 'bool' }
+        { name: 'isBot', type: 'bool' },
+        { name: 'deadline', type: 'uint256' }
       ],
       outputs: []
     }];
 
     const callData = encodeFunctionData({
-      abi,
+      abi: nativeAbi,
       functionName: 'stakeOnMatch',
-      args: [hashedMatchId, isBot]
+      args: [hashedMatchId, isBot, BigInt(stakeDeadline)]
     });
 
-    console.log(`[ERC-7715] Executing background stake for match ${matchId}...`);
+    console.log(`[ERC-7715] Executing native stake for match ${matchId}...`);
     
     const bundleId = await sendSessionCalls(
       [{
         to: config.contractAddress,
         data: callData,
-        value: toHex(BigInt(amountWei)) as `0x${string}`
+        value: toHex(BigInt(amount)) as `0x${string}`
       }],
       context
     );
