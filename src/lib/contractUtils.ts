@@ -1,14 +1,14 @@
 /**
  * Contract Utility Functions
  * 
- * Helper functions for interacting with DetectiveGameEntry contract:
- * - Registration signature generation
+ * Helper functions for interacting with DetectiveGameEntry V3:
  * - Stake amount validation
  * - Deadline calculation
  * - Match ID hashing
+ * - Error message formatting
  */
 
-import { keccak256, toHex, encodePacked } from 'viem';
+import { keccak256, toHex } from 'viem';
 import { 
   CONTRACT_ADDRESS, 
   STAKE_LIMITS,
@@ -17,78 +17,7 @@ import {
 import { type StakeCurrency } from './gameConstants';
 
 // Chain ID for Arbitrum One
-const ARBITRUM_CHAIN_ID = 42161;
-
-/**
- * Interface for registration signature data
- */
-export interface RegistrationSignatureData {
-  signature: `0x${string}`;
-  deadline: bigint;
-  nonce: bigint;
-}
-
-/**
- * Creates a registration signature for the contract
- * 
- * @param wallet Wallet client with signing capability
- * @param fid Farcaster ID to register
- * @param customDeadline Optional custom deadline (defaults to 5 min)
- * @returns Signature data for registerForGame call
- * 
- * @example
- * ```typescript
- * const { signature, deadline, nonce } = await createRegistrationSignature(
- *   wallet,
- *   12345
- * );
- * 
- * await wallet.writeContract({
- *   address: CONTRACT_ADDRESS,
- *   abi: DETECTIVE_GAME_ENTRY_ABI,
- *   functionName: 'registerForGame',
- *   args: [BigInt(fid), nonce, deadline, signature],
- *   value: entryFee,
- * });
- * ```
- */
-export async function createRegistrationSignature(
-  wallet: {
-    account: { address: `0x${string}` };
-    signMessage: (args: { message: { raw: `0x${string}` } }) => Promise<`0x${string}`>;
-  },
-  fid: number,
-  customDeadline?: number
-): Promise<RegistrationSignatureData> {
-  const nonce = BigInt(Date.now());
-  const deadline = BigInt(customDeadline || Math.floor(Date.now() / 1000) + 300);
-  
-  // Create the message hash (matches contract's hashing logic)
-  const messageHash = keccak256(encodePacked(
-    ['address', 'uint256', 'uint256', 'uint256', 'address', 'uint256'],
-    [
-      wallet.account.address,
-      BigInt(fid),
-      nonce,
-      deadline,
-      CONTRACT_ADDRESS,
-      BigInt(ARBITRUM_CHAIN_ID)
-    ]
-  ));
-  
-  // Create Ethereum signed message hash
-  const ethSignedMessageHash = keccak256(encodePacked(
-    ['string', 'bytes32'],
-    ['\x19Ethereum Signed Message:\n32', messageHash]
-  ));
-  
-  // Sign the message
-  const signature = await wallet.signMessage({
-    message: { raw: ethSignedMessageHash },
-  });
-  
-  return { signature, deadline, nonce };
-}
+export const ARBITRUM_CHAIN_ID = 42161;
 
 /**
  * Validates a native stake amount
@@ -215,27 +144,27 @@ export function getContractErrorMessage(error: DetectiveGameEntryErrors): string
   const messages: Record<DetectiveGameEntryErrors, string> = {
     ContractPaused: 'Contract is currently paused',
     InvalidAddress: 'Invalid address provided',
-    InvalidFID: 'Invalid Farcaster ID',
     InvalidAmount: 'Invalid amount',
     InvalidMatchId: 'Invalid match ID',
     InvalidDeadline: 'Invalid deadline',
     StakeTooHigh: `Stake exceeds maximum (${formatStakeAmount(BigInt(STAKE_LIMITS.native.max), 'NATIVE')} or ${formatStakeAmount(BigInt(STAKE_LIMITS.usdc.max), 'USDC')})`,
     StakeTooLow: `Stake below minimum (${formatStakeAmount(BigInt(STAKE_LIMITS.native.min), 'NATIVE')} or ${formatStakeAmount(BigInt(STAKE_LIMITS.usdc.min), 'USDC')})`,
     InsufficientFee: 'Insufficient entry fee',
-    FIDAlreadyRegistered: 'This Farcaster ID is already registered',
-    WalletAlreadyRegistered: 'This wallet is already registered',
-    InvalidSignature: 'Invalid registration signature',
+    AlreadyRegistered: 'This wallet is already registered',
+    NotRegistered: 'Wallet not registered. Please register first.',
+    AlreadyVoted: 'You have already voted on this match',
+    AlreadyStaked: 'You have already staked on this match',
     ExpiredDeadline: 'Transaction deadline has expired',
     NotAdmin: 'Caller is not admin',
-    TransferFailed: 'Native token transfer failed',
-    USDCTransferFailed: 'USDC transfer failed',
+    TransferFailed: 'Token transfer failed',
+    USDCTransferFailed: 'USDC transfer failed (check approval)',
   };
   
   return messages[error] || 'Unknown contract error';
 }
 
 /**
- * Pre-computed stake limits for client-side validation
+ * Pre-computed stake limits for display
  */
 export const STAKE_LIMITS_DISPLAY = {
   native: {
@@ -247,3 +176,37 @@ export const STAKE_LIMITS_DISPLAY = {
     max: formatStakeAmount(BigInt(STAKE_LIMITS.usdc.max), 'USDC'),
   },
 } as const;
+
+/**
+ * Validates match ID format
+ * 
+ * @param matchId Match ID to validate
+ * @returns True if valid
+ */
+export function isValidMatchId(matchId: string): boolean {
+  // Check if it's a valid bytes32 (0x + 64 hex chars) or a non-empty string
+  if (matchId.startsWith('0x')) {
+    return matchId.length === 66 && /^0x[0-9a-fA-F]{64}$/.test(matchId);
+  }
+  return matchId.length > 0 && matchId.length <= 64;
+}
+
+/**
+ * Creates match ID from components (for consistent ID generation)
+ * 
+ * @param playerFid Player's Farcaster ID
+ * @param opponentFid Opponent's Farcaster ID
+ * @param roundNumber Round number
+ * @param timestamp Match start timestamp
+ * @returns bytes32 match ID
+ */
+export function createMatchId(
+  playerFid: number,
+  opponentFid: number,
+  roundNumber: number,
+  timestamp: number
+): `0x${string}` {
+  return keccak256(
+    toHex(`${playerFid}-${opponentFid}-${roundNumber}-${timestamp}`)
+  );
+}
