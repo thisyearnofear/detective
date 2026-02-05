@@ -371,8 +371,32 @@ export async function getTransactionReceipt(txHash: string): Promise<any | null>
     });
 
     return receipt || null;
-  } catch (error) {
+  } catch (error: any) {
     console.error('[FarcasterWalletProvider] Failed to fetch transaction status:', error);
+    
+    // Handle Farcaster SDK internal RPC errors
+    const errorMessage = error?.message || String(error);
+    if (
+      errorMessage.includes('RpcResponse') ||
+      errorMessage.includes("Cannot read properties of undefined (reading 'error')") ||
+      errorMessage.includes("Cannot read properties of undefined (reading 'result')")
+    ) {
+      console.warn('[FarcasterWalletProvider] Farcaster SDK RPC error in getTransactionReceipt, trying fallback...');
+      
+      // Reset cache and try window.ethereum fallback
+      cachedProvider = null;
+      cacheTime = 0;
+      
+      if (typeof window !== 'undefined' && (window as any).ethereum) {
+        console.log('[FarcasterWalletProvider] Retrying getTransactionReceipt with window.ethereum');
+        const fallbackReceipt = await (window as any).ethereum.request({
+          method: 'eth_getTransactionReceipt',
+          params: [txHash],
+        });
+        return fallbackReceipt || null;
+      }
+    }
+    
     throw error;
   }
 }
