@@ -6,7 +6,7 @@
  * - Server-side TX verification on-chain
  * - Contract address and RPC configuration
  * 
- * Contract: DetectiveGameEntry (0xa879B5CbD12b6137fCcf70669D48F55666296357)
+ * Contract: DetectiveGameEntry (0xF3f9e93B0bdd7C87B261F30eC6a697fAf50f4460)
  * 
  * Used by:
  * - useRegistrationFlow hook: Request TX from user with progress tracking
