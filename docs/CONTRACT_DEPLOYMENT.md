@@ -3,9 +3,13 @@
 ## Contract Information
 
 **Network**: Arbitrum One (mainnet)  
-**Address**: `[DEPLOY AND UPDATE]`  
+**Address**: `0xF3f9e93B0bdd7C87B261F30eC6a697fAf50f4460`  
 **Version**: V3 (Streamlined)  
 **Solidity Version**: 0.8.20
+
+## Verification
+
+- **Blockscout**: https://arbitrum.blockscout.com/address/0xF3f9e93B0bdd7C87B261F30eC6a697fAf50f4460
 
 ## What's New in V3
 
