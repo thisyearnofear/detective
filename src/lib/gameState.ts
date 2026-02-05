@@ -1136,7 +1136,11 @@ class GameManager {
    */
   private async handleFinishedPhase(now: number): Promise<void> {
     const CLEANUP_GRACE_PERIOD = 5000;
-    if (!this.state!.finishedAt || now - this.state!.finishedAt <= CLEANUP_GRACE_PERIOD) {
+    const timeSinceFinish = this.state!.finishedAt ? now - this.state!.finishedAt : 0;
+    console.log(`[GameManager] handleFinishedPhase: finishedAt=${this.state!.finishedAt}, timeSinceFinish=${timeSinceFinish}ms, graceRequired=${CLEANUP_GRACE_PERIOD}ms`);
+    
+    if (!this.state!.finishedAt || timeSinceFinish <= CLEANUP_GRACE_PERIOD) {
+      console.log(`[GameManager] Not ready to cycle yet: finishedAt=${this.state!.finishedAt}, timeSinceFinish=${timeSinceFinish}`);
       return; // Not ready to cycle yet
     }
 

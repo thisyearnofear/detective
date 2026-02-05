@@ -118,10 +118,17 @@ export default function AdminPage() {
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [showResetModal, setShowResetModal] = useState(false);
 
-    // Poll admin data every 3 seconds
+    // Poll admin data every 2 seconds for responsive updates
     const { data: adminData, mutate } = useSWR('/api/admin/state', fetcher, {
-        refreshInterval: 3000,
+        refreshInterval: 2000,
+        revalidateOnFocus: true,
+        dedupingInterval: 500, // Allow rapid revalidation
     });
+    
+    // Force immediate revalidation helper
+    const forceRefresh = useCallback(() => {
+        mutate(undefined, { revalidate: true });
+    }, [mutate]);
 
     const handleBulkRegister = async () => {
         const usernameList = usernames
@@ -152,7 +159,7 @@ export default function AdminPage() {
                     text: `Registered ${data.registered} users. ${data.failed} failed.`,
                 });
                 setUsernames('');
-                mutate();
+                forceRefresh();
             } else {
                 setMessage({ type: 'error', text: data.error || 'Registration failed' });
             }
@@ -178,7 +185,7 @@ export default function AdminPage() {
 
             if (data.success) {
                 setMessage({ type: 'success', text: data.message });
-                mutate();
+                forceRefresh();
             } else {
                 setMessage({ type: 'error', text: data.error });
             }
@@ -204,7 +211,7 @@ export default function AdminPage() {
 
             if (data.success) {
                 setMessage({ type: 'success', text: data.message });
-                mutate();
+                forceRefresh();
             } else {
                 setMessage({ type: 'error', text: data.error });
             }
@@ -213,7 +220,7 @@ export default function AdminPage() {
         } finally {
             setIsTransitioning(false);
         }
-    }, [mutate]);
+    }, [forceRefresh]);
 
     const handleToggleMonetization = async () => {
         const currentEnabled = adminData?.gameState?.config?.monetizationEnabled;
@@ -236,7 +243,7 @@ export default function AdminPage() {
                     type: 'success', 
                     text: `Monetization ${newEnabled ? 'enabled' : 'disabled'} successfully.` 
                 });
-                mutate();
+                forceRefresh();
             }
         } catch (error: any) {
             setMessage({ type: 'error', text: error.message });
