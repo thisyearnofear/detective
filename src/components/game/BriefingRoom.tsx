@@ -1,11 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import useSWR from 'swr';
+import { useState } from 'react';
 import { Player, UserProfile } from '@/lib/types';
 import { useCountdown } from '@/hooks/useCountdown';
 import { useRegistrationFlow } from '@/hooks/useRegistrationFlow';
-import { fetcher } from '@/lib/fetcher';
 import { GAME_CONSTANTS } from '@/lib/gameConstants';
 import ErrorCard from '../ErrorCard';
 import ArbitrumRegistrationModal from '../ArbitrumRegistrationModal';
@@ -14,46 +12,40 @@ import DetectiveToast from '../DetectiveToast';
 type Props = {
   currentPlayer: UserProfile;
   isRegistrationOpen?: boolean;
-  gameState: any;
+  gameState: {
+    cycleId: string;
+    state: string;
+    playerCount: number;
+    registrationEnds: number;
+    gameEnds: number;
+    isRegistered: boolean;
+    phase?: string;
+    phaseEndTime?: number;
+    reason?: string;
+    config?: any;
+    players?: Player[];
+  };
 };
 
 export default function BriefingRoom({ currentPlayer, isRegistrationOpen = true, gameState }: Props) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isRegistered, setIsRegistered] = useState(gameState?.isRegistered || false);
-  const [timeLeft, setTimeLeft] = useState(0);
   const [showRegistrationModal, setShowRegistrationModal] = useState(false);
 
   // Registration flow management
   const flow = useRegistrationFlow();
 
-  // Consolidated polling: single endpoint for game state, phase, and players
-  // Reduces 2 requests/2s to 1 request/2s
-  const { data: statusData } = useSWR(
-    gameState?.cycleId ? `/api/game/status?cycleId=${gameState.cycleId}&fid=${currentPlayer.fid}` : null,
-    fetcher,
-    {
-      refreshInterval: 2000, // Poll every 2s for phase changes + player updates
-      revalidateOnFocus: true, // Mobile: Refresh when user returns
-      shouldRetryOnError: true,
-      errorRetryInterval: 1000,
-    }
-  );
-
-  const registeredPlayers = (statusData?.players || []) as Player[];
+  // Use provided gameState - no duplicate fetching
+  const registeredPlayers = (gameState?.players || []) as Player[];
   const maxPlayers = GAME_CONSTANTS.MAX_PLAYERS;
 
   // Use countdown hook for timer (syncs with server)
-  const countdownEndTime = statusData?.phaseEndTime || gameState?.registrationEnds || 0;
-  const { timeRemaining } = useCountdown({
+  const countdownEndTime = gameState?.phaseEndTime || gameState?.registrationEnds || 0;
+  const { timeRemaining: timeLeft } = useCountdown({
     endTime: countdownEndTime,
-    pollInterval: 100, // Smooth updates
+    pollInterval: 250, // Reduced from 100ms - 4 updates/sec is smooth enough
   });
-
-  // Update timeLeft state for Lobby component
-  useEffect(() => {
-    setTimeLeft(timeRemaining);
-  }, [timeRemaining]);
 
   const handleRegister = async () => {
     console.log('[BriefingRoom] Join investigation initiated for FID:', currentPlayer.fid);
@@ -71,7 +63,7 @@ export default function BriefingRoom({ currentPlayer, isRegistrationOpen = true,
         setIsLoading(true);
       },
       { 
-        skipPermissions: statusData?.config && !statusData.config.monetizationEnabled 
+        skipPermissions: gameState?.config && !gameState.config.monetizationEnabled 
       }
     );
 
@@ -88,7 +80,7 @@ export default function BriefingRoom({ currentPlayer, isRegistrationOpen = true,
       console.log('[BriefingRoom] Sending investigation join request with TX:', txHash);
       const arbitrumWalletAddress = localStorage.getItem('arbitrumWalletAddress');
 
-      const registrationBody: any = { fid: currentPlayer.fid };
+      const registrationBody: Record<string, unknown> = { fid: currentPlayer.fid };
 
       if (txHash && arbitrumWalletAddress) {
         registrationBody.arbitrumTxHash = txHash;
@@ -101,6 +93,7 @@ export default function BriefingRoom({ currentPlayer, isRegistrationOpen = true,
         registrationBody.permissionExpiry = permissions.expiry;
       }
 
+      // Use AbortSignal.timeout for fetch timeout
       const response = await fetch('/api/game/register', {
         method: 'POST',
         headers: {
@@ -108,6 +101,7 @@ export default function BriefingRoom({ currentPlayer, isRegistrationOpen = true,
           'Accept': 'application/json',
         },
         body: JSON.stringify(registrationBody),
+        // Use AbortSignal.timeout for fetch timeout
         signal: AbortSignal.timeout(15000),
       });
 
@@ -323,9 +317,9 @@ export default function BriefingRoom({ currentPlayer, isRegistrationOpen = true,
             ✅ You're registered!
           </div>
 
-          {registeredPlayers.length >= 4 && (
+          {registeredPlayers.length >= 4 && gameState?.players && (
             <div className="animate-fade-in">
-              {registeredPlayers.find((p: Player) => p.fid === currentPlayer.fid)?.isReady ? (
+              {gameState.players.find((p: Player) => p.fid === currentPlayer.fid)?.isReady ? (
                 <div className="w-full px-6 py-4 bg-slate-700/50 border border-slate-600 rounded-lg text-center text-gray-300 font-bold">
                   Waiting for other detectives...
                 </div>

@@ -78,7 +78,7 @@ export default function ChatWindow({
   const { secondsRemaining } = useCountdown({
     endTime: match.endTime,
     onComplete: () => setIsTimeUp(true),
-    pollInterval: 100,
+    pollInterval: 250, // 4 updates/sec is smooth enough
     totalDuration: 60000, // Always 60s per match for consistent progress bar
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);

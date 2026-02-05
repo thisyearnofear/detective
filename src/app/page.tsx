@@ -35,14 +35,15 @@ export default function Home() {
   }, []);
 
   // Use SWR for polling the game state
-  // PERFORMANT: Adaptive polling - faster when waiting for cycle transition
+  // PERFORMANT: Adaptive polling - deduped requests prevent double-fetching
   const { data: gameState, error: gameStateError } = useSWR(
     sdkUser ? `/api/game/status?fid=${sdkUser.fid}` : "/api/game/status",
     fetcher,
     { 
       refreshInterval: 2000,
+      dedupingInterval: 2000, // Prevent duplicate requests within 2s window
       keepPreviousData: true,
-      revalidateOnFocus: true, // Mobile: Refresh when user returns
+      revalidateOnFocus: true,
     },
   );
 
