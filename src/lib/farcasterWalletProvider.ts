@@ -136,6 +136,9 @@ export async function requestAccounts(): Promise<string[] | null> {
           });
           if (fallbackAccounts && fallbackAccounts.length > 0) {
             console.log('[FarcasterWalletProvider] Fallback accounts:', fallbackAccounts);
+            // Cache the fallback provider so subsequent calls use it
+            cachedProvider = (window as any).ethereum;
+            cacheTime = Date.now();
             return fallbackAccounts;
           }
         } catch (fallbackError: any) {
@@ -189,6 +192,35 @@ export async function sendTransaction(txParams: {
       console.warn('[FarcasterWalletProvider] User rejected transaction');
       throw new Error('Transaction rejected');
     }
+    
+    // Handle Farcaster SDK internal RPC errors
+    const errorMessage = error?.message || String(error);
+    if (
+      errorMessage.includes('RpcResponse') ||
+      errorMessage.includes("Cannot read properties of undefined (reading 'error')") ||
+      errorMessage.includes("Cannot read properties of undefined (reading 'result')")
+    ) {
+      console.warn('[FarcasterWalletProvider] Farcaster SDK RPC error in sendTransaction, trying fallback...');
+      
+      // Reset cache and try window.ethereum fallback
+      cachedProvider = null;
+      cacheTime = 0;
+      
+      if (typeof window !== 'undefined' && (window as any).ethereum) {
+        console.log('[FarcasterWalletProvider] Retrying sendTransaction with window.ethereum');
+        const fallbackTxHash = await (window as any).ethereum.request({
+          method: 'eth_sendTransaction',
+          params: [txParams],
+        });
+        if (fallbackTxHash && typeof fallbackTxHash === 'string') {
+          console.log('[FarcasterWalletProvider] Fallback transaction sent:', fallbackTxHash);
+          return fallbackTxHash;
+        }
+      }
+      
+      throw new Error('Transaction failed. Please try refreshing the app.');
+    }
+    
     throw error;
   }
 }
