@@ -58,6 +58,42 @@ function getArbitrumClient() {
   return arbitrumClient;
 }
 
+/**
+ * Check if a wallet is already registered on-chain
+ * 
+ * @param walletAddress The wallet address to check
+ * @returns true if already registered, false otherwise
+ */
+export async function isWalletRegisteredOnChain(walletAddress: string): Promise<boolean> {
+  const config = getArbitrumConfig();
+  
+  if (!config.enabled || !config.contractAddress || config.contractAddress === '0x') {
+    return false;
+  }
+
+  try {
+    const client = getArbitrumClient();
+    
+    // isWalletRegistered(address) selector: 0x7f247e49
+    const selector = '0x7f247e49';
+    const paddedAddr = walletAddress.toLowerCase().replace('0x', '').padStart(64, '0');
+    const callData = selector + paddedAddr;
+    
+    const result = await client.call({
+      to: config.contractAddress,
+      data: callData as `0x${string}`,
+    });
+
+    // Result is 0x...001 for true, 0x...000 for false
+    const isRegistered = result.data?.endsWith('1') ?? false;
+    console.log(`[ArbitrumVerification] isWalletRegistered(${walletAddress.slice(0, 10)}...): ${isRegistered}`);
+    return isRegistered;
+  } catch (error) {
+    console.error('[ArbitrumVerification] Failed to check wallet registration:', error);
+    return false;
+  }
+}
+
 // ========== TX SIGNING (CLIENT-SIDE) ==========
 
 /**
