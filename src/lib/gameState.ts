@@ -335,6 +335,8 @@ class GameManager {
       gameEnds: this.state!.gameEnds,
       config: this.state!.config,
     });
+    // Increment version so other instances pick up the config change
+    await stateConsistency.tryIncrementStateVersion();
     console.log(`[GameManager] Config updated:`, config);
   }
 
@@ -788,6 +790,9 @@ class GameManager {
       registrationEnds: this.state!.registrationEnds,
       gameEnds: this.state!.gameEnds,
     });
+    // Increment version so other instances pick up the state change
+    await stateConsistency.tryIncrementStateVersion();
+    console.log(`[GameManager] Force transitioned to ${newState}`);
   }
 
   /**
