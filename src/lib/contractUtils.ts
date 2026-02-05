@@ -10,7 +10,6 @@
 
 import { keccak256, toHex } from 'viem';
 import { 
-  CONTRACT_ADDRESS, 
   STAKE_LIMITS,
   type DetectiveGameEntryErrors 
 } from './detectiveGameEntryAbi';
