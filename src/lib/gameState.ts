@@ -1250,6 +1250,8 @@ class GameManager {
         vote_speed_ms: voteSpeedMs,
         messages: match.messages,
         staked_amount: match.stakedAmount || null,
+        stake_currency: match.stakeCurrency || null,
+        stake_tx_hash: match.stakeTxHash || null,
         payout_amount: isCorrect ? (match.stakedAmount ? (BigInt(match.stakedAmount) * 2n).toString() : null) : "0",
         started_at: new Date(match.startTime),
         ended_at: new Date(match.endTime),

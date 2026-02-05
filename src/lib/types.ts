@@ -54,8 +54,9 @@ export interface VoteRecord {
   roundNumber?: number;
   
   // Economic Outcome
-  stakedAmount?: string; // Amount staked on this guess (wei)
-  payoutAmount?: string; // Amount won/lost (wei)
+  stakedAmount?: string; // Amount staked in base units
+  stakeCurrency?: "NATIVE" | "USDC"; // Currency used for stake
+  payoutAmount?: string; // Amount won/lost in base units
 }
 
 // Represents a single conversation match
@@ -78,10 +79,12 @@ export interface Match {
   lastPlayerMessageTime: number; // For inactivity tracking
   typingIndicator?: TypingIndicator; // Bot typing state
 
-  // Truth Stake
-  stakedAmount?: string; // Total ARB staked on this match (wei)
+  // Truth Stake (supports native ETH/ARB and USDC)
+  stakedAmount?: string; // Amount staked in base units
+  stakeCurrency?: "NATIVE" | "USDC"; // Currency used for stake
   isStaked?: boolean; // Whether this match has active economic stakes
   payoutStatus?: "PENDING" | "SETTLED" | "FAILED";
+  stakeTxHash?: string; // On-chain stake transaction hash
 }
 
 // Typing indicator state for realistic bot behavior

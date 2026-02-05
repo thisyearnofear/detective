@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
-import { validateAgentRequest, unauthorizedResponse, checkRateLimit } from "@/lib/agentAuth";
+import { guardAgentEndpoint, unauthorizedResponse } from "@/lib/agentAuth";
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +9,8 @@ export const dynamic = 'force-dynamic';
  * 
  * Allows an external agent to post a reply to a match.
  * Body: { matchId: string, botFid: number, text: string }
+ * 
+ * x402: Requires USDC payment when NEXT_PUBLIC_X402_ENABLED=true
  */
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -22,22 +24,17 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 1. Authenticate Request (Supports Signature or Legacy Secret)
-  const auth = await validateAgentRequest(request, body);
-  if (!auth.authorized) {
-    return unauthorizedResponse();
-  }
-
-  // 2. Rate Limiting: 60 requests per minute per IP
-  const ip = request.headers.get("x-forwarded-for") || "unknown";
-  const limit = await checkRateLimit(`reply:${ip}`, 60, 60);
+  // Unified guard: auth + rate limit + x402 payment
+  const guard = await guardAgentEndpoint(request, {
+    rateKey: "reply",
+    rateLimit: 60,
+    rateWindow: 60,
+    priceKey: "reply", // x402 pricing from GAME_CONSTANTS
+    payload: body,
+  });
   
-  if (!limit.allowed) {
-    return NextResponse.json(
-      { error: "Too many requests. Please slow down." },
-      { status: 429 }
-    );
-  }
+  if (!guard.ok) return guard.response;
+  const { auth } = guard;
 
   try {
     const match = await gameManager.getMatch(matchId);
