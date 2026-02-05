@@ -14,7 +14,7 @@
  * - /api/game/register: Verify TX proof on server
  */
 
-import { createPublicClient, http, Address, getAddress, isAddress, toHex } from 'viem';
+import { createPublicClient, http, Address, getAddress, isAddress } from 'viem';
 import { arbitrum } from 'viem/chains';
 
 // ========== CONFIGURATION ==========
@@ -263,25 +263,27 @@ export async function verifyArbitrumTx(
 // ========== ENCODING / DECODING HELPERS ==========
 
 /**
- * Encode the registerForGame(uint256 fid) function call
+ * Encode the registerForGame() function call
  * 
- * Function signature: registerForGame(uint256)
- * Selector: keccak256("registerForGame(uint256)") = 0x3017f27c
+ * Function signature: registerForGame()
+ * Selector: keccak256("registerForGame()") = 0xdaeded60
+ * 
+ * NOTE: V3 contract takes no parameters - FID is verified off-chain by backend
  * 
  * EXPORTED: Used by useRegistrationFlow and requestArbitrumRegistrationTx
  */
-export function encodeRegisterFunctionCall(fid: number): string {
-  const SELECTOR = '0x3017f27c';
-  const encodedFid = toHex(fid, { size: 32 });
-  return (SELECTOR + encodedFid.slice(2)) as `0x${string}`;
+export function encodeRegisterFunctionCall(_fid?: number): string {
+  // V3 contract: registerForGame() takes no arguments
+  const SELECTOR = '0xdaeded60';
+  return SELECTOR as `0x${string}`;
 }
 
 /**
  * Verify TX input matches expected function call
  */
-function isValidRegisterFunctionCall(input: string, expectedFid: number): boolean {
+function isValidRegisterFunctionCall(input: string, _expectedFid?: number): boolean {
   try {
-    const expected = encodeRegisterFunctionCall(expectedFid);
+    const expected = encodeRegisterFunctionCall();
     return input.toLowerCase() === expected.toLowerCase();
   } catch {
     return false;
