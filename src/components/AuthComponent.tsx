@@ -124,22 +124,39 @@ export default function AuthComponent({
         let token: string | null = null;
         let inMiniApp = false;
 
-        // Try Quick Auth (only available in MiniApp)
-        try {
-          const result = await Promise.race([
-            sdk.quickAuth.getToken(),
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('timeout')), 2000)
-            )
-          ]);
-          
-          const quickAuthResult = result as { token?: string };
-          token = quickAuthResult?.token || null;
-          inMiniApp = !!token;
-        } catch {
-          // Not in MiniApp - will show web auth
-          inMiniApp = false;
-        }
+          // Try Quick Auth (only available in MiniApp)
+          try {
+            // Check if we're likely in a miniapp context first
+            const isPossiblyMiniApp = 
+              typeof window !== 'undefined' && (
+                window.parent !== window ||
+                navigator.userAgent.includes('Farcaster') ||
+                navigator.userAgent.includes('Warpcast') ||
+                document.referrer.includes('warpcast.com') ||
+                document.referrer.includes('farcaster.xyz')
+              );
+            
+            if (!isPossiblyMiniApp) {
+              // Skip Quick Auth entirely if we're clearly not in a miniapp
+              inMiniApp = false;
+            } else {
+              const result = await Promise.race([
+                sdk.quickAuth.getToken(),
+                new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error('timeout')), 2000)
+                )
+              ]);
+              
+              const quickAuthResult = result as { token?: string };
+              token = quickAuthResult?.token || null;
+              inMiniApp = !!token;
+            }
+          } catch (quickAuthErr) {
+            // Not in MiniApp or SDK error - will show web auth
+            // Suppress SDK internal errors (e.g., RpcResponse parsing failures)
+            console.log('[AuthComponent] Quick Auth unavailable:', quickAuthErr instanceof Error ? quickAuthErr.message : 'SDK error');
+            inMiniApp = false;
+          }
 
         // If in MiniApp and got token, authenticate
         if (inMiniApp && token) {
