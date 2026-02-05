@@ -14,13 +14,16 @@ export async function POST(request: Request) {
         const { action, state } = body;
 
         if (action === "transition" && state) {
-            // Load state from Redis first
-            await gameManager.getGameState();
+            // Force transition first, then get state for response
+            // Don't call getGameState before - it might trigger auto-transitions
             await gameManager.forceStateTransition(state);
+            // Wait a bit for Redis to sync
+            await new Promise(resolve => setTimeout(resolve, 100));
+            const gameState = await gameManager.getGameState();
             return NextResponse.json({
                 success: true,
                 message: `Game state transitioned to ${state}`,
-                gameState: await gameManager.getGameState(),
+                gameState,
             });
         }
 
