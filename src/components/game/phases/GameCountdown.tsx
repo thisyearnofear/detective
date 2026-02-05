@@ -12,6 +12,7 @@ export default function GameCountdown({ playerCount, onComplete }: Props) {
         const interval = setInterval(() => {
             setCount(prev => {
                 if (prev <= 1) {
+                    clearInterval(interval);
                     onComplete();
                     return 0;
                 }
