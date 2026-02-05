@@ -1,29 +1,13 @@
 /**
- * DetectiveGameEntry Smart Contract ABI
+ * DetectiveGameEntry V3 Smart Contract ABI
  * 
- * Deployed on Arbitrum One: 0xa879B5CbD12b6137fCcf70669D48F55666296357
- * Verified: https://arbitrum.blockscout.com/address/0xa879B5CbD12b6137fCcf70669D48F55666296357
+ * Deployed on Arbitrum One: [UPDATE AFTER DEPLOYMENT]
  * 
- * Purpose: Minimal proof-of-intent contract with multi-currency staking
- * - registerForGame(uint256 fid, uint256 nonce, uint256 deadline, bytes signature): 
- *     Register wallet with FID using signature verification
- * - stakeOnMatch(bytes32 matchId, bool isBot, uint256 deadline): 
- *     Stake native ETH/ARB on match outcome
- * - stakeOnMatchUSDC(bytes32 matchId, bool isBot, uint256 amount, uint256 deadline): 
- *     Stake USDC on match outcome
- * - submitVote(bytes32 matchId, bool isBot): 
- *     Submit vote without stake
- * 
- * Admin Functions:
- * - transferAdmin(address newAdmin): Transfer admin role
- * - setPaused(bool paused): Emergency pause/unpause
- * - setMinEntryFee(uint256 newFee): Update minimum entry fee
- * 
- * Security Features:
- * - Signature verification for FID registration (prevents spoofing)
- * - Deadline parameters prevent stale transactions
- * - Min/max stake limits prevent dust attacks and griefing
- * - Non-custodial: all funds forwarded directly to treasury
+ * Streamlined design:
+ * - Backend handles FID verification (off-chain)
+ * - Contract handles stake/vote integrity (on-chain)
+ * - Immutable treasury for trustlessness
+ * - Simple emergency escape hatch
  */
 
 export const DETECTIVE_GAME_ENTRY_ABI = [
@@ -37,21 +21,14 @@ export const DETECTIVE_GAME_ENTRY_ABI = [
   },
   {
     type: 'function',
-    name: 'MAX_STAKE_NATIVE',
-    inputs: [],
-    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    name: 'MAX_STAKE_USDC',
-    inputs: [],
-    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
     name: 'MIN_STAKE_NATIVE',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'MAX_STAKE_NATIVE',
     inputs: [],
     outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
     stateMutability: 'view',
@@ -63,7 +40,21 @@ export const DETECTIVE_GAME_ENTRY_ABI = [
     outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
     stateMutability: 'view',
   },
+  {
+    type: 'function',
+    name: 'MAX_STAKE_USDC',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+    stateMutability: 'view',
+  },
   // ============ State Variables ============
+  {
+    type: 'function',
+    name: 'treasury',
+    inputs: [],
+    outputs: [{ name: '', type: 'address', internalType: 'address' }],
+    stateMutability: 'view',
+  },
   {
     type: 'function',
     name: 'admin',
@@ -85,21 +76,7 @@ export const DETECTIVE_GAME_ENTRY_ABI = [
     outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
     stateMutability: 'view',
   },
-  {
-    type: 'function',
-    name: 'treasury',
-    inputs: [],
-    outputs: [{ name: '', type: 'address', internalType: 'address' }],
-    stateMutability: 'view',
-  },
   // ============ Mappings ============
-  {
-    type: 'function',
-    name: 'registeredFids',
-    inputs: [{ name: 'fid', type: 'uint256', internalType: 'uint256' }],
-    outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
-    stateMutability: 'view',
-  },
   {
     type: 'function',
     name: 'registeredWallets',
@@ -109,8 +86,21 @@ export const DETECTIVE_GAME_ENTRY_ABI = [
   },
   {
     type: 'function',
-    name: 'registrationNonces',
-    inputs: [{ name: 'fid', type: 'uint256', internalType: 'uint256' }],
+    name: 'hasVoted',
+    inputs: [
+      { name: 'matchId', type: 'bytes32', internalType: 'bytes32' },
+      { name: 'user', type: 'address', internalType: 'address' },
+    ],
+    outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'userStakes',
+    inputs: [
+      { name: 'matchId', type: 'bytes32', internalType: 'bytes32' },
+      { name: 'user', type: 'address', internalType: 'address' },
+    ],
     outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
     stateMutability: 'view',
   },
@@ -118,12 +108,7 @@ export const DETECTIVE_GAME_ENTRY_ABI = [
   {
     type: 'function',
     name: 'registerForGame',
-    inputs: [
-      { name: 'fid', type: 'uint256', internalType: 'uint256' },
-      { name: 'nonce', type: 'uint256', internalType: 'uint256' },
-      { name: 'deadline', type: 'uint256', internalType: 'uint256' },
-      { name: 'signature', type: 'bytes', internalType: 'bytes' },
-    ],
+    inputs: [],
     outputs: [],
     stateMutability: 'payable',
   },
@@ -182,14 +167,18 @@ export const DETECTIVE_GAME_ENTRY_ABI = [
     outputs: [],
     stateMutability: 'nonpayable',
   },
-  // ============ View Functions ============
   {
     type: 'function',
-    name: 'isFidRegistered',
-    inputs: [{ name: 'fid', type: 'uint256', internalType: 'uint256' }],
-    outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
-    stateMutability: 'view',
+    name: 'emergencyWithdraw',
+    inputs: [
+      { name: 'token', type: 'address', internalType: 'address' },
+      { name: 'to', type: 'address', internalType: 'address' },
+      { name: 'amount', type: 'uint256', internalType: 'uint256' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
   },
+  // ============ View Functions ============
   {
     type: 'function',
     name: 'isWalletRegistered',
@@ -199,9 +188,46 @@ export const DETECTIVE_GAME_ENTRY_ABI = [
   },
   {
     type: 'function',
-    name: 'getRegistrationNonce',
-    inputs: [{ name: 'fid', type: 'uint256', internalType: 'uint256' }],
+    name: 'hasUserVoted',
+    inputs: [
+      { name: 'matchId', type: 'bytes32', internalType: 'bytes32' },
+      { name: 'user', type: 'address', internalType: 'address' },
+    ],
+    outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getUserStake',
+    inputs: [
+      { name: 'matchId', type: 'bytes32', internalType: 'bytes32' },
+      { name: 'user', type: 'address', internalType: 'address' },
+    ],
     outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getStakeLimits',
+    inputs: [],
+    outputs: [
+      { name: 'minNative', type: 'uint256', internalType: 'uint256' },
+      { name: 'maxNative', type: 'uint256', internalType: 'uint256' },
+      { name: 'minUsdc', type: 'uint256', internalType: 'uint256' },
+      { name: 'maxUsdc', type: 'uint256', internalType: 'uint256' },
+    ],
+    stateMutability: 'pure',
+  },
+  {
+    type: 'function',
+    name: 'getContractInfo',
+    inputs: [],
+    outputs: [
+      { name: '_treasury', type: 'address', internalType: 'address' },
+      { name: '_admin', type: 'address', internalType: 'address' },
+      { name: '_isPaused', type: 'bool', internalType: 'bool' },
+      { name: '_minEntryFee', type: 'uint256', internalType: 'uint256' },
+    ],
     stateMutability: 'view',
   },
   // ============ Events ============
@@ -210,9 +236,7 @@ export const DETECTIVE_GAME_ENTRY_ABI = [
     name: 'PlayerRegistered',
     inputs: [
       { name: 'wallet', type: 'address', indexed: true, internalType: 'address' },
-      { name: 'fid', type: 'uint256', indexed: true, internalType: 'uint256' },
       { name: 'timestamp', type: 'uint256', indexed: false, internalType: 'uint256' },
-      { name: 'nonce', type: 'uint256', indexed: false, internalType: 'uint256' },
     ],
   },
   {
@@ -223,17 +247,7 @@ export const DETECTIVE_GAME_ENTRY_ABI = [
       { name: 'matchId', type: 'bytes32', indexed: true, internalType: 'bytes32' },
       { name: 'isBot', type: 'bool', indexed: false, internalType: 'bool' },
       { name: 'amount', type: 'uint256', indexed: false, internalType: 'uint256' },
-    ],
-  },
-  {
-    type: 'event',
-    name: 'StakePlacedERC20',
-    inputs: [
-      { name: 'wallet', type: 'address', indexed: true, internalType: 'address' },
-      { name: 'matchId', type: 'bytes32', indexed: true, internalType: 'bytes32' },
-      { name: 'isBot', type: 'bool', indexed: false, internalType: 'bool' },
-      { name: 'token', type: 'address', indexed: false, internalType: 'address' },
-      { name: 'amount', type: 'uint256', indexed: false, internalType: 'uint256' },
+      { name: 'isNative', type: 'bool', indexed: false, internalType: 'bool' },
     ],
   },
   {
@@ -267,6 +281,15 @@ export const DETECTIVE_GAME_ENTRY_ABI = [
       { name: 'newFee', type: 'uint256', indexed: false, internalType: 'uint256' },
     ],
   },
+  {
+    type: 'event',
+    name: 'EmergencyWithdrawal',
+    inputs: [
+      { name: 'token', type: 'address', indexed: true, internalType: 'address' },
+      { name: 'to', type: 'address', indexed: true, internalType: 'address' },
+      { name: 'amount', type: 'uint256', indexed: false, internalType: 'uint256' },
+    ],
+  },
   // ============ Errors ============
   {
     type: 'error',
@@ -276,11 +299,6 @@ export const DETECTIVE_GAME_ENTRY_ABI = [
   {
     type: 'error',
     name: 'InvalidAddress',
-    inputs: [],
-  },
-  {
-    type: 'error',
-    name: 'InvalidFID',
     inputs: [],
   },
   {
@@ -315,17 +333,22 @@ export const DETECTIVE_GAME_ENTRY_ABI = [
   },
   {
     type: 'error',
-    name: 'FIDAlreadyRegistered',
+    name: 'AlreadyRegistered',
     inputs: [],
   },
   {
     type: 'error',
-    name: 'WalletAlreadyRegistered',
+    name: 'NotRegistered',
     inputs: [],
   },
   {
     type: 'error',
-    name: 'InvalidSignature',
+    name: 'AlreadyVoted',
+    inputs: [],
+  },
+  {
+    type: 'error',
+    name: 'AlreadyStaked',
     inputs: [],
   },
   {
@@ -352,55 +375,48 @@ export const DETECTIVE_GAME_ENTRY_ABI = [
 
 // Contract addresses by network
 export const DETECTIVE_GAME_ENTRY_ADDRESSES = {
-  arbitrumOne: '0xa879B5CbD12b6137fCcf70669D48F55666296357' as const,
+  arbitrumOne: '0x0000000000000000000000000000000000000000' as const, // Update after deployment
   arbitrumSepolia: '0x0000000000000000000000000000000000000000' as const, // Update after testnet deployment
 } as const;
 
-// Default to mainnet
+// Default to mainnet (update after deployment)
 export const CONTRACT_ADDRESS = DETECTIVE_GAME_ENTRY_ADDRESSES.arbitrumOne;
 
 // Stake limits for client-side validation
 export const STAKE_LIMITS = {
   native: {
-    min: '100000000000000', // 0.0001 ETH in wei
-    max: '100000000000000000', // 0.1 ETH in wei
+    min: '100000000000000',     // 0.0001 ETH in wei
+    max: '100000000000000000',  // 0.1 ETH in wei
   },
   usdc: {
-    min: 1000000, // 1 USDC (6 decimals)
+    min: 1000000,   // 1 USDC (6 decimals)
     max: 100000000, // 100 USDC (6 decimals)
   },
-} as const;
-
-// EIP-712 Domain for signature verification
-export const REGISTRATION_DOMAIN = {
-  name: 'DetectiveGame',
-  version: '1',
-  chainId: 42161, // Arbitrum One
 } as const;
 
 // Types for TypeScript
 export type DetectiveGameEntryEvents = 
   | 'PlayerRegistered'
   | 'StakePlaced'
-  | 'StakePlacedERC20'
   | 'VoteSubmitted'
   | 'AdminTransferred'
   | 'PauseStatusChanged'
-  | 'MinEntryFeeUpdated';
+  | 'MinEntryFeeUpdated'
+  | 'EmergencyWithdrawal';
 
 export type DetectiveGameEntryErrors =
   | 'ContractPaused'
   | 'InvalidAddress'
-  | 'InvalidFID'
   | 'InvalidAmount'
   | 'InvalidMatchId'
   | 'InvalidDeadline'
   | 'StakeTooHigh'
   | 'StakeTooLow'
   | 'InsufficientFee'
-  | 'FIDAlreadyRegistered'
-  | 'WalletAlreadyRegistered'
-  | 'InvalidSignature'
+  | 'AlreadyRegistered'
+  | 'NotRegistered'
+  | 'AlreadyVoted'
+  | 'AlreadyStaked'
   | 'ExpiredDeadline'
   | 'NotAdmin'
   | 'TransferFailed'
