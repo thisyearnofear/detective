@@ -95,6 +95,7 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
     mutate,
   } = useSWR(`/api/match/active?fid=${fid}`, fetcherWithGameNotLive, {
     refreshInterval,
+    dedupingInterval: 2000, // Prevent duplicate requests within 2s window
     refreshWhenHidden: true, // Mobile: Keep polling when app backgrounded
     revalidateOnFocus: true, // Mobile: Refresh when user returns
     keepPreviousData: true,
