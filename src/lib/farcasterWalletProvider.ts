@@ -48,16 +48,25 @@ export async function getEthereumProvider(): Promise<EthereumProvider | null> {
     console.log('[FarcasterWalletProvider] Attempting Farcaster SDK wallet...');
     const provider = await miniApp.wallet.getEthereumProvider();
     
-    if (provider) {
+    if (provider && typeof provider.request === 'function') {
       console.log('[FarcasterWalletProvider] ✓ Farcaster SDK wallet available');
       cachedProvider = provider as EthereumProvider;
       cacheTime = now;
       return cachedProvider;
     } else {
-      console.log('[FarcasterWalletProvider] Farcaster SDK returned null, trying fallback');
+      console.log('[FarcasterWalletProvider] Farcaster SDK returned invalid provider, trying fallback');
     }
-  } catch (error) {
-    console.log('[FarcasterWalletProvider] Farcaster SDK unavailable, trying fallback:', error);
+  } catch (error: any) {
+    // Check for SDK internal errors that indicate the SDK isn't ready
+    const errorMessage = error?.message || String(error);
+    if (
+      errorMessage.includes('RpcResponse') ||
+      errorMessage.includes("Cannot read properties of undefined")
+    ) {
+      console.log('[FarcasterWalletProvider] Farcaster SDK not ready, skipping to fallback');
+    } else {
+      console.log('[FarcasterWalletProvider] Farcaster SDK unavailable, trying fallback:', error);
+    }
   }
 
   // Fallback to window.ethereum (MetaMask, etc.)
@@ -99,10 +108,45 @@ export async function requestAccounts(): Promise<string[] | null> {
     console.log('[FarcasterWalletProvider] Accounts requested:', accounts);
     return accounts;
   } catch (error: any) {
+    // Handle user rejection
     if (error.code === 4001) {
       console.warn('[FarcasterWalletProvider] User rejected account access');
       return null;
     }
+    
+    // Handle Farcaster SDK internal RPC errors (e.g., RpcResponse.InternalErrorError)
+    // These occur when the SDK's response parsing fails due to unexpected response format
+    const errorMessage = error?.message || String(error);
+    if (
+      errorMessage.includes('RpcResponse') ||
+      errorMessage.includes("Cannot read properties of undefined (reading 'error')") ||
+      errorMessage.includes("Cannot read properties of undefined (reading 'result')")
+    ) {
+      console.warn('[FarcasterWalletProvider] Farcaster SDK RPC parsing error, resetting and retrying...');
+      
+      // Reset cache and try fallback to window.ethereum if available
+      cachedProvider = null;
+      cacheTime = 0;
+      
+      if (typeof window !== 'undefined' && (window as any).ethereum) {
+        console.log('[FarcasterWalletProvider] Retrying with window.ethereum fallback');
+        try {
+          const fallbackAccounts = await (window as any).ethereum.request({
+            method: 'eth_requestAccounts',
+          });
+          if (fallbackAccounts && fallbackAccounts.length > 0) {
+            console.log('[FarcasterWalletProvider] Fallback accounts:', fallbackAccounts);
+            return fallbackAccounts;
+          }
+        } catch (fallbackError: any) {
+          console.warn('[FarcasterWalletProvider] Fallback also failed:', fallbackError.message);
+        }
+      }
+      
+      // If we're in Farcaster context but SDK failed, provide a clearer error
+      throw new Error('Wallet connection failed. Please try refreshing the app or reconnecting your wallet.');
+    }
+    
     throw error;
   }
 }

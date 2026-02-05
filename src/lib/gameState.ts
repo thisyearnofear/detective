@@ -230,6 +230,7 @@ class GameManager {
         this.state!.registrationEnds = stateMeta.registrationEnds;
         this.state!.gameEnds = stateMeta.gameEnds;
         this.state!.finishedAt = stateMeta.finishedAt;
+        this.state!.config = stateMeta.config || this.state!.config;
       }
       getRepository().invalidateAll();
       // Mark version as read to prevent re-invalidation on subsequent requests

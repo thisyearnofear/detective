@@ -1,0 +1,225 @@
+2026-02-05T21:47:54.468Z [console][error] Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'result')
+2026-02-05T21:48:17.464Z [console][error] %c%s%c  [33m[1m⚠[22m[39m metadataBase property in metadata export is not set for resolving social open graph or twitter images, using "http://localhost:3000". See https://nextjs.org/docs/app/api-reference/functions/generate-metadata#metadatabase background: #e6e6e6;background: light-dark(rgba(0,0,0,0.1), rgba(255,255,255,0.25));color: #000000;color: light-dark(#000000, #ffffff);border-radius: 2px  Server  
+2026-02-05T21:48:18.415Z [console][error] Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'result')
+2026-02-05T21:48:29.766Z [console][error] Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'result')
+2026-02-05T21:52:31.876Z [console][error] %c%s%c  [33m[1m⚠[22m[39m metadataBase property in metadata export is not set for resolving social open graph or twitter images, using "http://localhost:3000". See https://nextjs.org/docs/app/api-reference/functions/generate-metadata#metadatabase background: #e6e6e6;background: light-dark(rgba(0,0,0,0.1), rgba(255,255,255,0.25));color: #000000;color: light-dark(#000000, #ffffff);border-radius: 2px  Server  
+2026-02-05T21:52:32.736Z [console][error] Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'result')
+2026-02-05T21:52:45.879Z [console][error] [useRegistrationFlow] Registration error: RpcResponse.InternalErrorError: Cannot read properties of undefined (reading 'error')
+2026-02-05T21:54:14.115Z [console][error] A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+%s%s https://react.dev/link/hydration-mismatch 
+
+  ...
+    <HotReload assetPrefix="" globalError={[...]}>
+      <AppDevOverlayErrorBoundary globalError={[...]}>
+        <ReplaySsrOnlyErrors>
+        <DevRootHTTPAccessFallbackBoundary>
+          <HTTPAccessFallbackBoundary notFound={<NotAllowedRootHTTPFallbackError>}>
+            <HTTPAccessFallbackErrorBoundary pathname="/" notFound={<NotAllowedRootHTTPFallbackError>} ...>
+              <RedirectBoundary>
+                <RedirectErrorBoundary router={{...}}>
+                  <Head>
+                  <__next_root_layout_boundary__>
+                    <SegmentViewNode type="layout" pagePath="layout.tsx">
+                      <SegmentTrieNode>
+                      <link>
+                      <RootLayout>
+                        <html lang="en">
+                          <head>
+                          <body className="text-white">
+                            ...
+                              <SegmentViewNode type="page" pagePath="page.tsx">
+                                <SegmentTrieNode>
+                                <ClientPageRoot Component={function Home} searchParams={{}} params={{}}>
+                                  <Home params={Promise} searchParams={Promise}>
+                                    <div
+                                      className="min-h-screen flex items-center justify-center relative"
+-                                     data-orchid-ref="ref-0mgqh54110"
+                                    >
+                                      <div
+                                        className="text-center"
+-                                       data-orchid-ref="ref-yxyitnp4h5"
+                                      >
+                                        <SpinningDetective size="xl" className="mb-6">
+                                          <div
+                                            className="inline-block mb-6"
+-                                           data-orchid-ref="ref-9r5hvlphcq"
+                                          >
+                                            <img
+                                              src="/detective.png"
+                                              alt="Detective"
+                                              className="w-32 h-32 animate-flip-rotate object-contain"
+                                              style={{filter:"drop-shado..."}}
+-                                             data-orchid-ref="ref-03clrmzn14"
+                                            >
+                                        <h1
+                                          className="hero-title text-3xl font-black text-stroke"
+-                                         data-orchid-ref="ref-ar8xw6h3wa"
+                                        >
++                                         🔍 Detective
+                                        <p
+                                          className="text-gray-400 text-sm"
+-                                         data-orchid-ref="ref-ka0zfvxxps"
+                                        >
++                                         Loading...
+                            <svg
+                              className="svg-filters"
+                              xmlns="http://www.w3.org/2000/svg"
+                              version="1.1"
+-                             data-orch... [truncated]
+2026-02-05T21:54:32.051Z [console][error] %c%s%c  [33m[1m⚠[22m[39m metadataBase property in metadata export is not set for resolving social open graph or twitter images, using "http://localhost:3000". See https://nextjs.org/docs/app/api-reference/functions/generate-metadata#metadatabase background: #e6e6e6;background: light-dark(rgba(0,0,0,0.1), rgba(255,255,255,0.25));color: #000000;color: light-dark(#000000, #ffffff);border-radius: 2px  Server  
+2026-02-05T21:54:14.116Z [console][error] A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+%s%s https://react.dev/link/hydration-mismatch 
+
+  ...
+    <HotReload assetPrefix="" globalError={[...]}>
+      <AppDevOverlayErrorBoundary globalError={[...]}>
+        <ReplaySsrOnlyErrors>
+        <DevRootHTTPAccessFallbackBoundary>
+          <HTTPAccessFallbackBoundary notFound={<NotAllowedRootHTTPFallbackError>}>
+            <HTTPAccessFallbackErrorBoundary pathname="/" notFound={<NotAllowedRootHTTPFallbackError>} ...>
+              <RedirectBoundary>
+                <RedirectErrorBoundary router={{...}}>
+                  <Head>
+                  <__next_root_layout_boundary__>
+                    <SegmentViewNode type="layout" pagePath="layout.tsx">
+                      <SegmentTrieNode>
+                      <link>
+                      <RootLayout>
+                        <html lang="en">
+                          <head>
+                          <body className="text-white">
+                            ...
+                              <SegmentViewNode type="page" pagePath="page.tsx">
+                                <SegmentTrieNode>
+                                <ClientPageRoot Component={function Home} searchParams={{}} params={{}}>
+                                  <Home params={Promise} searchParams={Promise}>
+                                    <div
+                                      className="min-h-screen flex items-center justi...
+2026-02-05T21:54:14.115Z [console][error] A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+%s%s https://react.dev/link/hydration-mismatch 
+
+  ...
+    <HotReload assetPrefix="" globalError={[...]}>
+      <AppDevOverlayErrorBoundary globalError={[...]}>
+        <ReplaySsrOnlyErrors>
+        <DevRootHTTPAccessFallbackBoundary>
+          <HTTPAccessFallbackBoundary notFound={<NotAllowedRootHTTPFallbackError>}>
+            <HTTPAccessFallbackErrorBoundary pathname="/" notFound={<NotAllowedRootHTTPFallbackError>} ...>
+              <RedirectBoundary>
+                <RedirectErrorBoundary router={{...}}>
+                  <Head>
+                  <__next_root_layout_boundary__>
+                    <SegmentViewNode type="layout" pagePath="layout.tsx">
+                      <SegmentTrieNode>
+                      <link>
+                      <RootLayout>
+                        <html lang="en">
+                          <head>
+                          <body className="text-white">
+                            ...
+                              <SegmentViewNode type="page" pagePath="page.tsx">
+                                <SegmentTrieNode>
+                                <ClientPageRoot Component={function Home} searchParams={{}} params={{}}>
+                                  <Home params={Promise} searchParams={Promise}>
+                                    <div
+                                      className="min-h-screen flex items-center justify-center relative"
+-                                     data-orchid-ref="ref-0mgqh54110"
+                                    >
+                                      <div
+                                        className="text-center"
+-                                       data-orchid-ref="ref-yxyitnp4h5"
+                                      >
+                                        <SpinningDetective size="xl" className="mb-6">
+                                          <div
+                                            className="inline-block mb-6"
+-                                           data-orchid-ref="ref-9r5hvlphcq"
+                                          >
+                                            <img
+                                              src="/detective.png"
+                                              alt="Detective"
+                                              className="w-32 h-32 animate-flip-rotate object-contain"
+                                              style={{filter:"drop-shado..."}}
+-                                             data-orchid-ref="ref-03clrmzn14"
+                                            >
+                                        <h1
+                                          className="hero-title text-3xl font-black text-stroke"
+-                                         data-orchid-ref="ref-ar8xw6h3wa"
+                                        >
++                                         🔍 Detective
+                                        <p
+                                          className="text-gray-400 text-sm"
+-                                         data-orchid-ref="ref-ka0zfvxxps"
+                                        >
++                                         Loading...
+                            <svg
+                              className="svg-filters"
+                              xmlns="http://www.w3.org/2000/svg"
+                              version="1.1"
+-                             data-orch... [truncated]
+2026-02-05T21:54:32.051Z [console][error] %c%s%c  [33m[1m⚠[22m[39m metadataBase property in metadata export is not set for resolving social open graph or twitter images, using "http://localhost:3000". See https://nextjs.org/docs/app/api-reference/functions/generate-metadata#metadatabase background: #e6e6e6;background: light-dark(rgba(0,0,0,0.1), rgba(255,255,255,0.25));color: #000000;color: light-dark(#000000, #ffffff);border-radius: 2px  Server  
+2026-02-05T21:54:54.239Z [console][error] %c%s%c  [33m[1m⚠[22m[39m metadataBase property in metadata export is not set for resolving social open graph or twitter images, using "http://localhost:3000". See https://nextjs.org/docs/app/api-reference/functions/generate-metadata#metadatabase background: #e6e6e6;background: light-dark(rgba(0,0,0,0.1), rgba(255,255,255,0.25));color: #000000;color: light-dark(#000000, #ffffff);border-radius: 2px  Server  
+2026-02-05T21:55:20.699Z [console][error] %c%s%c  [33m[1m⚠[22m[39m metadataBase property in metadata export is not set for resolving social open graph or twitter images, using "http://localhost:3000". See https://nextjs.org/docs/app/api-reference/functions/generate-metadata#metadatabase background: #e6e6e6;background: light-dark(rgba(0,0,0,0.1), rgba(255,255,255,0.25));color: #000000;color: light-dark(#000000, #ffffff);border-radius: 2px  Server  
+2026-02-05T21:54:14.116Z [console][error] A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+%s%s https://react.dev/link/hydration-mismatch 
+
+  ...
+    <HotReload assetPrefix="" globalError={[...]}>
+      <AppDevOverlayErrorBoundary globalError={[...]}>
+        <ReplaySsrOnlyErrors>
+        <DevRootHTTPAccessFallbackBoundary>
+          <HTTPAccessFallbackBoundary notFound={<NotAllowedRootHTTPFallbackError>}>
+            <HTTPAccessFallbackErrorBoundary pathname="/" notFound={<NotAllowedRootHTTPFallbackError>} ...>
+              <RedirectBoundary>
+                <RedirectErrorBoundary router={{...}}>
+                  <Head>
+                  <__next_root_layout_boundary__>
+                    <SegmentViewNode type="layout" pagePath="layout.tsx">
+                      <SegmentTrieNode>
+                      <link>
+                      <RootLayout>
+                        <html lang="en">
+                          <head>
+                          <body className="text-white">
+                            ...
+                              <SegmentViewNode type="page" pagePath="page.tsx">
+                                <SegmentTrieNode>
+                                <ClientPageRoot Component={function Home} searchParams={{}} params={{}}>
+                                  <Home params={Promise} searchParams={Promise}>
+                                    <div
+                                      className="min-h-screen flex items-center justi...
