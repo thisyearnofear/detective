@@ -57,6 +57,8 @@ export interface DbMatch {
     vote_speed_ms: number | null;
     messages: any[];
     staked_amount: string | null;
+    stake_currency: "NATIVE" | "USDC" | null;
+    stake_tx_hash: string | null;
     payout_amount: string | null;
     started_at: Date;
     ended_at: Date;
@@ -267,6 +269,12 @@ class PostgresDatabase {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'player_stats' AND column_name = 'deception_accuracy') THEN
           ALTER TABLE player_stats ADD COLUMN deception_accuracy DECIMAL(5,2) DEFAULT 0;
         END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'matches' AND column_name = 'stake_currency') THEN
+          ALTER TABLE matches ADD COLUMN stake_currency VARCHAR(10);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'matches' AND column_name = 'stake_tx_hash') THEN
+          ALTER TABLE matches ADD COLUMN stake_tx_hash VARCHAR(255);
+        END IF;
       END $$;
     `);
 
@@ -302,22 +310,24 @@ class PostgresDatabase {
             `INSERT INTO matches (
         id, cycle_id, player_fid, opponent_fid, opponent_type,
         slot_number, round_number, vote, is_correct, vote_changes,
-        vote_speed_ms, messages, staked_amount, payout_amount, 
-        started_at, ended_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        vote_speed_ms, messages, staked_amount, stake_currency, stake_tx_hash,
+        payout_amount, started_at, ended_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
       ON CONFLICT (id) DO UPDATE SET
         vote = EXCLUDED.vote,
         is_correct = EXCLUDED.is_correct,
         vote_changes = EXCLUDED.vote_changes,
         vote_speed_ms = EXCLUDED.vote_speed_ms,
         messages = EXCLUDED.messages,
+        stake_currency = EXCLUDED.stake_currency,
+        stake_tx_hash = EXCLUDED.stake_tx_hash,
         payout_amount = EXCLUDED.payout_amount`,
             [
                 match.id, match.cycle_id, match.player_fid, match.opponent_fid,
                 match.opponent_type, match.slot_number, match.round_number,
                 match.vote, match.is_correct, match.vote_changes, match.vote_speed_ms,
-                JSON.stringify(match.messages), match.staked_amount, match.payout_amount,
-                match.started_at, match.ended_at
+                JSON.stringify(match.messages), match.staked_amount, match.stake_currency,
+                match.stake_tx_hash, match.payout_amount, match.started_at, match.ended_at
             ]
         );
     }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
-import { validateAgentRequest, unauthorizedResponse, checkRateLimit } from "@/lib/agentAuth";
+import { guardAgentEndpoint } from "@/lib/agentAuth";
 
 export const dynamic = 'force-dynamic';
 
@@ -9,24 +9,20 @@ export const dynamic = 'force-dynamic';
  * 
  * Returns a list of active matches where it is an external bot's turn to reply.
  * Optional query param: ?fid=<bot_fid> to filter for a specific bot.
+ * 
+ * x402: Requires USDC payment when NEXT_PUBLIC_X402_ENABLED=true
  */
 export async function GET(request: NextRequest) {
-  // 1. Authenticate Request
-  const auth = await validateAgentRequest(request);
-  if (!auth.authorized) {
-    return unauthorizedResponse();
-  }
-
-  // 2. Rate Limiting: 60 requests per minute per IP
-  const ip = request.headers.get("x-forwarded-for") || "unknown";
-  const limit = await checkRateLimit(`pending:${ip}`, 60, 60);
+  // Unified guard: auth + rate limit + x402 payment
+  const guard = await guardAgentEndpoint(request, {
+    rateKey: "pending",
+    rateLimit: 60,
+    rateWindow: 60,
+    priceKey: "pending", // x402 pricing from GAME_CONSTANTS
+  });
   
-  if (!limit.allowed) {
-    return NextResponse.json(
-      { error: "Too many requests. Please slow down." },
-      { status: 429 }
-    );
-  }
+  if (!guard.ok) return guard.response;
+  const { auth } = guard;
 
   const searchParams = request.nextUrl.searchParams;
   const targetFid = searchParams.get("fid") ? parseInt(searchParams.get("fid")!, 10) : null;
