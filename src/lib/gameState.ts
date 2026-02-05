@@ -775,8 +775,11 @@ class GameManager {
     this.state!.state = newState;
 
     if (newState === "REGISTRATION") {
-      this.state!.registrationEnds = now + REGISTRATION_COUNTDOWN;
-      this.state!.gameEnds = now + GAME_DURATION;
+      // Set far-future timestamps to prevent auto-transition
+      // Countdown only starts when MIN_PLAYERS join
+      this.state!.registrationEnds = now + 999999999;
+      this.state!.gameEnds = now + 999999999;
+      this.state!.finishedAt = undefined;
     } else if (newState === "LIVE") {
       this.state!.registrationEnds = now - 1;
       this.state!.gameEnds = now + GAME_DURATION;
@@ -1188,7 +1191,7 @@ class GameManager {
   }
 
   private async updateCycleState(): Promise<void> {
-   // Load latest metadata from Redis (minimal read, not full collections yet)
+   // Load latest metadata from Redis (read-only, no auto-transitions)
    const stateMeta = await persistence.loadGameStateMeta();
    if (stateMeta) {
      this.state!.state = stateMeta.state;
@@ -1196,26 +1199,58 @@ class GameManager {
      this.state!.gameEnds = stateMeta.gameEnds;
      this.state!.finishedAt = stateMeta.finishedAt;
    }
+   // NOTE: Auto-transitions disabled - use explicit API calls or cron job
+   // See tickGameState() for explicit transition logic
+  }
 
-   const now = Date.now();
+  /**
+   * Explicit game state tick - call this from a cron job or dedicated endpoint
+   * Handles all phase transitions in one place
+   */
+  async tickGameState(): Promise<{ transitioned: boolean; from?: string; to?: string }> {
+    await this.ensureInitialized();
+    
+    const stateMeta = await persistence.loadGameStateMeta();
+    if (stateMeta) {
+      this.state!.state = stateMeta.state;
+      this.state!.registrationEnds = stateMeta.registrationEnds;
+      this.state!.gameEnds = stateMeta.gameEnds;
+      this.state!.finishedAt = stateMeta.finishedAt;
+    }
+    
+    // Load players for countdown check
+    const players = await getRepository().getPlayers();
+    this.state!.players = players;
+    
+    const now = Date.now();
+    const currentState = this.state!.state;
 
     // REGISTRATION -> LIVE (two-phase: countdown start, then transition)
     if (this.state!.state === "REGISTRATION") {
       await this.handleRegistrationPhase(now);
+      if (this.state!.state !== currentState) {
+        return { transitioned: true, from: currentState, to: this.state!.state };
+      }
     }
 
     // FINISHED -> REGISTRATION (auto-cycle with version-based atomicity)
     if (this.state!.state === "FINISHED") {
       await this.handleFinishedPhase(now);
-      return;
+      if (this.state!.state !== currentState) {
+        return { transitioned: true, from: currentState, to: this.state!.state };
+      }
     }
 
     // LIVE -> FINISHED: Timer expired = game over
     if (this.state!.state === "LIVE" && now > this.state!.gameEnds) {
       await this.handleLiveToFinished(now);
-      return;
+      if (this.state!.state !== currentState) {
+        return { transitioned: true, from: currentState, to: this.state!.state };
+      }
     }
-    }
+    
+    return { transitioned: false };
+  }
 
   private async cleanupOldMatches(): Promise<void> {
     const now = Date.now();

@@ -3,7 +3,7 @@
  * Consolidated Game Status API
  * 
  * Returns combined game state, phase info, and player list in a single request.
- * This consolidates what would normally be 2-3 separate polling requests.
+ * Also triggers game state tick for phase transitions (client-driven).
  * 
  * Usage: /api/game/status?cycleId=xxx&fid=yyy
  */
@@ -16,6 +16,9 @@ export async function GET(request: Request) {
      const { searchParams } = new URL(request.url);
      const fidParam = searchParams.get("fid");
 
+     // Tick game state for phase transitions (idempotent, handles its own rate limiting)
+     await gameManager.tickGameState();
+     
      const gameState = await gameManager.getGameState();
      
      // gameState() already loads players via repository, so we have fresh player count
