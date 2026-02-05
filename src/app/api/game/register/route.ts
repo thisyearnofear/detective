@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
 import { getFarcasterUserData } from "@/lib/neynar";
-import { verifyArbitrumTx, getArbitrumConfig } from "@/lib/arbitrumVerification";
+import { verifyArbitrumTx, getArbitrumConfig, isWalletRegisteredOnChain } from "@/lib/arbitrumVerification";
 import { db } from "@/lib/database";
 
 /**
@@ -70,19 +70,53 @@ export async function POST(request: Request) {
         );
       }
 
-      // Check: TX hash not already used (replay attack prevention)
-      console.log('[Registration] Checking for existing TX hash...');
-      const existingReg = await db.getRegistrationByTxHash(gameState.cycleId, arbitrumTxHash);
-      if (existingReg) {
-        console.log(`[Registration] TX hash already used: ${arbitrumTxHash}`);
-        return NextResponse.json(
-          { error: "This transaction has already been used for registration." },
-          { status: 403 }
-        );
-      }
-      console.log('[Registration] ✓ TX hash not previously used');
+      // Check if using "already-registered" flow (wallet registered on-chain previously)
+      const isAlreadyRegisteredFlow = arbitrumTxHash === 'already-registered';
+      
+      if (isAlreadyRegisteredFlow) {
+        // Verify wallet is actually registered on-chain
+        console.log('[Registration] Already-registered flow, verifying wallet on-chain...');
+        const walletRegistered = await isWalletRegisteredOnChain(arbitrumWalletAddress);
+        if (!walletRegistered) {
+          console.error('[Registration] Wallet not registered on-chain despite claim');
+          return NextResponse.json(
+            { error: "Wallet is not registered on-chain. Please complete registration transaction." },
+            { status: 403 }
+          );
+        }
+        console.log('[Registration] ✓ Wallet verified on-chain (already registered)');
+      } else {
+        // Normal flow: verify new TX
+        // Check: TX hash not already used (replay attack prevention)
+        console.log('[Registration] Checking for existing TX hash...');
+        const existingReg = await db.getRegistrationByTxHash(gameState.cycleId, arbitrumTxHash);
+        if (existingReg) {
+          console.log(`[Registration] TX hash already used: ${arbitrumTxHash}`);
+          return NextResponse.json(
+            { error: "This transaction has already been used for registration." },
+            { status: 403 }
+          );
+        }
+        console.log('[Registration] ✓ TX hash not previously used');
 
-      // Check: FID not already registered for this game
+        // Verify TX on-chain
+        console.log('[Registration] Calling verifyArbitrumTx...');
+        const txValid = await verifyArbitrumTx(arbitrumTxHash, arbitrumWalletAddress, fid);
+        console.log('[Registration] verifyArbitrumTx returned:', txValid);
+        if (!txValid) {
+          return NextResponse.json(
+            {
+              error: "Arbitrum TX verification failed. Please check that the transaction was sent to the correct contract with the correct FID.",
+              txHash: arbitrumTxHash,
+            },
+            { status: 403 }
+          );
+        }
+
+        console.log(`[Registration] Arbitrum TX verified for FID ${fid}: ${arbitrumTxHash}`);
+      }
+
+      // Check: FID not already registered for this game cycle
       console.log('[Registration] Checking if FID already registered...');
       const fidReg = await db.getRegistrationByFid(gameState.cycleId, fid);
       if (fidReg) {
@@ -92,23 +126,7 @@ export async function POST(request: Request) {
           { status: 403 }
         );
       }
-      console.log('[Registration] ✓ FID not previously registered');
-
-      // Verify TX on-chain
-      console.log('[Registration] Calling verifyArbitrumTx...');
-      const txValid = await verifyArbitrumTx(arbitrumTxHash, arbitrumWalletAddress, fid);
-      console.log('[Registration] verifyArbitrumTx returned:', txValid);
-      if (!txValid) {
-        return NextResponse.json(
-          {
-            error: "Arbitrum TX verification failed. Please check that the transaction was sent to the correct contract with the correct FID.",
-            txHash: arbitrumTxHash,
-          },
-          { status: 403 }
-        );
-      }
-
-      console.log(`[Registration] Arbitrum TX verified for FID ${fid}: ${arbitrumTxHash}`);
+      console.log('[Registration] ✓ FID not previously registered for this cycle');
 
       // Record registration in database
       try {

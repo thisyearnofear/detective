@@ -92,30 +92,41 @@ export function useRegistrationFlow(): UseRegistrationFlowReturn {
           throw new Error('User FID not found');
         }
 
-        const { getArbitrumConfig, encodeRegisterFunctionCall } = await import('@/lib/arbitrumVerification');
+        const { getArbitrumConfig, encodeRegisterFunctionCall, isWalletRegisteredOnChain } = await import('@/lib/arbitrumVerification');
         const config = getArbitrumConfig();
-        const encodedData = encodeRegisterFunctionCall(fid);
-        const txHash = await sendTransaction({
-          from: userAddress,
-          to: config.contractAddress,
-          value: '0x0',
-          data: encodedData,
-          gas: '0x186a0',
-        });
+        
+        // Check if wallet is already registered on-chain
+        const alreadyRegistered = await isWalletRegisteredOnChain(userAddress);
+        let txHash: string;
+        
+        if (alreadyRegistered) {
+          console.log('[useRegistrationFlow] Wallet already registered on-chain, skipping TX');
+          // Use a placeholder hash to indicate already registered
+          txHash = 'already-registered';
+        } else {
+          const encodedData = encodeRegisterFunctionCall(fid);
+          txHash = await sendTransaction({
+            from: userAddress,
+            to: config.contractAddress,
+            value: '0x0',
+            data: encodedData,
+            gas: '0x186a0',
+          });
 
-        if (!txHash) {
-          throw new Error('Failed to get transaction hash from wallet');
+          if (!txHash) {
+            throw new Error('Failed to get transaction hash from wallet');
+          }
+          
+          setCurrentStep('confirming');
+          const { isFarcasterMiniApp } = await import('@/lib/farcasterAuth');
+          if (!isFarcasterMiniApp()) {
+            const confirmed = await waitForConfirmation(txHash, 30000);
+            if (!confirmed) throw new Error('Transaction confirmation timeout');
+          }
         }
 
         if (typeof window !== 'undefined') {
           localStorage.setItem('arbitrumWalletAddress', userAddress);
-        }
-
-        setCurrentStep('confirming');
-        const { isFarcasterMiniApp } = await import('@/lib/farcasterAuth');
-        if (!isFarcasterMiniApp()) {
-          const confirmed = await waitForConfirmation(txHash, 30000);
-          if (!confirmed) throw new Error('Transaction confirmation timeout');
         }
 
         // STEP: Request Session Permissions (ERC-7715)
