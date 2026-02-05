@@ -176,6 +176,7 @@ export async function sendTransaction(txParams: {
   }
 
   try {
+    console.log('[FarcasterWalletProvider] Sending transaction:', JSON.stringify(txParams));
     const txHash = (await provider.request({
       method: 'eth_sendTransaction',
       params: [txParams],
@@ -188,6 +189,8 @@ export async function sendTransaction(txParams: {
     console.log('[FarcasterWalletProvider] Transaction sent:', txHash);
     return txHash;
   } catch (error: any) {
+    console.error('[FarcasterWalletProvider] sendTransaction error:', error.message, error.code, error);
+    
     if (error.code === 4001) {
       console.warn('[FarcasterWalletProvider] User rejected transaction');
       throw new Error('Transaction rejected');
