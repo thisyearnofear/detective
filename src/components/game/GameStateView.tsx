@@ -66,6 +66,7 @@ export default function GameStateView({
         <BriefingRoom
           currentPlayer={currentPlayer}
           gameState={gameState}
+          onRequestRefresh={onRequestRefresh}
         />
       );
 

@@ -380,29 +380,39 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
     };
   }, []);
 
+  // Check onboarding on mount (must be before early returns to maintain hook order)
+  useEffect(() => {
+    if (shouldShowOnboarding()) {
+      setShowOnboarding(true);
+    }
+  }, [shouldShowOnboarding]);
+
+  // Handle onboarding completion
+  const handleOnboardingComplete = useCallback(() => {
+    setShowOnboarding(false);
+  }, []);
+
   // Handle vote toggle
   const handleVoteToggle = useCallback(
     async (matchId: string) => {
-      setVotes((prev): VoteState => {
-        const currentVote = prev[matchId] || "REAL";
-        const newVote = currentVote === "REAL" ? "BOT" : "REAL";
+      const previousVote = votes[matchId] || "REAL";
+      const newVote = previousVote === "REAL" ? "BOT" : "REAL";
 
-        // Optimistic update
-        const updated: VoteState = { ...prev, [matchId]: newVote };
+      setVotes((prev): VoteState => ({ ...prev, [matchId]: newVote }));
 
-        // Fire and forget - send to server but don't wait
-        fetch("/api/match/vote", {
+      try {
+        await fetch("/api/match/vote", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ matchId, vote: newVote, fid }),
-        }).catch((error) => {
-          console.error("Error updating vote:", error);
         });
-
-        return updated;
-      });
+        mutate();
+      } catch (error) {
+        console.error("Error updating vote:", error);
+        setVotes((prev): VoteState => ({ ...prev, [matchId]: previousVote }));
+      }
     },
-    [fid]
+    [fid, mutate]
   );
 
   // Handle match completion - collect reveal data
@@ -655,21 +665,6 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
       />
     );
   }
-
-  // Note: New message tracking would need WebSocket or more sophisticated tracking
-  // for real new message detection - currently not implemented
-
-  // Check onboarding on mount
-  useEffect(() => {
-    if (shouldShowOnboarding()) {
-      setShowOnboarding(true);
-    }
-  }, [shouldShowOnboarding]);
-
-  // Handle onboarding completion
-  const handleOnboardingComplete = useCallback(() => {
-    setShowOnboarding(false);
-  }, []);
 
   return (
     <>

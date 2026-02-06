@@ -11,6 +11,8 @@
 import { NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: Request) {
    try {
      const { searchParams } = new URL(request.url);
@@ -83,7 +85,11 @@ export async function GET(request: Request) {
       players,
     };
 
-    return NextResponse.json(clientState);
+    return NextResponse.json(clientState, {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      },
+    });
   } catch (error) {
     console.error("Error fetching game status:", error);
     return NextResponse.json(

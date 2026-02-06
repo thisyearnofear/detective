@@ -18,6 +18,13 @@ const StarfieldBackground = memo(function StarfieldBackground() {
 
         console.log('🌟 StarfieldBackground mounting...');
 
+        const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+        const isSmallScreen = window.innerWidth < 768;
+
+        if (prefersReducedMotion) {
+            return;
+        }
+
         // Scene setup
         const scene = new THREE.Scene();
         sceneRef.current = scene;
@@ -43,7 +50,7 @@ const StarfieldBackground = memo(function StarfieldBackground() {
         rendererRef.current = renderer;
 
         // Create particles - Optimized for performance
-        const POINTS_COUNT = 800; // Reduced to 800
+        const POINTS_COUNT = isSmallScreen ? 400 : 800;
         const positions = new Float32Array(POINTS_COUNT * 3);
         const colors = new Float32Array(POINTS_COUNT * 3);
         const sizes = new Float32Array(POINTS_COUNT);
@@ -139,8 +146,10 @@ const StarfieldBackground = memo(function StarfieldBackground() {
         scene.add(particles);
         particlesRef.current = particles;
 
-        // Mouse move handler
+        // Mouse move handler (desktop only)
+        const canTrackPointer = window.matchMedia?.('(pointer: fine)').matches;
         const handleMouseMove = (event: MouseEvent) => {
+            if (!canTrackPointer) return;
             mouseRef.current.x = (event.clientX / window.innerWidth) * 2 - 1;
             mouseRef.current.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
@@ -157,14 +166,18 @@ const StarfieldBackground = memo(function StarfieldBackground() {
             rendererRef.current.setSize(window.innerWidth, window.innerHeight);
         };
 
-        window.addEventListener('mousemove', handleMouseMove);
+        if (canTrackPointer) {
+            window.addEventListener('mousemove', handleMouseMove);
+        }
         window.addEventListener('resize', handleResize);
 
         // Animation loop
         const clock = new THREE.Clock();
         let animationFrameId: number;
 
+        let isPaused = document.hidden;
         const animate = () => {
+            if (isPaused) return;
             animationFrameId = requestAnimationFrame(animate);
 
             const elapsedTime = clock.getElapsedTime();
@@ -189,12 +202,24 @@ const StarfieldBackground = memo(function StarfieldBackground() {
         };
 
         console.log('🚀 Starting star animation with', POINTS_COUNT, 'particles');
+        const handleVisibility = () => {
+            isPaused = document.hidden;
+            if (!isPaused) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = requestAnimationFrame(animate);
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibility);
         animate();
 
         // Cleanup
         return () => {
-            window.removeEventListener('mousemove', handleMouseMove);
+            if (canTrackPointer) {
+                window.removeEventListener('mousemove', handleMouseMove);
+            }
             window.removeEventListener('resize', handleResize);
+            document.removeEventListener('visibilitychange', handleVisibility);
             cancelAnimationFrame(animationFrameId);
 
             geometry.dispose();

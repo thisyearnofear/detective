@@ -6,6 +6,8 @@ type Chain = 'arbitrum' | 'monad';
 type LeaderboardType = 'current-game' | 'season' | 'all-time' | 'nft-holders' | 'token-holders';
 type TimeFrame = '24h' | '7d' | '30d' | 'all';
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -68,6 +70,10 @@ export async function GET(request: NextRequest) {
         timeframe,
         total: leaderboardData?.length || 0,
       }
+    }, {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      },
     });
 
   } catch (error) {
