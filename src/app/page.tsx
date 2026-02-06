@@ -36,7 +36,7 @@ export default function Home() {
 
   // Use SWR for polling the game state
   // PERFORMANT: Adaptive polling - deduped requests prevent double-fetching
-  const { data: gameState, error: gameStateError } = useSWR(
+  const { data: gameState, error: gameStateError, mutate: mutateGameState } = useSWR(
     sdkUser ? `/api/game/status?fid=${sdkUser.fid}` : "/api/game/status",
     fetcher,
     { 
@@ -146,6 +146,7 @@ export default function Home() {
         displayName={sdkUser.displayName}
         pfpUrl={sdkUser.pfpUrl}
         gameState={gameState}
+        onRequestRefresh={() => mutateGameState()}
         onGameFinish={(results) => {
           console.log('[page.tsx] onGameFinish callback received:', results);
           setGameResults(results);
