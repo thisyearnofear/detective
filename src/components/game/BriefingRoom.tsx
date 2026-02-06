@@ -12,7 +12,7 @@ import DetectiveToast from '../DetectiveToast';
 type Props = {
   currentPlayer: UserProfile;
   isRegistrationOpen?: boolean;
-  onRequestRefresh?: () => void;
+  onRequestRefresh?: (force?: boolean) => void;
   gameState: {
     cycleId: string;
     state: string;
@@ -41,9 +41,12 @@ export default function BriefingRoom({ currentPlayer, isRegistrationOpen = true,
   const registeredPlayers = (gameState?.players || []) as Player[];
   const maxPlayers = GAME_CONSTANTS.MAX_PLAYERS;
 
-  // Keep local registered flag in sync with server state
+  // Sync with server state — only allow server to SET registered, never unset a local true
+  // This prevents the race where stale poll data resets the UI after a successful registration
   useEffect(() => {
-    setIsRegistered(gameState?.isRegistered || false);
+    if (gameState?.isRegistered) {
+      setIsRegistered(true);
+    }
   }, [gameState?.isRegistered]);
 
   // Use countdown hook for timer (syncs with server)
@@ -128,7 +131,7 @@ export default function BriefingRoom({ currentPlayer, isRegistrationOpen = true,
       const data = await response.json();
       console.log('[BriefingRoom] Investigation join success:', data);
       setIsRegistered(true);
-      onRequestRefresh?.();
+      onRequestRefresh?.(true); // Force bypass SWR dedup to ensure fresh data
 
       // Keep modal visible briefly to show success, then close
       setTimeout(() => {
@@ -155,7 +158,7 @@ export default function BriefingRoom({ currentPlayer, isRegistrationOpen = true,
         throw new Error('Failed to set ready status');
       }
 
-      onRequestRefresh?.();
+      onRequestRefresh?.(true);
     } catch (err: any) {
       setError(err.message);
     } finally {

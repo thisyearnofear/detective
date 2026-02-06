@@ -10,7 +10,7 @@ import SpinningDetective from '../SpinningDetective';
  * Stats toggle once back in REGISTRATION state.
  */
 type Props = {
-  onRequestRefresh?: () => void;
+  onRequestRefresh?: (force?: boolean) => void;
 };
 
 export default function GameFinishedView({ onRequestRefresh }: Props) {
@@ -42,7 +42,7 @@ export default function GameFinishedView({ onRequestRefresh }: Props) {
         <div className="flex justify-center">
           <button
             type="button"
-            onClick={onRequestRefresh}
+            onClick={() => onRequestRefresh?.()}
             className="px-4 py-2 rounded-xl bg-white/10 border border-white/15 text-sm text-white font-semibold hover:bg-white/15 transition-colors"
           >
             Refresh

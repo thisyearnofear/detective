@@ -146,7 +146,7 @@ export default function Home() {
         displayName={sdkUser.displayName}
         pfpUrl={sdkUser.pfpUrl}
         gameState={gameState}
-        onRequestRefresh={() => mutateGameState()}
+        onRequestRefresh={(force) => mutateGameState(undefined, { revalidate: force })}
         onGameFinish={(results) => {
           console.log('[page.tsx] onGameFinish callback received:', results);
           setGameResults(results);
