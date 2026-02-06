@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 type Props = {
     playerCount: number;
@@ -7,13 +7,18 @@ type Props = {
 
 export default function GameCountdown({ playerCount, onComplete }: Props) {
     const [count, setCount] = useState(5);
+    const hasCompletedRef = useRef(false);
 
     useEffect(() => {
+        hasCompletedRef.current = false;
+        
         const interval = setInterval(() => {
             setCount(prev => {
-                if (prev <= 1) {
+                if (prev <= 1 && !hasCompletedRef.current) {
+                    hasCompletedRef.current = true;
                     clearInterval(interval);
-                    onComplete();
+                    // Defer onComplete to avoid React hook mismatch during state transition
+                    setTimeout(() => onComplete(), 0);
                     return 0;
                 }
                 return prev - 1;
