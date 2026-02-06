@@ -27,6 +27,7 @@ type Props = {
     gameEnds: number;
     isRegistered: boolean;
   };
+  onRequestRefresh?: () => void;
   onGameFinish?: (results: GameResults) => void;
 };
 
@@ -45,6 +46,7 @@ export default function GameStateView({
   displayName,
   pfpUrl,
   gameState,
+  onRequestRefresh,
   onGameFinish,
 }: Props) {
   const currentPlayer = { fid, username, displayName, pfpUrl };
@@ -91,7 +93,7 @@ export default function GameStateView({
       );
 
     case 'FINISHED':
-      return <GameFinishedView />;
+      return <GameFinishedView onRequestRefresh={onRequestRefresh} />;
 
     default:
       return null;

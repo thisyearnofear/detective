@@ -9,7 +9,11 @@ import SpinningDetective from '../SpinningDetective';
  * and prepares for next cycle. Users can view full results via
  * Stats toggle once back in REGISTRATION state.
  */
-export default function GameFinishedView() {
+type Props = {
+  onRequestRefresh?: () => void;
+};
+
+export default function GameFinishedView({ onRequestRefresh }: Props) {
   return (
     <div className="w-full space-y-8 text-center py-12">
       {/* Spinning Detective */}
@@ -33,6 +37,18 @@ export default function GameFinishedView() {
           💡 Use the <span className="text-white font-semibold">🏆 Stats</span> button to view your results
         </p>
       </div>
+
+      {onRequestRefresh && (
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={onRequestRefresh}
+            className="px-4 py-2 rounded-xl bg-white/10 border border-white/15 text-sm text-white font-semibold hover:bg-white/15 transition-colors"
+          >
+            Refresh
+          </button>
+        </div>
+      )}
     </div>
   );
 }
