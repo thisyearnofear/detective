@@ -1,8 +1,8 @@
 export default {
   apps: [{
     name: 'detective-api',
-    script: 'npm',
-    args: 'run start',
+    script: './node_modules/.bin/next',
+    args: 'start',
     cwd: '/opt/detective',
     env: {
       NODE_ENV: 'production',
