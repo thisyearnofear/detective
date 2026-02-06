@@ -783,7 +783,9 @@ class GameManager {
     } else if (newState === "LIVE") {
       this.state!.registrationEnds = now - 1;
       this.state!.gameEnds = now + GAME_DURATION;
+      this.state!.finishedAt = undefined;
     } else if (newState === "FINISHED") {
+      this.state!.finishedAt = now;
       this.state!.leaderboard = await this.getLeaderboard();
     }
 
@@ -792,6 +794,7 @@ class GameManager {
       state: this.state!.state,
       registrationEnds: this.state!.registrationEnds,
       gameEnds: this.state!.gameEnds,
+      finishedAt: this.state!.finishedAt,
     });
     // Increment version so other instances pick up the state change
     await stateConsistency.tryIncrementStateVersion();
