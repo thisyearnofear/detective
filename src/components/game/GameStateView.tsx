@@ -27,7 +27,7 @@ type Props = {
     gameEnds: number;
     isRegistered: boolean;
   };
-  onRequestRefresh?: () => void;
+  onRequestRefresh?: (force?: boolean) => void;
   onGameFinish?: (results: GameResults) => void;
 };
 
