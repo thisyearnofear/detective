@@ -6,7 +6,7 @@ export default {
     cwd: '/opt/detective',
     env: {
       NODE_ENV: 'production',
-      PORT: 3100,
+      PORT: 4000,
     },
     exec_mode: 'fork',
     instances: 1,
