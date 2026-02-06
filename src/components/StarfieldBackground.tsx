@@ -50,7 +50,8 @@ const StarfieldBackground = memo(function StarfieldBackground() {
         rendererRef.current = renderer;
 
         // Create particles - Optimized for performance
-        const POINTS_COUNT = isSmallScreen ? 400 : 800;
+        // REDUCED from 800 to 150 - visual impact minimal, performance gain significant
+        const POINTS_COUNT = isSmallScreen ? 100 : 150;
         const positions = new Float32Array(POINTS_COUNT * 3);
         const colors = new Float32Array(POINTS_COUNT * 3);
         const sizes = new Float32Array(POINTS_COUNT);
@@ -171,14 +172,27 @@ const StarfieldBackground = memo(function StarfieldBackground() {
         }
         window.addEventListener('resize', handleResize);
 
-        // Animation loop
+        // Animation loop - OPTIMIZED to pause when not visible and cap FPS
         const clock = new THREE.Clock();
         let animationFrameId: number;
+        let lastFrameTime = 0;
+        const FRAME_THROTTLE = 1000 / 30; // Cap at 30fps for performance
 
-        let isPaused = document.hidden;
+        let isPaused = document.hidden || !canvasRef.current;
+
         const animate = () => {
-            if (isPaused) return;
-            animationFrameId = requestAnimationFrame(animate);
+            if (isPaused) {
+                animationFrameId = requestAnimationFrame(animate);
+                return;
+            }
+
+            // Throttle frame rate
+            const now = Date.now();
+            if (now - lastFrameTime < FRAME_THROTTLE) {
+                animationFrameId = requestAnimationFrame(animate);
+                return;
+            }
+            lastFrameTime = now;
 
             const elapsedTime = clock.getElapsedTime();
 

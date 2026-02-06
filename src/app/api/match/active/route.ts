@@ -2,8 +2,12 @@
 import { NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
 import { NextRequest } from "next/server";
+import { getJSON, setJSON } from "@/lib/redis";
 
 export const dynamic = "force-dynamic";
+
+// Cache TTL in seconds - shorter because match state changes more frequently
+const CACHE_TTL = 1;
 
 /**
  * API route to get all active matches for a player.
@@ -24,6 +28,18 @@ export async function GET(request: NextRequest) {
     const playerFid = parseInt(fid, 10);
     if (isNaN(playerFid)) {
       return NextResponse.json({ error: "Invalid FID." }, { status: 400 });
+    }
+
+    // Try to get cached response first (prevent cold start delays)
+    const cacheKey = `api:match:active:${playerFid}`;
+    const cached = await getJSON<Record<string, any>>(cacheKey);
+    
+    // Only use cache if it's fresh
+    if (cached && cached._cachedAt && Date.now() - cached._cachedAt < CACHE_TTL * 1000) {
+      const { _cachedAt, ...responseData } = cached;
+      return NextResponse.json(responseData, {
+        headers: { "X-Cache": "HIT", "Cache-Control": "no-store" }
+      });
     }
 
     const gameState = await gameManager.getGameState();
@@ -82,7 +98,7 @@ export async function GET(request: NextRequest) {
     const player = rawState.players.get(playerFid);
     const voteHistory = player ? player.voteHistory : [];
 
-    return NextResponse.json({
+    const responseData = {
       matches: sanitizedMatches,
       slots,
       currentRound: rawState.playerSessions.get(playerFid)?.currentRound || 1,
@@ -97,7 +113,12 @@ export async function GET(request: NextRequest) {
       serverTime: Date.now(),
       // Config for feature toggles
       config: rawState.config,
-    }, {
+    };
+
+    // Cache the response
+    await setJSON(cacheKey, { ...responseData, _cachedAt: Date.now() }, CACHE_TTL);
+
+    return NextResponse.json(responseData, {
       headers: {
         "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
       },
