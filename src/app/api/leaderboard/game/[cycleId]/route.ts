@@ -9,6 +9,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { database } from "@/lib/database";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(
     _request: NextRequest,
     { params }: { params: Promise<{ cycleId: string }> }
@@ -49,6 +51,10 @@ export async function GET(
             },
             results,
             total: results.length,
+        }, {
+            headers: {
+                "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+            },
         });
     } catch (error) {
         console.error("[Leaderboard] Error fetching game results:", error);

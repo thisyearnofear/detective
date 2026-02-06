@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Player, UserProfile } from '@/lib/types';
 import { useCountdown } from '@/hooks/useCountdown';
 import { useRegistrationFlow } from '@/hooks/useRegistrationFlow';
@@ -12,6 +12,7 @@ import DetectiveToast from '../DetectiveToast';
 type Props = {
   currentPlayer: UserProfile;
   isRegistrationOpen?: boolean;
+  onRequestRefresh?: () => void;
   gameState: {
     cycleId: string;
     state: string;
@@ -27,7 +28,7 @@ type Props = {
   };
 };
 
-export default function BriefingRoom({ currentPlayer, isRegistrationOpen = true, gameState }: Props) {
+export default function BriefingRoom({ currentPlayer, isRegistrationOpen = true, onRequestRefresh, gameState }: Props) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isRegistered, setIsRegistered] = useState(gameState?.isRegistered || false);
@@ -39,6 +40,11 @@ export default function BriefingRoom({ currentPlayer, isRegistrationOpen = true,
   // Use provided gameState - no duplicate fetching
   const registeredPlayers = (gameState?.players || []) as Player[];
   const maxPlayers = GAME_CONSTANTS.MAX_PLAYERS;
+
+  // Keep local registered flag in sync with server state
+  useEffect(() => {
+    setIsRegistered(gameState?.isRegistered || false);
+  }, [gameState?.isRegistered]);
 
   // Use countdown hook for timer (syncs with server)
   const countdownEndTime = gameState?.phaseEndTime || gameState?.registrationEnds || 0;
@@ -122,6 +128,7 @@ export default function BriefingRoom({ currentPlayer, isRegistrationOpen = true,
       const data = await response.json();
       console.log('[BriefingRoom] Investigation join success:', data);
       setIsRegistered(true);
+      onRequestRefresh?.();
 
       // Keep modal visible briefly to show success, then close
       setTimeout(() => {
@@ -148,7 +155,7 @@ export default function BriefingRoom({ currentPlayer, isRegistrationOpen = true,
         throw new Error('Failed to set ready status');
       }
 
-      // Optimistic update or wait for SWR revalidation
+      onRequestRefresh?.();
     } catch (err: any) {
       setError(err.message);
     } finally {

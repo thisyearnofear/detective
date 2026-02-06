@@ -2,6 +2,8 @@
 import { NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
 
+export const dynamic = "force-dynamic";
+
 /**
  * API route to get the current leaderboard.
  * Handles GET requests.
@@ -18,7 +20,11 @@ export async function GET() {
         ? rawState.leaderboard
         : await gameManager.getLeaderboard();
 
-    return NextResponse.json(leaderboard);
+    return NextResponse.json(leaderboard, {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      },
+    });
   } catch (error) {
     console.error("Error fetching leaderboard:", error);
     return NextResponse.json(

@@ -14,6 +14,13 @@ export default function AnimatedGridBackdrop({
   const gridItemsRef = useRef<HTMLDivElement[]>([]);
 
   useEffect(() => {
+    const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const canTrackPointer = window.matchMedia?.('(pointer: fine)').matches;
+
+    if (prefersReducedMotion) {
+      return;
+    }
+
     // Get random value
     const getRandom = (min: number, max: number) =>
       (Math.random() * (max - min) + min).toFixed(2);
@@ -83,10 +90,14 @@ export default function AnimatedGridBackdrop({
       requestAnimationFrame(() => tilt(ev));
     };
 
-    window.addEventListener('mousemove', tiltHandler);
+    if (canTrackPointer) {
+      window.addEventListener('mousemove', tiltHandler);
+    }
 
     return () => {
-      window.removeEventListener('mousemove', tiltHandler);
+      if (canTrackPointer) {
+        window.removeEventListener('mousemove', tiltHandler);
+      }
       window.removeEventListener('resize', calcWinsize);
     };
   }, []);

@@ -615,35 +615,7 @@ class PostgresDatabase {
         return result.rows.map(convertAccuracy);
     }
 
-    async getCurrentGameLeaderboard(chain: string = 'arbitrum', limit: number = 100): Promise<DbLeaderboardEntry[]> {
-        const pool = await this.getPool();
-
-        // Note: The chain parameter is for API compatibility.
-        // Currently, player stats are tracked across all chains.
-        // In a full implementation, this would filter by chain.
-        console.log(`[PostgresDB] getCurrentGameLeaderboard called with chain: ${chain}`);
-
-        const result = await pool.query(
-            `SELECT
-                fid, username, display_name, pfp_url, accuracy, avg_speed_ms, total_matches,
-                total_games, COALESCE(total_wins, 0) as total_wins,
-                ROW_NUMBER() OVER (ORDER BY accuracy DESC, avg_speed_ms ASC) as rank
-            FROM player_stats
-            WHERE total_matches >= 5
-            ORDER BY accuracy DESC, avg_speed_ms ASC
-            LIMIT $1`,
-            [limit]
-        );
-        return result.rows.map(convertAccuracy);
-    }
-
-    async getSeasonLeaderboard(chain: string = 'arbitrum', timeframe: string = '7d', limit: number = 100): Promise<DbLeaderboardEntry[]> {
-        // For now, using the global leaderboard as a fallback
-        // In a real implementation, this would filter by season/timeframe
-
-        // Note: The chain and timeframe parameters are for API compatibility.
-        console.log(`[PostgresDB] getSeasonLeaderboard called with chain: ${chain}, timeframe: ${timeframe}`);
-
+    private async queryLeaderboard(limit: number): Promise<DbLeaderboardEntry[]> {
         const pool = await this.getPool();
         const result = await pool.query(
             `SELECT
@@ -659,90 +631,28 @@ class PostgresDatabase {
         return result.rows.map(convertAccuracy);
     }
 
-    async getAllTimeLeaderboard(chain: string = 'arbitrum', limit: number = 100): Promise<DbLeaderboardEntry[]> {
-        const pool = await this.getPool();
-
-        // Note: The chain parameter is for API compatibility.
-        // Currently, player stats are tracked across all chains.
-        // In a full implementation, this would filter by chain.
-        console.log(`[PostgresDB] getAllTimeLeaderboard called with chain: ${chain}`);
-
-        const result = await pool.query(
-            `SELECT
-                fid, username, display_name, pfp_url, accuracy, avg_speed_ms, total_matches,
-                total_games, COALESCE(total_wins, 0) as total_wins,
-                ROW_NUMBER() OVER (ORDER BY accuracy DESC, avg_speed_ms ASC) as rank
-            FROM player_stats
-            WHERE total_matches >= 5
-            ORDER BY accuracy DESC, avg_speed_ms ASC
-            LIMIT $1`,
-            [limit]
-        );
-        return result.rows.map(convertAccuracy);
+    async getCurrentGameLeaderboard(_chain: string = 'arbitrum', limit: number = 100): Promise<DbLeaderboardEntry[]> {
+        return this.queryLeaderboard(limit);
     }
 
-    async getNFTHolderLeaderboard(chain: string = 'arbitrum', timeframe: string = '7d', limit: number = 100): Promise<DbLeaderboardEntry[]> {
-        // For now, using the global leaderboard as a fallback
-        // In a real implementation, this would filter for NFT holders
-
-        // Note: The chain and timeframe parameters are for API compatibility.
-        console.log(`[PostgresDB] getNFTHolderLeaderboard called with chain: ${chain}, timeframe: ${timeframe}`);
-
-        const pool = await this.getPool();
-        const result = await pool.query(
-            `SELECT
-                fid, username, display_name, pfp_url, accuracy, avg_speed_ms, total_matches,
-                total_games, COALESCE(total_wins, 0) as total_wins,
-                ROW_NUMBER() OVER (ORDER BY accuracy DESC, avg_speed_ms ASC) as rank
-            FROM player_stats
-            WHERE total_matches >= 5
-            ORDER BY accuracy DESC, avg_speed_ms ASC
-            LIMIT $1`,
-            [limit]
-        );
-        return result.rows.map(convertAccuracy);
+    async getSeasonLeaderboard(_chain: string = 'arbitrum', _timeframe: string = '7d', limit: number = 100): Promise<DbLeaderboardEntry[]> {
+        return this.queryLeaderboard(limit);
     }
 
-    async getTokenHolderLeaderboard(chain: string = 'monad', timeframe: string = '7d', limit: number = 100): Promise<DbLeaderboardEntry[]> {
-        // For now, using the global leaderboard as a fallback
-        // In a real implementation, this would filter for token holders
+    async getAllTimeLeaderboard(_chain: string = 'arbitrum', limit: number = 100): Promise<DbLeaderboardEntry[]> {
+        return this.queryLeaderboard(limit);
+    }
 
-        // Note: The chain and timeframe parameters are for API compatibility.
-        console.log(`[PostgresDB] getTokenHolderLeaderboard called with chain: ${chain}, timeframe: ${timeframe}`);
+    async getNFTHolderLeaderboard(_chain: string = 'arbitrum', _timeframe: string = '7d', limit: number = 100): Promise<DbLeaderboardEntry[]> {
+        return this.queryLeaderboard(limit);
+    }
 
-        const pool = await this.getPool();
-        const result = await pool.query(
-            `SELECT
-                fid, username, display_name, pfp_url, accuracy, avg_speed_ms, total_matches,
-                total_games, COALESCE(total_wins, 0) as total_wins,
-                ROW_NUMBER() OVER (ORDER BY accuracy DESC, avg_speed_ms ASC) as rank
-            FROM player_stats
-            WHERE total_matches >= 5
-            ORDER BY accuracy DESC, avg_speed_ms ASC
-            LIMIT $1`,
-            [limit]
-        );
-        return result.rows.map(convertAccuracy);
+    async getTokenHolderLeaderboard(_chain: string = 'monad', _timeframe: string = '7d', limit: number = 100): Promise<DbLeaderboardEntry[]> {
+        return this.queryLeaderboard(limit);
     }
 
     async getCrossChainLeaderboard(limit: number = 100): Promise<DbLeaderboardEntry[]> {
-        // For now, using the global leaderboard as a fallback
-        // In a real implementation, this would aggregate results from multiple chains
-        console.log('[PostgresDB] getCrossChainLeaderboard called');
-
-        const pool = await this.getPool();
-        const result = await pool.query(
-            `SELECT
-                fid, username, display_name, pfp_url, accuracy, avg_speed_ms, total_matches,
-                total_games, COALESCE(total_wins, 0) as total_wins,
-                ROW_NUMBER() OVER (ORDER BY accuracy DESC, avg_speed_ms ASC) as rank
-            FROM player_stats
-            WHERE total_matches >= 5
-            ORDER BY accuracy DESC, avg_speed_ms ASC
-            LIMIT $1`,
-            [limit]
-        );
-        return result.rows.map(convertAccuracy);
+        return this.queryLeaderboard(limit);
     }
 
     // ========== REGISTRATION TRACKING ==========

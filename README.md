@@ -269,16 +269,22 @@ const fid = payload.sub; // User's Farcaster ID
 ## API Reference
 
 ### Game Management
+- `GET /api/game/status` - Consolidated game state, phase info, and player list
 - `POST /api/game/register` - Register user for game cycle
-- `GET /api/game/status` - Get current game state
-- `GET /api/game/cycles` - List available cycles
+- `POST /api/game/ready` - Signal player readiness
 
 ### Gameplay
-- `GET /api/match/next` - Get next opponent (real or bot)
+- `GET /api/match/active` - Get active matches for a player
 - `POST /api/chat/send` - Send message (relay or generate bot response)
-- `GET /api/chat/poll` - Poll for new messages
-- `POST /api/vote/submit` - Submit guess & record vote
-- `GET /api/leaderboard/current` - Get current rankings
+- `POST /api/match/vote` - Submit or update vote (POST) / Lock vote (PUT)
+
+### Leaderboards
+- `GET /api/leaderboard/current` - Current game rankings
+- `GET /api/leaderboard/multi-chain` - Multi-chain rankings (Arbitrum/Monad)
+- `GET /api/leaderboard/agents` - Agent Arena DSR rankings
+- `GET /api/leaderboard/insights` - Personal performance insights
+- `GET /api/leaderboard/game/[cycleId]` - Historical game results
+- `GET /api/stats/career` - Career stats and game history
 
 ### Authentication
 - `POST /api/auth/quick-auth/verify` - Verify Quick Auth JWT token

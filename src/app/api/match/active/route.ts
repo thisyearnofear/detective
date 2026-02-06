@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
 import { NextRequest } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 /**
  * API route to get all active matches for a player.
  * Returns up to 2 simultaneous matches that are currently active.
@@ -95,6 +97,10 @@ export async function GET(request: NextRequest) {
       serverTime: Date.now(),
       // Config for feature toggles
       config: rawState.config,
+    }, {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      },
     });
   } catch (error) {
     console.error("Error fetching active matches:", error);
