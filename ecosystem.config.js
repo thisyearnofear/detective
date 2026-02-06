@@ -1,4 +1,4 @@
-module.exports = {
+export default {
   apps: [{
     name: 'detective-api',
     script: 'npm',
@@ -8,8 +8,7 @@ module.exports = {
       NODE_ENV: 'production',
       PORT: 3000,
     },
-    instance_var: 'INSTANCE_ID',
-    exec_mode: 'cluster',
+    exec_mode: 'fork',
     instances: 1,
     watch: false,
     autorestart: true,
