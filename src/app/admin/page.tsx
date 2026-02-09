@@ -120,11 +120,11 @@ export default function AdminPage() {
 
     // Poll admin data every 2 seconds for responsive updates
     const { data: adminData, mutate } = useSWR('/api/admin/state', fetcher, {
-        refreshInterval: 2000,
+        refreshInterval: 1000,
         revalidateOnFocus: true,
         dedupingInterval: 500, // Allow rapid revalidation
     });
-    
+
     // Force immediate revalidation helper
     const forceRefresh = useCallback(() => {
         mutate(undefined, { revalidate: true });
@@ -231,17 +231,17 @@ export default function AdminPage() {
             const response = await fetch('/api/admin/state', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    action: 'update-config', 
-                    config: { monetizationEnabled: newEnabled } 
+                body: JSON.stringify({
+                    action: 'update-config',
+                    config: { monetizationEnabled: newEnabled }
                 }),
             });
 
             const data = await response.json();
             if (data.success) {
-                setMessage({ 
-                    type: 'success', 
-                    text: `Monetization ${newEnabled ? 'enabled' : 'disabled'} successfully.` 
+                setMessage({
+                    type: 'success',
+                    text: `Monetization ${newEnabled ? 'enabled' : 'disabled'} successfully.`
                 });
                 forceRefresh();
             }
@@ -282,11 +282,10 @@ export default function AdminPage() {
                 {message && (
                     <div className="w-full mb-8">
                         <div
-                            className={`p-4 rounded-lg text-center backdrop-blur-sm ${
-                                message.type === 'success'
+                            className={`p-4 rounded-lg text-center backdrop-blur-sm ${message.type === 'success'
                                     ? 'bg-green-900/20 border border-green-500/30 text-green-400'
                                     : 'bg-red-900/20 border border-red-500/30 text-red-400'
-                            }`}
+                                }`}
                         >
                             {message.text}
                         </div>
@@ -381,18 +380,16 @@ export default function AdminPage() {
                                     </div>
                                     <button
                                         onClick={handleToggleMonetization}
-                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                                            adminData?.gameState?.config?.monetizationEnabled 
-                                                ? 'bg-blue-600' 
+                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${adminData?.gameState?.config?.monetizationEnabled
+                                                ? 'bg-blue-600'
                                                 : 'bg-slate-700'
-                                        }`}
+                                            }`}
                                     >
                                         <span
-                                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                                                adminData?.gameState?.config?.monetizationEnabled 
-                                                    ? 'translate-x-6' 
+                                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${adminData?.gameState?.config?.monetizationEnabled
+                                                    ? 'translate-x-6'
                                                     : 'translate-x-1'
-                                            }`}
+                                                }`}
                                         />
                                     </button>
                                 </div>

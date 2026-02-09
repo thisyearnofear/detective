@@ -28,7 +28,7 @@ interface CacheEntry<T> {
 
 export class GameRepository {
   private cache = new Map<string, CacheEntry<any>>();
-  private readonly CACHE_TTL_MS = 5000; // 5 second TTL for normal polling
+  private readonly CACHE_TTL_MS = 1000; // 1 second TTL for responsive updates
   private lastKnownVersion = -1;
 
   /**

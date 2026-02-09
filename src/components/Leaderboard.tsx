@@ -78,8 +78,8 @@ type LeaderboardType = 'current-game' | 'season' | 'all-time' | 'nft-holders' | 
 type TimeFrame = '24h' | '7d' | '30d' | 'all';
 
 // Shared Table Component - CONSOLIDATION
-const LeaderboardTable = ({ entries, showStatus = false }: { 
-  entries: LeaderboardEntry[] | undefined; 
+const LeaderboardTable = ({ entries, showStatus = false }: {
+  entries: LeaderboardEntry[] | undefined;
   showStatus?: boolean;
 }) => {
   if (!entries || entries.length === 0) {
@@ -111,7 +111,7 @@ const LeaderboardTable = ({ entries, showStatus = false }: {
                     )}
                   </div>
                 </td>
-                
+
                 <td className="py-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
@@ -125,11 +125,11 @@ const LeaderboardTable = ({ entries, showStatus = false }: {
                     </div>
                   </div>
                 </td>
-                
+
                 <td className="py-4">
                   <span className="text-lg font-bold text-white">{entry.accuracy.toFixed(1)}%</span>
                 </td>
-                
+
                 {showStatus && (
                   <td className="py-4">
                     <div className="flex gap-1">
@@ -151,10 +151,10 @@ const LeaderboardTable = ({ entries, showStatus = false }: {
 interface GameResultsProps {
   isGameEnd?: boolean;
   accuracy?: number;
-  roundResults?: Array<{ 
-    roundNumber: number; 
-    correct: boolean; 
-    opponentUsername: string; 
+  roundResults?: Array<{
+    roundNumber: number;
+    correct: boolean;
+    opponentUsername: string;
     opponentType: "REAL" | "BOT";
     stakedAmount?: string;
     payoutAmount?: string;
@@ -204,8 +204,8 @@ interface MultiChainLeaderboardData {
   crossChainRankings: LeaderboardEntry[];
 }
 
-export default function Leaderboard({ 
-  fid, 
+export default function Leaderboard({
+  fid,
   mode: initialMode = 'current',
   isGameEnd = false,
   accuracy = 0,
@@ -225,18 +225,18 @@ export default function Leaderboard({
   const [careerOffset, setCareerOffset] = useState(0);
   // Track whether to show game end results or career stats (when both available)
   const [showGameEnd, setShowGameEnd] = useState(isGameEnd);
-  
+
   const { data: leaderboard, error } = useSWR<LeaderboardEntry[]>(
     (mode as string) === 'current' ? '/api/leaderboard/current' : null,
-    fetcher, 
+    fetcher,
     {
-      refreshInterval: 10000,
+      refreshInterval: 5000,
     }
   );
 
   const { data: careerStats } = useSWR<any>(
-    (mode as string) === 'career' && fid 
-      ? `/api/stats/career?fid=${fid}&timeFilter=${careerTimeFilter}&offset=${careerOffset}&limit=10` 
+    (mode as string) === 'career' && fid
+      ? `/api/stats/career?fid=${fid}&timeFilter=${careerTimeFilter}&offset=${careerOffset}&limit=10`
       : null,
     fetcher,
     {
@@ -248,19 +248,19 @@ export default function Leaderboard({
   const { data: insights } = useSWR<PlayerInsights>(
     (mode as string) === 'insights' && fid ? `/api/leaderboard/insights?fid=${fid}&chain=${selectedChain}` : null,
     fetcher,
-    { refreshInterval: 30000 }
+    { refreshInterval: 15000 }
   );
 
   const { data: multiChainData, isLoading: isMultiChainLoading } = useSWR<MultiChainLeaderboardData>(
     (mode as string) === 'multi-chain' ? `/api/leaderboard/multi-chain?chain=${selectedChain}&type=${leaderboardType}&timeframe=${timeFrame}` : null,
     fetcher,
-    { refreshInterval: 10000 }
+    { refreshInterval: 5000 }
   );
 
   // Game end mode - show results with current leaderboard
   if (isGameEnd && showGameEnd) {
     const percentile = totalPlayers > 0 ? Math.round(((totalPlayers - playerRank) / totalPlayers) * 100) : 0;
-    
+
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4 relative z-10">
         {/* Results Summary */}
@@ -298,9 +298,9 @@ export default function Leaderboard({
           <div className="bg-slate-900/50 rounded-lg p-4 text-center border border-slate-700 mb-8">
             <p className="text-gray-300 text-sm">
               {accuracy >= 80 ? "🔥 Incredible detective work! You're a natural detective." :
-               accuracy >= 60 ? "💪 Nice work! Keep playing to improve." :
-               accuracy >= 40 ? "📈 Not bad! You'll get better with practice." :
-               "🎯 Keep playing - You'll improve"}
+                accuracy >= 60 ? "💪 Nice work! Keep playing to improve." :
+                  accuracy >= 40 ? "📈 Not bad! You'll get better with practice." :
+                    "🎯 Keep playing - You'll improve"}
             </p>
           </div>
 
@@ -413,21 +413,21 @@ export default function Leaderboard({
 
           {/* Strengths & Weaknesses */}
           <div className="grid grid-cols-2 gap-3">
-          <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3">
-            <div className="text-green-400 text-xs uppercase tracking-wide mb-1">Strength</div>
-            <div className="flex items-center gap-2">
-              <span className="text-lg">{helpers.getStrengthEmoji(insights.strengthArea)}</span>
-              <span className="font-medium text-white capitalize">{insights.strengthArea}</span>
+            <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3">
+              <div className="text-green-400 text-xs uppercase tracking-wide mb-1">Strength</div>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">{helpers.getStrengthEmoji(insights.strengthArea)}</span>
+                <span className="font-medium text-white capitalize">{insights.strengthArea}</span>
+              </div>
             </div>
-          </div>
-          
-          <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3">
-            <div className="text-orange-400 text-xs uppercase tracking-wide mb-1">Focus Area</div>
-            <div className="flex items-center gap-2">
-              <span className="text-lg">{helpers.getStrengthEmoji(insights.weaknessArea)}</span>
-              <span className="font-medium text-white capitalize">{insights.weaknessArea}</span>
+
+            <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3">
+              <div className="text-orange-400 text-xs uppercase tracking-wide mb-1">Focus Area</div>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">{helpers.getStrengthEmoji(insights.weaknessArea)}</span>
+                <span className="font-medium text-white capitalize">{insights.weaknessArea}</span>
+              </div>
             </div>
-          </div>
           </div>
 
           {/* Next Milestone */}
@@ -436,7 +436,7 @@ export default function Leaderboard({
               <span className="text-blue-400 text-sm font-medium">Next Milestone</span>
               <span className="text-blue-300 text-sm">{insights.nextMilestone.progress}%</span>
             </div>
-            
+
             <div className="mb-3">
               {insights.nextMilestone.type === 'rank' && (
                 <span className="text-white font-medium">Reach rank #{insights.nextMilestone.target}</span>
@@ -448,9 +448,9 @@ export default function Leaderboard({
                 <span className="text-white font-medium">Achieve {insights.nextMilestone.target} game win streak</span>
               )}
             </div>
-            
+
             <div className="w-full bg-slate-700/50 h-2 rounded-full overflow-hidden">
-              <div 
+              <div
                 className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 transition-all duration-300"
                 style={{ width: `${insights.nextMilestone.progress}%` }}
               />
@@ -461,7 +461,7 @@ export default function Leaderboard({
           {(insights.competitiveAnalysis.beatenRecently.length > 0 || insights.competitiveAnalysis.lostToRecently.length > 0) && (
             <div className="bg-slate-800/30 rounded-lg p-4">
               <h4 className="font-medium text-white mb-3 text-sm">Recent Matchups</h4>
-              
+
               {insights.competitiveAnalysis.beatenRecently.length > 0 && (
                 <div className="mb-3">
                   <div className="text-green-400 text-xs mb-1">Recently Outperformed</div>
@@ -474,7 +474,7 @@ export default function Leaderboard({
                   </div>
                 </div>
               )}
-              
+
               {insights.competitiveAnalysis.lostToRecently.length > 0 && (
                 <div className="mb-3">
                   <div className="text-red-400 text-xs mb-1">Learning Opportunities</div>
@@ -487,7 +487,7 @@ export default function Leaderboard({
                   </div>
                 </div>
               )}
-              
+
               {insights.competitiveAnalysis.rivalUsername && (
                 <div className="bg-purple-500/10 border border-purple-500/20 rounded p-2 mt-2">
                   <div className="text-purple-400 text-xs mb-1">Rival Detected</div>
@@ -554,15 +554,14 @@ export default function Leaderboard({
             {multiChainData?.chainStats && Object.entries(multiChainData.chainStats).map(([chainKey, stats]) => {
               const chain = chainKey as Chain;
               const config = helpers.getChainBadge(chain);
-              
+
               return (
-                <div 
+                <div
                   key={chain}
-                  className={`border rounded-xl p-4 transition-all cursor-pointer ${
-                    selectedChain === chain 
-                      ? config.color + ' border-opacity-100' 
-                      : 'bg-slate-800/30 border-white/5 hover:border-white/10'
-                  }`}
+                  className={`border rounded-xl p-4 transition-all cursor-pointer ${selectedChain === chain
+                    ? config.color + ' border-opacity-100'
+                    : 'bg-slate-800/30 border-white/5 hover:border-white/10'
+                    }`}
                   onClick={() => setSelectedChain(chain)}
                 >
                   <div className="flex items-center justify-between mb-3">
@@ -574,7 +573,7 @@ export default function Leaderboard({
                       {config.description}
                     </span>
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
                       <div className="text-gray-400">Players</div>
@@ -593,7 +592,7 @@ export default function Leaderboard({
                       <div className="font-bold text-green-400">{stats.topAccuracy.toFixed(1)}%</div>
                     </div>
                   </div>
-                  
+
                   {/* Development notice when no stats available */}
                   {stats.totalPlayers === 0 && (
                     <div className="mt-3 p-2 bg-yellow-900/20 border border-yellow-700/30 rounded text-xs text-yellow-300">
@@ -615,11 +614,10 @@ export default function Leaderboard({
                 <button
                   key={type}
                   onClick={() => setLeaderboardType(type)}
-                  className={`px-3 py-1 text-xs rounded transition-colors ${
-                    leaderboardType === type
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-400 hover:text-white'
-                  }`}
+                  className={`px-3 py-1 text-xs rounded transition-colors ${leaderboardType === type
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-400 hover:text-white'
+                    }`}
                 >
                   {type.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
                 </button>
@@ -633,11 +631,10 @@ export default function Leaderboard({
                   <button
                     key={time}
                     onClick={() => setTimeFrame(time)}
-                    className={`px-3 py-1 text-xs rounded transition-colors ${
-                      timeFrame === time
-                        ? 'bg-purple-600 text-white'
-                        : 'text-gray-400 hover:text-white'
-                    }`}
+                    className={`px-3 py-1 text-xs rounded transition-colors ${timeFrame === time
+                      ? 'bg-purple-600 text-white'
+                      : 'text-gray-400 hover:text-white'
+                      }`}
                   >
                     {time}
                   </button>
@@ -667,7 +664,7 @@ export default function Leaderboard({
             <p className="text-gray-300 text-sm text-center mb-4">
               Top performers across both Arbitrum and Monad ecosystems
             </p>
-            
+
             <div className="grid md:grid-cols-3 gap-4">
               {multiChainData.crossChainRankings.slice(0, 3).map((entry, index) => (
                 <div key={entry.player.fid} className="bg-slate-900/50 rounded-lg p-4 text-center">
@@ -712,40 +709,37 @@ export default function Leaderboard({
     return (
       <div className="bg-slate-800 rounded-lg p-6 mt-8">
         {/* Tab switcher */}
-         <div className="flex gap-2 mb-6 border-b border-slate-700">
-           {isGameEnd && (
-             <button
-               onClick={() => setShowGameEnd(true)}
-               className={`px-4 py-2 font-medium transition-colors ${
-                 showGameEnd
-                   ? 'border-b-2 border-blue-500 text-white'
-                   : 'text-gray-400 hover:text-white'
-               }`}
-             >
-               Latest Results
-             </button>
-           )}
-           <button
-             onClick={() => setMode('current' as LeaderboardMode)}
-             className={`px-4 py-2 font-medium transition-colors ${
-               (mode as string) === 'current'
-                 ? 'border-b-2 border-blue-500 text-white'
-                 : 'text-gray-400 hover:text-white'
-             }`}
-           >
-             Current Investigation
-           </button>
-           <button
-             onClick={() => setMode('career' as LeaderboardMode)}
-             className={`px-4 py-2 font-medium transition-colors ${
-               (mode as string) === 'career'
-                 ? 'border-b-2 border-blue-500 text-white'
-                 : 'text-gray-400 hover:text-white'
-             }`}
-           >
-             Career Stats
-           </button>
-         </div>
+        <div className="flex gap-2 mb-6 border-b border-slate-700">
+          {isGameEnd && (
+            <button
+              onClick={() => setShowGameEnd(true)}
+              className={`px-4 py-2 font-medium transition-colors ${showGameEnd
+                ? 'border-b-2 border-blue-500 text-white'
+                : 'text-gray-400 hover:text-white'
+                }`}
+            >
+              Latest Results
+            </button>
+          )}
+          <button
+            onClick={() => setMode('current' as LeaderboardMode)}
+            className={`px-4 py-2 font-medium transition-colors ${(mode as string) === 'current'
+              ? 'border-b-2 border-blue-500 text-white'
+              : 'text-gray-400 hover:text-white'
+              }`}
+          >
+            Current Investigation
+          </button>
+          <button
+            onClick={() => setMode('career' as LeaderboardMode)}
+            className={`px-4 py-2 font-medium transition-colors ${(mode as string) === 'career'
+              ? 'border-b-2 border-blue-500 text-white'
+              : 'text-gray-400 hover:text-white'
+              }`}
+          >
+            Career Stats
+          </button>
+        </div>
 
         <h2 className="text-2xl font-bold mb-6 text-center">Career Stats</h2>
 
@@ -791,11 +785,10 @@ export default function Leaderboard({
                 setCareerTimeFilter(filter);
                 setCareerOffset(0);
               }}
-              className={`px-3 py-2 text-sm font-medium transition-colors ${
-                careerTimeFilter === filter
-                  ? 'border-b-2 border-blue-500 text-white'
-                  : 'text-gray-400 hover:text-white'
-              }`}
+              className={`px-3 py-2 text-sm font-medium transition-colors ${careerTimeFilter === filter
+                ? 'border-b-2 border-blue-500 text-white'
+                : 'text-gray-400 hover:text-white'
+                }`}
             >
               {filter === 'all' ? 'All Time' : filter === 'month' ? 'This Month' : 'This Week'}
             </button>
@@ -856,7 +849,7 @@ export default function Leaderboard({
               >
                 ← Previous
               </button>
-              
+
               <div className="text-xs text-gray-400 flex items-center px-2">
                 {careerOffset + 1}–{Math.min(careerOffset + 10, careerStats.pagination.total)} of {careerStats.pagination.total}
               </div>
@@ -921,22 +914,20 @@ export default function Leaderboard({
         <div className="flex gap-2 mb-6 border-b border-slate-700">
           <button
             onClick={() => setMode('current' as LeaderboardMode)}
-            className={`px-4 py-2 font-medium transition-colors ${
-              (mode as string) === 'current'
-                ? 'border-b-2 border-blue-500 text-white'
-                : 'text-gray-400 hover:text-white'
-            }`}
+            className={`px-4 py-2 font-medium transition-colors ${(mode as string) === 'current'
+              ? 'border-b-2 border-blue-500 text-white'
+              : 'text-gray-400 hover:text-white'
+              }`}
           >
             Current Investigation
           </button>
           {fid && (
             <button
               onClick={() => setMode('career' as LeaderboardMode)}
-              className={`px-4 py-2 font-medium transition-colors ${
-                (mode as string) === 'career'
-                  ? 'border-b-2 border-blue-500 text-white'
-                  : 'text-gray-400 hover:text-white'
-              }`}
+              className={`px-4 py-2 font-medium transition-colors ${(mode as string) === 'career'
+                ? 'border-b-2 border-blue-500 text-white'
+                : 'text-gray-400 hover:text-white'
+                }`}
             >
               Career Stats
             </button>
@@ -954,22 +945,20 @@ export default function Leaderboard({
       <div className="flex gap-2 mb-6 border-b border-slate-700">
         <button
           onClick={() => setMode('current' as LeaderboardMode)}
-          className={`px-4 py-2 font-medium transition-colors ${
-            (mode as string) === 'current'
-              ? 'border-b-2 border-blue-500 text-white'
-              : 'text-gray-400 hover:text-white'
-          }`}
+          className={`px-4 py-2 font-medium transition-colors ${(mode as string) === 'current'
+            ? 'border-b-2 border-blue-500 text-white'
+            : 'text-gray-400 hover:text-white'
+            }`}
         >
           Current Investigation
         </button>
         {fid && (
           <button
             onClick={() => setMode('career' as LeaderboardMode)}
-            className={`px-4 py-2 font-medium transition-colors ${
-              (mode as string) === 'career'
-                ? 'border-b-2 border-blue-500 text-white'
-                : 'text-gray-400 hover:text-white'
-            }`}
+            className={`px-4 py-2 font-medium transition-colors ${(mode as string) === 'career'
+              ? 'border-b-2 border-blue-500 text-white'
+              : 'text-gray-400 hover:text-white'
+              }`}
           >
             Career Stats
           </button>

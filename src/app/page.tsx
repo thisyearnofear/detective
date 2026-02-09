@@ -39,9 +39,9 @@ export default function Home() {
   const { data: gameState, error: gameStateError, mutate: mutateGameState } = useSWR(
     sdkUser ? `/api/game/status?fid=${sdkUser.fid}` : "/api/game/status",
     fetcher,
-    { 
-      refreshInterval: 2000,
-      dedupingInterval: 2000, // Prevent duplicate requests within 2s window
+    {
+      refreshInterval: 1000,
+      dedupingInterval: 1000, // Prevent duplicate requests within 1s window
       keepPreviousData: true,
       revalidateOnFocus: true,
     },
@@ -81,7 +81,7 @@ export default function Home() {
       try {
         const token = localStorage.getItem('auth-token');
         const cachedUser = localStorage.getItem('cached-user');
-        
+
         if (token && cachedUser) {
           // Verify token is still valid on server
           const response = await fetch('/api/auth/quick-auth/verify', {
@@ -185,19 +185,19 @@ export default function Home() {
 
   return (
     <main className="min-h-screen flex items-center justify-center relative overflow-hidden px-4 z-0">
-        {/* Layer 1: Starfield (deepest) */}
-        <StarfieldBackground />
+      {/* Layer 1: Starfield (deepest) */}
+      <StarfieldBackground />
 
-        {/* Layer 2: Grid Backdrop */}
-        <AnimatedGridBackdrop images={gridImages} />
+      {/* Layer 2: Grid Backdrop */}
+      <AnimatedGridBackdrop images={gridImages} />
 
-        {/* Layer 3: Content Container - Perfect centering */}
-        <div className="relative z-20 w-full max-w-2xl flex flex-col items-center justify-center min-h-screen">
+      {/* Layer 3: Content Container - Perfect centering */}
+      <div className="relative z-20 w-full max-w-2xl flex flex-col items-center justify-center min-h-screen">
 
         {/* Hero Section - The DETECTIVE Title - Centered with entrance animation */}
         <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-1000 ${introComplete ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
           <h1 className={`hero-title text-6xl sm:text-7xl md:text-[10rem] font-black text-white tracking-tighter leading-none select-none mix-blend-overlay opacity-90 text-center transition-all duration-700 ${introComplete ? '' : 'animate-in'}`}
-              style={{ animationDelay: '100ms' }}>
+            style={{ animationDelay: '100ms' }}>
             DETECTIVE
           </h1>
         </div>
@@ -238,8 +238,8 @@ export default function Home() {
 
               {/* Authentication - Unified MiniApp + Web */}
               <div className="w-full">
-                <AuthComponent 
-                  onAuthSuccess={(user, _token) => handleWebAuth(user)} 
+                <AuthComponent
+                  onAuthSuccess={(user, _token) => handleWebAuth(user)}
                 />
               </div>
 
@@ -326,19 +326,19 @@ export default function Home() {
                     )}
                   </div>
                   <div className="flex gap-2">
-                     <button
-                       onClick={() => setShowLeaderboard(!showLeaderboard)}
-                       className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-white/10 hover:bg-white/20 text-white border border-white/20"
-                     >
-                       {showLeaderboard ? '← Back to Investigation' : '🏆 Stats'}
-                     </button>
-                     <button
-                       onClick={handleLogout}
-                       className="text-xs text-gray-400 hover:text-white transition-colors"
-                     >
-                       Switch
-                     </button>
-                   </div>
+                    <button
+                      onClick={() => setShowLeaderboard(!showLeaderboard)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-white/10 hover:bg-white/20 text-white border border-white/20"
+                    >
+                      {showLeaderboard ? '← Back to Investigation' : '🏆 Stats'}
+                    </button>
+                    <button
+                      onClick={handleLogout}
+                      className="text-xs text-gray-400 hover:text-white transition-colors"
+                    >
+                      Switch
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -386,10 +386,10 @@ export default function Home() {
                   {renderGameState()}
                 </>
               )}
-              </div>
-                  )}
-                  </div>
-                  </div>
-                  </main>
-                  );
-                  }
+            </div>
+          )}
+        </div>
+      </div>
+    </main>
+  );
+}

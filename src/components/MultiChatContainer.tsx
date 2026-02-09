@@ -15,7 +15,7 @@ import { UserProfile } from "@/lib/types";
 
 // Polling intervals - single source of truth
 const POLLING_INTERVALS = {
-  ACTIVE_GAME: 2000,      // Normal active game polling
+  ACTIVE_GAME: 1000,      // Normal active game polling - faster for responsive updates
   ROUND_TRANSITION: 500,  // Fast polling during round transitions
   POST_GAME_WAIT: 1000,   // Minimal polling while waiting for next cycle (detects cycleId change)
 } as const;
@@ -95,7 +95,7 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
     mutate,
   } = useSWR(`/api/match/active?fid=${fid}`, fetcherWithGameNotLive, {
     refreshInterval,
-    dedupingInterval: 2000, // Prevent duplicate requests within 2s window
+    dedupingInterval: 1000, // Prevent duplicate requests within 1s window
     refreshWhenHidden: true, // Mobile: Keep polling when app backgrounded
     revalidateOnFocus: true, // Mobile: Refresh when user returns
     keepPreviousData: true,
@@ -256,26 +256,26 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
         // Only trigger if match is marked as staked, we haven't done it yet, 
         // and we have session permissions
         if (
-          match.isStaked && 
+          match.isStaked &&
           !executedStakesRef.current.has(match.id) &&
           !match.voteLocked
         ) {
           console.log(`[MultiChatContainer] Detected new staked match: ${match.id}`);
-          
+
           try {
             const { executeSessionStake, getSessionPermissions, isPermissionValid } = await import('@/lib/erc7715');
             const { context, expiry } = getSessionPermissions();
-            
+
             if (context && isPermissionValid(expiry || 0)) {
               // Mark as executed immediately to prevent duplicate calls during async ops
               executedStakesRef.current.add(match.id);
-              
+
               const currentVote = votes[match.id] || match.currentVote || "REAL";
               const isBot = currentVote === "BOT";
               const amountWei = match.stakedAmount || "1000000000000000"; // Default 0.001 ETH if not specified
-              
+
               const bundleId = await executeSessionStake(match.id, isBot, amountWei);
-              
+
               if (bundleId) {
                 console.log(`[MultiChatContainer] ✓ Background stake submitted for match ${match.id}. Bundle: ${bundleId}`);
               } else {
@@ -435,7 +435,7 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
           try {
             const { executeSessionVote, getSessionPermissions, isPermissionValid } = await import('@/lib/erc7715');
             const { context, expiry } = getSessionPermissions();
-            
+
             if (context && isPermissionValid(expiry || 0)) {
               const currentVote = votes[matchId] || "REAL";
               executeSessionVote(matchId, currentVote === "BOT")
