@@ -3,6 +3,10 @@
 /.pnp
 .pnp.js
 
+# Lock files (using bun.lock only)
+package-lock.json
+yarn.lock
+
 # Testing
 /coverage
 
