@@ -4,6 +4,7 @@
   "description": "Farcaster mini app - AI detective game with horizontal scaling support",
   "private": true,
   "type": "module",
+  "packageManager": "bun@1.1.0",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
