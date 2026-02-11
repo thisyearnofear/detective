@@ -3,7 +3,7 @@
 import useSWR from 'swr';
 import { LeaderboardEntry } from '@/lib/types';
 import { useState } from 'react';
-import { fetcher } from '@/lib/fetcher';
+import { fetcher, getApiUrl } from '@/lib/fetcher';
 
 // Shared UI Helpers - DRY principle
 const helpers = {
@@ -227,7 +227,7 @@ export default function Leaderboard({
   const [showGameEnd, setShowGameEnd] = useState(isGameEnd);
 
   const { data: leaderboard, error } = useSWR<LeaderboardEntry[]>(
-    (mode as string) === 'current' ? '/api/leaderboard/current' : null,
+    (mode as string) === 'current' ? getApiUrl('/api/leaderboard/current') : null,
     fetcher,
     {
       refreshInterval: 5000,
@@ -236,7 +236,7 @@ export default function Leaderboard({
 
   const { data: careerStats } = useSWR<any>(
     (mode as string) === 'career' && fid
-      ? `/api/stats/career?fid=${fid}&timeFilter=${careerTimeFilter}&offset=${careerOffset}&limit=10`
+      ? getApiUrl(`/api/stats/career?fid=${fid}&timeFilter=${careerTimeFilter}&offset=${careerOffset}&limit=10`)
       : null,
     fetcher,
     {
@@ -246,13 +246,13 @@ export default function Leaderboard({
   );
 
   const { data: insights } = useSWR<PlayerInsights>(
-    (mode as string) === 'insights' && fid ? `/api/leaderboard/insights?fid=${fid}&chain=${selectedChain}` : null,
+    (mode as string) === 'insights' && fid ? getApiUrl(`/api/leaderboard/insights?fid=${fid}&chain=${selectedChain}`) : null,
     fetcher,
     { refreshInterval: 15000 }
   );
 
   const { data: multiChainData, isLoading: isMultiChainLoading } = useSWR<MultiChainLeaderboardData>(
-    (mode as string) === 'multi-chain' ? `/api/leaderboard/multi-chain?chain=${selectedChain}&type=${leaderboardType}&timeframe=${timeFrame}` : null,
+    (mode as string) === 'multi-chain' ? getApiUrl(`/api/leaderboard/multi-chain?chain=${selectedChain}&type=${leaderboardType}&timeframe=${timeFrame}`) : null,
     fetcher,
     { refreshInterval: 5000 }
   );

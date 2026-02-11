@@ -9,7 +9,7 @@ import MobileSwipeableChat from "./MobileSwipeableChat";
 import OnboardingModal, { useOnboarding } from "./OnboardingModal";
 import { useModal } from "@/hooks/useModal";
 import { useViewport } from "@/lib/viewport";
-import { fetcherWithGameNotLive } from "@/lib/fetcher";
+import { fetcherWithGameNotLive, getApiUrl } from "@/lib/fetcher";
 import { syncTimeOffset, resetTimeOffset } from "@/lib/timeSynchronization";
 import { UserProfile } from "@/lib/types";
 
@@ -93,7 +93,7 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
     data: matchData,
     error,
     mutate,
-  } = useSWR(`/api/match/active?fid=${fid}`, fetcherWithGameNotLive, {
+  } = useSWR(getApiUrl(`/api/match/active?fid=${fid}`), fetcherWithGameNotLive, {
     refreshInterval,
     dedupingInterval: 1000, // Prevent duplicate requests within 1s window
     refreshWhenHidden: true, // Mobile: Keep polling when app backgrounded
@@ -401,7 +401,7 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
       setVotes((prev): VoteState => ({ ...prev, [matchId]: newVote }));
 
       try {
-        await fetch("/api/match/vote", {
+        await fetch(getApiUrl("/api/match/vote"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ matchId, vote: newVote, fid }),
@@ -422,7 +422,7 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
       if (isPreparingRound) return;
 
       try {
-        const response = await fetch("/api/match/vote", {
+        const response = await fetch(getApiUrl("/api/match/vote"), {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ matchId, fid }),

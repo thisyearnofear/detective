@@ -5,6 +5,7 @@ import { Player, UserProfile } from '@/lib/types';
 import { useCountdown } from '@/hooks/useCountdown';
 import { useRegistrationFlow } from '@/hooks/useRegistrationFlow';
 import { GAME_CONSTANTS } from '@/lib/gameConstants';
+import { getApiUrl } from '@/lib/fetcher';
 import ErrorCard from '../ErrorCard';
 import ArbitrumRegistrationModal from '../ArbitrumRegistrationModal';
 import DetectiveToast from '../DetectiveToast';
@@ -103,7 +104,7 @@ export default function BriefingRoom({ currentPlayer, isRegistrationOpen = true,
       }
 
       // Use AbortSignal.timeout for fetch timeout
-      const response = await fetch('/api/game/register', {
+      const response = await fetch(getApiUrl('/api/game/register'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -148,7 +149,7 @@ export default function BriefingRoom({ currentPlayer, isRegistrationOpen = true,
   const handleReady = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/game/ready', {
+      const response = await fetch(getApiUrl('/api/game/ready'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fid: currentPlayer.fid }),

@@ -10,7 +10,7 @@ import GameStateView from "@/components/game/GameStateView";
 import CaseStatusCard from "@/components/game/CaseStatusCard";
 import Leaderboard from "@/components/Leaderboard";
 import CollapsibleSection from "@/components/CollapsibleSection";
-import { fetcher } from "@/lib/fetcher";
+import { fetcher, getApiUrl } from "@/lib/fetcher";
 
 // Main component for the application's home page
 export default function Home() {
@@ -37,7 +37,7 @@ export default function Home() {
   // Use SWR for polling the game state
   // PERFORMANT: Adaptive polling - deduped requests prevent double-fetching
   const { data: gameState, error: gameStateError, mutate: mutateGameState } = useSWR(
-    sdkUser ? `/api/game/status?fid=${sdkUser.fid}` : "/api/game/status",
+    sdkUser ? getApiUrl(`/api/game/status?fid=${sdkUser.fid}`) : getApiUrl("/api/game/status"),
     fetcher,
     {
       refreshInterval: 1000,
@@ -84,7 +84,7 @@ export default function Home() {
 
         if (token && cachedUser) {
           // Verify token is still valid on server
-          const response = await fetch('/api/auth/quick-auth/verify', {
+          const response = await fetch(getApiUrl('/api/auth/quick-auth/verify'), {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

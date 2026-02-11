@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import AnimatedGridBackdrop from '@/components/AnimatedGridBackdrop';
 import StarfieldBackground from '@/components/StarfieldBackground';
-import { fetcher } from '@/lib/fetcher';
+import { fetcher, getApiUrl } from '@/lib/fetcher';
 
 // Custom confirmation modal component
 function ConfirmModal({
@@ -119,7 +119,7 @@ export default function AdminPage() {
     const [showResetModal, setShowResetModal] = useState(false);
 
     // Poll admin data every 2 seconds for responsive updates
-    const { data: adminData, mutate } = useSWR('/api/admin/state', fetcher, {
+    const { data: adminData, mutate } = useSWR(getApiUrl('/api/admin/state'), fetcher, {
         refreshInterval: 1000,
         revalidateOnFocus: true,
         dedupingInterval: 500, // Allow rapid revalidation
@@ -145,7 +145,7 @@ export default function AdminPage() {
         setMessage(null);
 
         try {
-            const response = await fetch('/api/admin/register-bulk', {
+            const response = await fetch(getApiUrl('/api/admin/register-bulk'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ usernames: usernameList }),
@@ -175,7 +175,7 @@ export default function AdminPage() {
         setMessage(null);
 
         try {
-            const response = await fetch('/api/admin/state', {
+            const response = await fetch(getApiUrl('/api/admin/state'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: 'transition', state: newState }),
@@ -201,7 +201,7 @@ export default function AdminPage() {
         setMessage(null);
 
         try {
-            const response = await fetch('/api/admin/state', {
+            const response = await fetch(getApiUrl('/api/admin/state'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: 'reset' }),
@@ -228,7 +228,7 @@ export default function AdminPage() {
 
         setMessage(null);
         try {
-            const response = await fetch('/api/admin/state', {
+            const response = await fetch(getApiUrl('/api/admin/state'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
