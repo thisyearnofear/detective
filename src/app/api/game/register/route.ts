@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
 import { getFarcasterUserData } from "@/lib/neynar";
-import { verifyArbitrumTx, getArbitrumConfig, isWalletRegisteredOnChain } from "@/lib/arbitrumVerification";
+import { verifyArbitrumTx, getArbitrumConfig } from "@/lib/arbitrumVerification";
 import { db } from "@/lib/database";
 
 /**

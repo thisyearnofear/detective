@@ -4,6 +4,7 @@ import useSWR from 'swr';
 import { LeaderboardEntry } from '@/lib/types';
 import { useState } from 'react';
 import { fetcher, getApiUrl } from '@/lib/fetcher';
+import { getMotivationMessage, getAchievements } from '@/lib/gamification';
 
 // Shared UI Helpers - DRY principle
 const helpers = {
@@ -296,13 +297,44 @@ export default function Leaderboard({
 
           {/* Motivation */}
           <div className="bg-slate-900/50 rounded-lg p-4 text-center border border-slate-700 mb-8">
-            <p className="text-gray-300 text-sm">
-              {accuracy >= 80 ? "🔥 Incredible detective work! You're a natural detective." :
-                accuracy >= 60 ? "💪 Nice work! Keep playing to improve." :
-                  accuracy >= 40 ? "📈 Not bad! You'll get better with practice." :
-                    "🎯 Keep playing - You'll improve"}
-            </p>
+            <p className="text-gray-300 text-sm">{getMotivationMessage(accuracy)}</p>
           </div>
+
+          {/* Achievements */}
+          {(() => {
+            const correctCount = roundResults.filter(r => r.correct).length;
+            const totalCount = roundResults.length;
+            const calculatedAccuracy = totalCount > 0 ? (correctCount / totalCount) * 100 : 0;
+            const gameResult: Parameters<typeof getAchievements>[0] = {
+              accuracy: calculatedAccuracy,
+              rank: playerRank,
+              totalPlayers,
+              correctCount,
+              totalCount,
+              earnings: 0,
+              streak: 0,
+              roundResults,
+            };
+            const achievements = getAchievements(gameResult);
+            if (achievements.length === 0) return null;
+            return (
+              <div className="bg-slate-900/50 rounded-lg p-4 text-center border border-slate-700 mb-8">
+                <p className="text-xs text-gray-400 mb-3">🏅 Achievements Unlocked</p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {achievements.map((achievement) => (
+                    <span
+                      key={achievement.id}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-500/20 to-blue-500/20 rounded-full border border-purple-500/30"
+                      title={achievement.description}
+                    >
+                      <span className="text-lg">{achievement.icon}</span>
+                      <span className="text-xs font-medium text-purple-200">{achievement.name}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Round Breakdown */}
           {roundResults.length > 0 && (

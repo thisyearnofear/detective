@@ -5,7 +5,7 @@ import { GameCycleState } from '@/lib/types';
 import { sendGameStartNotification } from '@/lib/farcasterAuth';
 import BriefingRoom from './BriefingRoom';
 import GameActiveView from './GameActiveView';
-import GameFinishedView from './GameFinishedView';
+import GameFinishedView from '@/components/GameFinishedView';
 
 type GameResults = {
   accuracy: number;
@@ -94,7 +94,15 @@ export default function GameStateView({
       );
 
     case 'FINISHED':
-      return <GameFinishedView onRequestRefresh={onRequestRefresh} />;
+      return (
+        <GameFinishedView
+          onRequestRefresh={onRequestRefresh}
+          nextRegistrationTime={gameState.registrationEnds}
+          onPlayAgain={() => {
+            onRequestRefresh?.(true);
+          }}
+        />
+      );
 
     default:
       return null;
