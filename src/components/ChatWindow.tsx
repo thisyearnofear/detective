@@ -65,8 +65,6 @@ export default function ChatWindow({
   // OPTIMIZED STATE - Reduced re-renders
   const [input, setInput] = useState("");
   const [isTimeUp, setIsTimeUp] = useState(false);
-  const [lastMessageTime, setLastMessageTime] = useState(Date.now());
-  const [warningLevel, setWarningLevel] = useState<"none" | "warning" | "critical">("none");
   const [messageCount, setMessageCount] = useState(0);
   const [opponentColors, setOpponentColors] = useState<{
     primary: [number, number, number];
@@ -150,20 +148,6 @@ export default function ChatWindow({
     }
   }, [messages, messageCount, shouldAutoScroll, isUserScrolling, isFarcasterFrame]);
 
-  useEffect(() => {
-    const checkActivity = setInterval(() => {
-      const timeSinceLastMessage = Date.now() - lastMessageTime;
-      if (timeSinceLastMessage > 45000) {
-        setWarningLevel("critical");
-      } else if (timeSinceLastMessage > 30000) {
-        setWarningLevel("warning");
-      } else {
-        setWarningLevel("none");
-      }
-    }, 1000);
-    return () => clearInterval(checkActivity);
-  }, [lastMessageTime]);
-
   // OPTIMIZED MESSAGE SENDING with haptic feedback
   const handleSend = useCallback(async () => {
     if (!input.trim()) return;
@@ -171,8 +155,6 @@ export default function ChatWindow({
     haptic('light'); // Haptic feedback on send
     const text = input;
     setInput("");
-    setLastMessageTime(Date.now());
-    setWarningLevel("none");
 
     // Force autoscroll when user sends a message
     setShouldAutoScroll(true);
@@ -239,51 +221,13 @@ export default function ChatWindow({
     : null;
 
   return (
-    <div
-      className={`${styles.container} ${warningLevel !== "none" ? "ring-2" : ""
-        } ${warningLevel === "warning" ? "ring-yellow-500 ring-opacity-50" : ""} ${warningLevel === "critical" ? "ring-red-500 ring-opacity-75" : ""
-        }`}
-      style={
-        warningLevel !== "none"
-          ? {
-            boxShadow:
-              warningLevel === "warning"
-                ? "inset 0 0 20px rgba(234, 179, 8, 0.2), 0 0 15px rgba(234, 179, 8, 0.15)"
-                : "inset 0 0 20px rgba(239, 68, 68, 0.25), 0 0 20px rgba(239, 68, 68, 0.2)",
-          }
-          : {}
-      }
-    >
+    <div className={styles.container}>
       {/* Stake Indicator Badge */}
       {monetizationEnabled && stakedDisplay && (
         <div className="absolute top-2 right-2 z-10">
           <div className="bg-gradient-to-r from-blue-600/90 to-purple-600/90 backdrop-blur-md border border-white/20 rounded-full px-2 py-0.5 shadow-lg flex items-center gap-1.5 animate-in fade-in zoom-in duration-300">
             <span className="text-[10px] text-blue-100 font-black uppercase tracking-tighter">Stake</span>
             <span className="text-[10px] text-white font-black">{stakedDisplay}</span>
-          </div>
-        </div>
-      )}
-
-      {warningLevel !== "none" && !isTimeUp && (
-        <div
-          className={`absolute top-0 left-0 right-0 p-3 text-center text-sm rounded-t-lg font-semibold transition-all ${warningLevel === "warning"
-            ? "bg-gradient-to-r from-yellow-500/30 to-amber-500/20 text-yellow-200 animate-inactivity-warning"
-            : "bg-gradient-to-r from-red-500/40 to-orange-500/30 text-red-100 animate-inactivity-critical"
-            }`}
-        >
-          <div className="flex items-center justify-center gap-2">
-            {warningLevel === "warning" && (
-              <>
-                <span className="animate-bounce">⚠️</span>
-                <span>Send a message to stay active!</span>
-              </>
-            )}
-            {warningLevel === "critical" && (
-              <>
-                <span className="animate-pulse">🚨</span>
-                <span>Send a message now or forfeit!</span>
-              </>
-            )}
           </div>
         </div>
       )}
