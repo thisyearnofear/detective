@@ -1,7 +1,8 @@
 // src/lib/accessControl.ts
 import { createPublicClient, http, Address } from 'viem';
-import { arbitrum, base } from 'viem/chains'; // Using base for mainnet compatibility
+import { arbitrum, base } from 'viem/chains';
 import { erc20Abi, erc721Abi } from 'viem';
+import { getApiUrl } from '@/lib/fetcher';
 
 // Access control configuration - easily configurable
 export const ACCESS_CONFIG = {
@@ -199,7 +200,7 @@ export async function checkUserAccess(
 async function checkWhitelist(walletAddress: string, fid?: number): Promise<boolean> {
   try {
     // Check database whitelist
-    const response = await fetch('/api/access/whitelist/check', {
+    const response = await fetch(getApiUrl('/api/access/whitelist/check'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ walletAddress, fid }),

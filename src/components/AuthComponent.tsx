@@ -14,6 +14,7 @@
 import { useEffect, useState } from 'react';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { SignInButton } from '@farcaster/auth-kit';
+import { getApiUrl } from '@/lib/fetcher';
 import SpinningDetective from './SpinningDetective';
 
 export type AuthUser = {
@@ -51,7 +52,7 @@ export default function AuthComponent({
    * DRY: Single source of truth for token validation
    */
   const verifyTokenOnServer = async (token: string): Promise<VerifyResponse> => {
-    const response = await fetch('/api/auth/quick-auth/verify', {
+    const response = await fetch(getApiUrl('/api/auth/quick-auth/verify'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

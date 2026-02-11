@@ -12,6 +12,7 @@ import {
   useMemoryOptimization
 } from "@/lib/performance";
 import { useHaptics, usePullToRefresh } from "@/lib/mobile";
+import { getApiUrl } from "@/lib/fetcher";
 import EmojiPicker from "./EmojiPicker";
 import VoteToggle from "./VoteToggle";
 import ProgressRingTimer from "./ProgressRingTimer";
@@ -180,7 +181,7 @@ export default function ChatWindow({
     try {
       const response = await requestCache.fetch(
         `send_${match.id}_${Date.now()}`,
-        () => fetch("/api/chat/send", {
+        () => fetch(getApiUrl("/api/chat/send"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ matchId: match.id, senderFid: fid, text }),
