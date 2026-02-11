@@ -62,6 +62,11 @@ export interface VoteRecord {
   stakedAmount?: string; // Amount staked in base units
   stakeCurrency?: "NATIVE" | "USDC"; // Currency used for stake
   payoutAmount?: string; // Amount won/lost in base units
+
+  // Multi-LLM Detection
+  llmGuess?: string; // Which LLM they guessed (model ID)
+  llmCorrect?: boolean; // Did they guess the LLM correctly?
+  llmBonusPoints?: number; // Bonus points for correct LLM guess (5 points)
 }
 
 // Represents a single conversation match
@@ -90,6 +95,11 @@ export interface Match {
   isStaked?: boolean; // Whether this match has active economic stakes
   payoutStatus?: "PENDING" | "SETTLED" | "FAILED";
   stakeTxHash?: string; // On-chain stake transaction hash
+
+  // Multi-LLM Support
+  llmModelId?: string; // The LLM model ID used for this bot
+  llmModelName?: string; // Human-readable name
+  userLlmGuess?: string; // User's LLM guess (from voting)
 }
 
 // Typing indicator state for realistic bot behavior

@@ -3,10 +3,14 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { UserProfile } from "@/lib/types";
+import { AVAILABLE_MODELS } from "@/lib/openrouter";
 
 type RevealData = {
   opponent: UserProfile;
   actualType: "REAL" | "BOT";
+  llmModelId?: string;
+  llmModelName?: string;
+  userLlmGuess?: string;
 };
 
 interface RoundTransitionProps {
@@ -63,6 +67,8 @@ export default function RoundTransition({
                 ? "from-red-900/20 to-red-800/10"
                 : "from-green-900/20 to-green-800/10";
 
+              const guessedCorrectly = isBot && reveal.userLlmGuess === reveal.llmModelId;
+
               return (
                 <div
                   key={idx}
@@ -92,6 +98,31 @@ export default function RoundTransition({
                         {isBot ? "AI Bot" : "Farcaster User"}
                       </p>
                     </div>
+
+                    {/* LLM Reveal for Bots */}
+                    {isBot && reveal.llmModelName && (
+                      <div className="mt-3 pt-3 border-t border-slate-700">
+                        <p className="text-xs text-gray-400 mb-1">Powered by</p>
+                        <div className={`
+                          inline-flex items-center gap-2 px-3 py-1.5 rounded-lg
+                          ${guessedCorrectly
+                            ? "bg-green-500/20 text-green-300 border border-green-500/50"
+                            : "bg-slate-700/50 text-gray-300 border border-slate-600"
+                          }
+                        `}>
+                          <span>{guessedCorrectly ? "🎯" : "🤖"}</span>
+                          <span className="text-sm font-medium">{reveal.llmModelName}</span>
+                        </div>
+                        {reveal.userLlmGuess && (
+                          <p className="text-xs text-gray-500 mt-2">
+                            You guessed: {
+                              AVAILABLE_MODELS.find(m => m.id === reveal.userLlmGuess)?.name || reveal.userLlmGuess
+                            }
+                            {guessedCorrectly && <span className="text-green-400 ml-1">✓ (+5 pts)</span>}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
