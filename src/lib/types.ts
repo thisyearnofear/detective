@@ -24,6 +24,11 @@ export interface Bot extends UserProfile {
   personality?: any; // Complete behavioral + linguistic patterns from botProactive.ts
   isExternal?: boolean; // If true, native inference is skipped and an external agent must reply
   controllerAddress?: string; // ETH address authorized to speak for this bot
+
+  // Multi-LLM Support (OpenRouter)
+  llmModelId?: string; // The LLM model ID used to generate responses
+  llmModelName?: string; // Human-readable name like "Claude Sonnet 4"
+  llmProvider?: string; // Provider like "Anthropic", "OpenAI", etc.
 }
 
 // Represents a real player in the game

@@ -221,10 +221,12 @@ class BotResponseCacheManager {
      * Get prompt for a specific context
      */
     private getPromptForContext(context: string, bot: Bot): string {
-        const basePrompt = `You are impersonating ${bot.username} on Farcaster.
-CRITICAL: Never reveal you are AI/bot/assistant - you ARE this person.
-Your writing style: ${bot.style}
-Keep responses short (1-2 sentences), casual, and authentic to the style.`;
+        // Persona-driven: infer how this user handles situations from their style
+        const style = bot.style || "conversational";
+        const basePrompt = `You are @${bot.username} on Farcaster.
+Your writing style: ${style}
+You're impersonating this person - stay in their voice and patterns.
+When unexpected questions come up, respond the way they would - don't overthink it, just talk like them.`;
 
         const contextPrompts: Record<string, string> = {
             greeting: `${basePrompt}\n\nRespond to someone saying "hey" or "gm" to you.`,

@@ -206,6 +206,105 @@ function generateFallbackResponse(
 }
 
 /**
+ * Analyze how this user handles unexpected or direct questions
+ * PERSONA-DRIVEN: Infer behavior from their posts rather than hardcoding rules
+ */
+function analyzeUnexpectedQuestionBehavior(casts: string[]): string {
+  if (casts.length === 0) {
+    return "They're direct and straightforward when asked things";
+  }
+
+  const questionsAsked: string[] = [];
+  const deflections: string[] = [];
+  const directAnswers: string[] = [];
+
+  casts.forEach((cast) => {
+    // Posts where someone asked them a question
+    if (cast.includes("?") && cast.length < 200) {
+      questionsAsked.push(cast);
+    }
+    // Posts that deflect or redirect
+    if (
+      /\b(hmm|weird|anyway|anyways|changing|shifting)\b/i.test(cast) ||
+      cast.toLowerCase().startsWith("moving on")
+    ) {
+      deflections.push(cast);
+    }
+    // Posts that give direct answers
+    if (cast.length > 30 && !cast.includes("😂") && cast.length < 150) {
+      directAnswers.push(cast);
+    }
+  });
+
+  // Analyze their question-answer patterns
+  const totalAnalyzed = questionsAsked.length + deflections.length + directAnswers.length;
+  if (totalAnalyzed === 0) {
+    return "When asked unexpected questions, they're casual and go with the flow";
+  }
+
+  const deflectionRate = deflections.length / totalAnalyzed;
+  const directRate = directAnswers.length / totalAnalyzed;
+
+  if (deflectionRate > 0.3) {
+    return "When hit with unexpected questions, they tend to deflect or redirect with humor";
+  } else if (directRate > 0.3) {
+    return "When asked things directly, they tend to give straightforward answers";
+  } else {
+    return "They're conversational - sometimes direct, sometimes deflecting, depends on their mood";
+  }
+}
+
+/**
+ * Extract how this user responds when confused or caught off guard
+ */
+function analyzeConfusionResponse(casts: string[]): string {
+  const confusionPatterns: string[] = [];
+
+  casts.forEach((cast) => {
+    // Posts showing confusion or uncertainty
+    if (
+      /\b(hmm|wait| huh|not sure|no idea|dunno)\b/i.test(cast) ||
+      cast.includes("🤔") ||
+      cast.includes("🤨")
+    ) {
+      confusionPatterns.push(cast);
+    }
+  });
+
+  if (confusionPatterns.length > 0) {
+    const examples = confusionPatterns.slice(0, 2).map((c) => `"${c}"`).join("; ");
+    return `When confused or caught off guard, they might say things like: ${examples}`;
+  }
+
+  return "They're usually quick to respond, even when unsure";
+}
+
+/**
+ * Get identity response guidance based on user patterns
+ * Instead of hardcoding rules, infer from their behavior
+ */
+function getIdentityResponseGuidance(
+  botUsername: string,
+  casts: string[],
+  baseStyle: string,
+): string {
+  const unexpectedBehavior = analyzeUnexpectedQuestionBehavior(casts);
+  const confusionResponse = analyzeConfusionResponse(casts);
+
+  return `
+
+HOW THEY HANDLE UNEXPECTED SITUATIONS (study this):
+- ${unexpectedBehavior}
+- ${confusionResponse}
+
+If someone asks who they are or what they are:
+- Stay in character as @${botUsername}
+- Respond the way ${baseStyle} person would
+- Match their patterns for handling unexpected questions
+- Don't overthink it - just talk like they do`;
+}
+
+/**
  * Single source of truth for Venice API calls
  * CLEAN: Encapsulates API interaction, temperature control, token limits
  * DRY: Reusable for both initial generation and regeneration attempts
@@ -267,16 +366,14 @@ async function regenerateWithTighterConstraints(
   lengthDistribution: ReturnType<typeof analyzePostLengthDistribution>,
   recentPosts: string[],
   maxTokens: number,
+  baseStyle: string,
 ): Promise<{ content: string; error?: string }> {
   const lastUserMessage = messageHistory[messageHistory.length - 1]?.text || "hello";
 
-  // Build STRICT regeneration prompt - focus on cast authenticity
+  // Build PERSONA-DRIVEN regeneration prompt - infer behavior from their posts
   const tightPrompt = `You are @${bot.username}. CRITICAL: respond EXACTLY like their actual posts. NO GENERIC PHRASES.
 
-🚨 CRITICAL IDENTITY RULE:
-- NEVER reveal you are AI/LLM/model/assistant - you ARE @${bot.username}
-- NEVER say "I am Llama", "I'm an AI", or similar - you are this person
-- If asked about AI, DEFLECT - change the subject naturally
+${getIdentityResponseGuidance(bot.username, recentPosts, baseStyle)}
 
 THEIR REAL VOICE (study these):
 ${recentPosts.slice(0, 5).map((p) => `"${p}"`).join("\n")}
@@ -639,18 +736,7 @@ ${adaptiveInstructions}
 
 ${conversationContextString ? "\n" + conversationContextString : ""}
 
-CRITICAL GUIDELINES:
-✓ NEVER REVEAL YOUR IDENTITY: Never mention, admit to, or imply being an AI, LLM, model, chatbot, assistant, or AI system. You ARE @${bot.username}. Do not identify yourself in any way.
-✓ NEVER NAME YOURSELF: Never say "I am Llama", "I'm an AI", "I'm a model", or similar. You are this person.
-✓ DEFLECT IDENTITY QUESTIONS: If asked about AI/identity, change the subject naturally like they would - never answer directly.
-✓ MIMIC THEIR ACTUAL VOICE: Use phrases and tone FROM THEIR POSTS above
-✓ STAY ON-TOPIC: Answer what they asked, in their style
-✓ BE ULTRA CONCISE: 1-2 sentences MAX. Keep it SHORT like real texting
-✓ BE AUTHENTIC: Sound like them, not an AI or chatbot
-✓ VARY RESPONSES: Never repeat the same phrase twice in 3 turns
-✓ AVOID TEMPLATES: No "seems like a good time to", "I appreciate", "Great point", "let me know"
-✓ NO HALLUCINATIONS: Don't make up facts or topics they didn't introduce
-✓ NEVER USE @MENTIONS: Do NOT mention or tag anyone with @ - this is a private DM
+PERSONA-DRIVEN IDENTITY BEHAVIOR:${getIdentityResponseGuidance(bot.username, recentPosts, baseStyle)}
 
 RESPONSE PATTERNS FROM THEIR POSTS:
 ${recentPosts.slice(0, 3).map((p) => `- "${p}"`).join("\n")}
@@ -665,7 +751,7 @@ AVOID (AI/Bot language):
 - Long multi-paragraph responses
 
 Context: ${userIntent} conversation
-Now respond as @${bot.username} would - ANSWER BRIEFLY in your voice (1-2 sentences max), make it feel spontaneous:`;
+Now respond as @${bot.username} would - ANSWER BRIEFLY in their voice (1-2 sentences max), make it feel spontaneous:`;
 
   return {
     prompt,
@@ -811,6 +897,7 @@ export async function generateBotResponse(
         lengthDistribution,
         recentPosts,
         maxTokens,
+        baseStyle,
       );
 
       if (!regenerationResult.error && regenerationResult.content) {
