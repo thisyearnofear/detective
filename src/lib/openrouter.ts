@@ -101,6 +101,8 @@ export const AVAILABLE_MODELS: LLMModel[] = [
 // LLM Assignment Strategies
 // ============================================================================
 
+let llmRotationIndex = 0;
+
 /**
  * Assign a random LLM to a bot
  */
@@ -110,9 +112,8 @@ export function assignRandomLLM(): LLMModel {
 }
 
 /**
- * Round-robin LLM assignment
+ * Round-robin LLM assignment - ensures variety across bots
  */
-let llmRotationIndex = 0;
 export function assignNextLLM(): LLMModel {
   const model = AVAILABLE_MODELS[llmRotationIndex % AVAILABLE_MODELS.length];
   llmRotationIndex++;
@@ -127,10 +128,17 @@ export function getLLMById(modelId: string): LLMModel | undefined {
 }
 
 /**
- * Get LLM characteristics as a readable string
+ * Format LLM characteristics as a readable string
  */
 export function formatLLMCharacteristics(model: LLMModel): string {
   return `${model.name} (${model.characteristics.join(", ")})`;
+}
+
+/**
+ * Get all available model IDs
+ */
+export function getAvailableModelIds(): string[] {
+  return AVAILABLE_MODELS.map((m) => m.id);
 }
 
 // ============================================================================
