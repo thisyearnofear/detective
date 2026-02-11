@@ -43,6 +43,7 @@ import { getRepository } from "./gameRepository";
 import { saveConversationContext, saveConversationMemory, clearAllConversationContexts } from "./conversationContext";
 import { extractCoherenceScoresFromMatch, clearConversationState } from "./inference";
 import { GAME_CONSTANTS, GAME_DURATION } from "./gameConstants";
+import { assignNextLLM } from "./openrouter";
 
 // Destructure from single source of truth
 const MATCH_DURATION = GAME_CONSTANTS.MATCH_DURATION;
@@ -295,12 +296,15 @@ class GameManager {
     };
 
     // Create bot with complete personality profile (includes linguistic + behavioral patterns)
+    const llmModel = assignNextLLM();
     const botData: Bot = {
       ...userProfile,
       type: "BOT",
       originalAuthor: userProfile,
       recentCasts,
       style,
+      llmModelId: llmModel.id,
+      llmModelName: llmModel.name,
     };
 
     const bot: Bot = {
@@ -310,6 +314,8 @@ class GameManager {
 
     this.state!.players.set(userProfile.fid, player);
     this.state!.bots.set(userProfile.fid, bot);
+
+    console.log(`[createBotAndPlayer] Bot @${bot.username} assigned LLM: ${llmModel.name} (${llmModel.id})`);
 
     // Persist
     await persistence.savePlayer(player);
@@ -520,8 +526,9 @@ class GameManager {
 
   /**
    * Update vote for a match (multiple times allowed).
+   * Also accepts optional LLM guess for bot matches.
    */
-  async updateMatchVote(matchId: string, vote: "REAL" | "BOT"): Promise<Match | null> {
+  async updateMatchVote(matchId: string, vote: "REAL" | "BOT", llmGuess?: string): Promise<Match | null> {
     await this.ensureInitialized();
 
     const match = this.state!.matches.get(matchId);
@@ -549,6 +556,12 @@ class GameManager {
     match.currentVote = vote;
     match.voteHistory.push({ vote, timestamp: Date.now() });
 
+    // Store LLM guess if provided (only for bot matches)
+    if (llmGuess && match.opponent.type === "BOT") {
+      match.userLlmGuess = llmGuess;
+      console.log(`[updateMatchVote] Match ${matchId} LLM guess: ${llmGuess}`);
+    }
+
     await persistence.saveMatch(match);
     console.log(`[updateMatchVote] Match ${matchId} vote updated to ${vote} (history: ${match.voteHistory.length} changes)`);
     return match;
@@ -571,6 +584,15 @@ class GameManager {
     const guess = match.currentVote || "REAL";
     const actualType = match.opponent.type;
     const isCorrect = guess === actualType;
+
+    // Calculate LLM bonus points (only for correct bot detection)
+    let llmCorrect = false;
+    let llmBonusPoints = 0;
+    if (isCorrect && match.opponent.type === "BOT" && match.userLlmGuess && match.opponent.llmModelId) {
+      llmCorrect = match.userLlmGuess === match.opponent.llmModelId;
+      llmBonusPoints = llmCorrect ? 5 : 0;
+      console.log(`[lockMatchVote] Match ${matchId}: LLM guess "${match.userLlmGuess}" vs actual "${match.opponent.llmModelId}" → correct: ${llmCorrect}, bonus: +${llmBonusPoints}`);
+    }
 
     // Calculate economic outcome (Truth Stake Loop)
     let payoutAmount = "0";
@@ -600,6 +622,9 @@ class GameManager {
       roundNumber: match.roundNumber,
       stakedAmount: match.isStaked ? match.stakedAmount : undefined,
       payoutAmount: match.isStaked ? payoutAmount : undefined,
+      llmGuess: match.userLlmGuess,
+      llmCorrect,
+      llmBonusPoints,
     };
 
     player.voteHistory.push(voteRecord);
