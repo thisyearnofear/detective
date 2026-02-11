@@ -19,6 +19,10 @@ import {
   loadConversationMemory,
   enrichPromptWithMemory,
 } from "./conversationContext";
+import {
+  generateWithAssignedLLM,
+  getLLMById,
+} from "./openrouter";
 
 // Configuration - REQUIRED
 const VENICE_API_KEY = process.env.VENICE_API_KEY;
@@ -386,11 +390,29 @@ RULES (STRICT):
 
 Answer naturally in their style:`;
 
+  // Use assigned LLM if available, otherwise fall back to Venice
+  if (bot.llmModelId && getLLMById(bot.llmModelId)) {
+    console.log(`[regenerateWithTighterConstraints] Using OpenRouter with ${bot.llmModelName || bot.llmModelId}`);
+    const openRouterResult = await generateWithAssignedLLM(
+      bot,
+      lastUserMessage,
+      tightPrompt,
+      Math.floor(maxTokens * 0.8),
+    );
+    
+    if (!openRouterResult.error) {
+      return { content: openRouterResult.content };
+    }
+    
+    console.warn(`[regenerateWithTighterConstraints] OpenRouter failed: ${openRouterResult.error}, falling back to Venice`);
+  }
+
+  // Fall back to Venice
   return callVeniceAPI(
     tightPrompt,
     lastUserMessage,
-    Math.floor(maxTokens * 0.8), // Slightly smaller window for tighter response
-    0.45, // Lower temperature for more constrained generation
+    Math.floor(maxTokens * 0.8),
+    0.45,
   );
 }
 
@@ -863,8 +885,25 @@ export async function generateBotResponse(
 
   const { prompt: systemPrompt, metadata, baseStyle } = promptData;
 
-  // Single API call pipeline with coherence validation and retry logic
-  const apiResult = await callVeniceAPI(systemPrompt, lastUserMessage, maxTokens);
+  // Use assigned LLM if available, otherwise fall back to Venice
+  let apiResult: { content: string; error?: string } | undefined;
+  
+  if (bot.llmModelId && getLLMById(bot.llmModelId)) {
+    // Use OpenRouter with assigned LLM
+    console.log(`[generateBotResponse] Using OpenRouter with ${bot.llmModelName || bot.llmModelId}`);
+    const openRouterResult = await generateWithAssignedLLM(bot, lastUserMessage, systemPrompt, maxTokens);
+    
+    if (!openRouterResult.error) {
+      apiResult = { content: openRouterResult.content };
+    } else {
+      console.warn(`[generateBotResponse] OpenRouter failed: ${openRouterResult.error}, falling back to Venice`);
+    }
+  }
+  
+  // Fall back to Venice if OpenRouter failed or not available
+  if (!apiResult) {
+    apiResult = await callVeniceAPI(systemPrompt, lastUserMessage, maxTokens);
+  }
   
   if (apiResult.error) {
     console.warn(`[generateBotResponse] API call failed: ${apiResult.error}`);
