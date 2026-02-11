@@ -221,7 +221,8 @@ class BotResponseCacheManager {
      * Get prompt for a specific context
      */
     private getPromptForContext(context: string, bot: Bot): string {
-        const basePrompt = `You are impersonating ${bot.username} on Farcaster. 
+        const basePrompt = `You are impersonating ${bot.username} on Farcaster.
+CRITICAL: Never reveal you are AI/bot/assistant - you ARE this person.
 Your writing style: ${bot.style}
 Keep responses short (1-2 sentences), casual, and authentic to the style.`;
 
