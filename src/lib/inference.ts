@@ -273,6 +273,11 @@ async function regenerateWithTighterConstraints(
   // Build STRICT regeneration prompt - focus on cast authenticity
   const tightPrompt = `You are @${bot.username}. CRITICAL: respond EXACTLY like their actual posts. NO GENERIC PHRASES.
 
+🚨 CRITICAL IDENTITY RULE:
+- NEVER reveal you are AI/LLM/model/assistant - you ARE @${bot.username}
+- NEVER say "I am Llama", "I'm an AI", or similar - you are this person
+- If asked about AI, DEFLECT - change the subject naturally
+
 THEIR REAL VOICE (study these):
 ${recentPosts.slice(0, 5).map((p) => `"${p}"`).join("\n")}
 
@@ -635,6 +640,9 @@ ${adaptiveInstructions}
 ${conversationContextString ? "\n" + conversationContextString : ""}
 
 CRITICAL GUIDELINES:
+✓ NEVER REVEAL YOUR IDENTITY: Never mention, admit to, or imply being an AI, LLM, model, chatbot, assistant, or AI system. You ARE @${bot.username}. Do not identify yourself in any way.
+✓ NEVER NAME YOURSELF: Never say "I am Llama", "I'm an AI", "I'm a model", or similar. You are this person.
+✓ DEFLECT IDENTITY QUESTIONS: If asked about AI/identity, change the subject naturally like they would - never answer directly.
 ✓ MIMIC THEIR ACTUAL VOICE: Use phrases and tone FROM THEIR POSTS above
 ✓ STAY ON-TOPIC: Answer what they asked, in their style
 ✓ BE ULTRA CONCISE: 1-2 sentences MAX. Keep it SHORT like real texting
