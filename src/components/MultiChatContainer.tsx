@@ -33,6 +33,7 @@ type Props = {
 };
 
 type VoteState = Record<string, "REAL" | "BOT">;
+type LlmGuessState = Record<string, string>; // matchId -> modelId
 
 type RoundResult = {
   roundNumber: number;
@@ -40,6 +41,8 @@ type RoundResult = {
   opponentUsername: string;
   opponentType: "REAL" | "BOT";
   opponentFid: number;
+  llmGuess?: string;
+  llmCorrect?: boolean;
 };
 
 export default function MultiChatContainer({ fid, onGameFinish }: Props) {
@@ -48,12 +51,16 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
   const { shouldShowOnboarding } = useOnboarding();
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [votes, setVotes] = useState<VoteState>({});
+  const [llmGuesses] = useState<LlmGuessState>({}); // State for LLM guesses (backend support pending)
   const [newMatchIds, setNewMatchIds] = useState<Set<string>>(new Set());
   const [gameFinished, setGameFinished] = useState(false);
   const [roundResults, setRoundResults] = useState<RoundResult[]>([]);
   const [batchReveals, setBatchReveals] = useState<Array<{
     opponent: UserProfile;
     actualType: "REAL" | "BOT";
+    llmModelId?: string;
+    llmModelName?: string;
+    userLlmGuess?: string;
   }>>([]);
   // Track if we've ever successfully loaded matches (to prevent premature error display)
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
@@ -412,7 +419,7 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
         setVotes((prev): VoteState => ({ ...prev, [matchId]: previousVote }));
       }
     },
-    [fid, mutate]
+    [fid, mutate, votes]
   );
 
   // Handle match completion - collect reveal data
@@ -465,6 +472,9 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
                     pfpUrl: match.opponent.pfpUrl,
                   },
                   actualType: result.actualType,
+                  llmModelId: match.opponent.llmModelId,
+                  llmModelName: match.opponent.llmModelName,
+                  userLlmGuess: llmGuesses[matchId],
                 },
               ];
             });
