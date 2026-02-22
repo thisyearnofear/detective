@@ -6,9 +6,12 @@ Can you tell if you're chatting with a real person or an AI bot trained on their
 
 ## Documentation
 
-The documentation has been consolidated into 5 comprehensive guides covering all aspects of the Detective project:
+The documentation has been consolidated into 6 comprehensive guides covering all aspects of the Detective project:
 
-### **📋 Core Documentation (5 Consolidated Guides)**
+### **🏆 Hackathon Submission**
+- [**HACKATHON_SUBMISSION.md**](HACKATHON_SUBMISSION.md) - **Read this first for Arbitrum Buildathon judging criteria and technical highlights.**
+
+### **📋 Core Documentation**
 1. [**CORE_ARCHITECTURE.md**](docs/CORE_ARCHITECTURE.md) - System architecture, advanced features, and scaling guide
 2. [**GAME_DESIGN_UIUX.md**](docs/GAME_DESIGN_UIUX.md) - Game mechanics, UI/UX enhancements, and user experience design
 3. [**IMPLEMENTATION_ADVANCED.md**](docs/IMPLEMENTATION_ADVANCED.md) - WebSocket implementation, progress log, and advanced features

@@ -1,8 +1,8 @@
 /**
- * DetectiveGameEntry V3 Smart Contract ABI
- * 
- * Deployed on Arbitrum One: [UPDATE AFTER DEPLOYMENT]
- * 
+ * DetectiveGameEntry V4 Smart Contract ABI
+ *
+ * Deployed on Arbitrum Sepolia: 0x303B0964B9AbB4AAb60F55a3FB2905BAfB6d30AC
+ *
  * Streamlined design:
  * - Backend handles FID verification (off-chain)
  * - Contract handles stake/vote integrity (on-chain)
@@ -13,411 +13,573 @@
 export const DETECTIVE_GAME_ENTRY_ABI = [
   // ============ Constants ============
   {
-    type: 'function',
-    name: 'USDC',
+    type: "function",
+    name: "USDC",
     inputs: [],
-    outputs: [{ name: '', type: 'address', internalType: 'address' }],
-    stateMutability: 'view',
+    outputs: [{ name: "", type: "address", internalType: "address" }],
+    stateMutability: "view",
   },
   {
-    type: 'function',
-    name: 'MIN_STAKE_NATIVE',
+    type: "function",
+    name: "MIN_STAKE_NATIVE",
     inputs: [],
-    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
-    stateMutability: 'view',
+    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    stateMutability: "view",
   },
   {
-    type: 'function',
-    name: 'MAX_STAKE_NATIVE',
+    type: "function",
+    name: "MAX_STAKE_NATIVE",
     inputs: [],
-    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
-    stateMutability: 'view',
+    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    stateMutability: "view",
   },
   {
-    type: 'function',
-    name: 'MIN_STAKE_USDC',
+    type: "function",
+    name: "MIN_STAKE_USDC",
     inputs: [],
-    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
-    stateMutability: 'view',
+    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    stateMutability: "view",
   },
   {
-    type: 'function',
-    name: 'MAX_STAKE_USDC',
+    type: "function",
+    name: "MAX_STAKE_USDC",
     inputs: [],
-    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
-    stateMutability: 'view',
+    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    stateMutability: "view",
   },
   // ============ State Variables ============
   {
-    type: 'function',
-    name: 'treasury',
+    type: "function",
+    name: "treasury",
     inputs: [],
-    outputs: [{ name: '', type: 'address', internalType: 'address' }],
-    stateMutability: 'view',
+    outputs: [{ name: "", type: "address", internalType: "address" }],
+    stateMutability: "view",
   },
   {
-    type: 'function',
-    name: 'admin',
+    type: "function",
+    name: "admin",
     inputs: [],
-    outputs: [{ name: '', type: 'address', internalType: 'address' }],
-    stateMutability: 'view',
+    outputs: [{ name: "", type: "address", internalType: "address" }],
+    stateMutability: "view",
   },
   {
-    type: 'function',
-    name: 'isPaused',
+    type: "function",
+    name: "isPaused",
     inputs: [],
-    outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
-    stateMutability: 'view',
+    outputs: [{ name: "", type: "bool", internalType: "bool" }],
+    stateMutability: "view",
   },
   {
-    type: 'function',
-    name: 'minEntryFee',
+    type: "function",
+    name: "minEntryFee",
     inputs: [],
-    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
-    stateMutability: 'view',
+    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    stateMutability: "view",
   },
   // ============ Mappings ============
   {
-    type: 'function',
-    name: 'registeredWallets',
-    inputs: [{ name: 'wallet', type: 'address', internalType: 'address' }],
-    outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
-    stateMutability: 'view',
+    type: "function",
+    name: "registeredWallets",
+    inputs: [{ name: "wallet", type: "address", internalType: "address" }],
+    outputs: [{ name: "", type: "bool", internalType: "bool" }],
+    stateMutability: "view",
   },
   {
-    type: 'function',
-    name: 'hasVoted',
+    type: "function",
+    name: "hasVoted",
     inputs: [
-      { name: 'matchId', type: 'bytes32', internalType: 'bytes32' },
-      { name: 'user', type: 'address', internalType: 'address' },
+      { name: "matchId", type: "bytes32", internalType: "bytes32" },
+      { name: "user", type: "address", internalType: "address" },
     ],
-    outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
-    stateMutability: 'view',
+    outputs: [{ name: "", type: "bool", internalType: "bool" }],
+    stateMutability: "view",
   },
   {
-    type: 'function',
-    name: 'userStakes',
+    type: "function",
+    name: "userStakes",
     inputs: [
-      { name: 'matchId', type: 'bytes32', internalType: 'bytes32' },
-      { name: 'user', type: 'address', internalType: 'address' },
+      { name: "matchId", type: "bytes32", internalType: "bytes32" },
+      { name: "user", type: "address", internalType: "address" },
     ],
-    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
-    stateMutability: 'view',
+    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    stateMutability: "view",
   },
   // ============ Core Functions ============
   {
-    type: 'function',
-    name: 'registerForGame',
+    type: "function",
+    name: "registerForGame",
     inputs: [],
     outputs: [],
-    stateMutability: 'payable',
+    stateMutability: "payable",
   },
   {
-    type: 'function',
-    name: 'stakeOnMatch',
+    type: "function",
+    name: "allocateRewards",
     inputs: [
-      { name: 'matchId', type: 'bytes32', internalType: 'bytes32' },
-      { name: 'isBot', type: 'bool', internalType: 'bool' },
-      { name: 'deadline', type: 'uint256', internalType: 'uint256' },
+      { name: "recipients", type: "address[]", internalType: "address[]" },
+      { name: "amounts", type: "uint256[]", internalType: "uint256[]" },
+      { name: "token", type: "address", internalType: "address" },
     ],
     outputs: [],
-    stateMutability: 'payable',
+    stateMutability: "nonpayable",
   },
   {
-    type: 'function',
-    name: 'stakeOnMatchUSDC',
-    inputs: [
-      { name: 'matchId', type: 'bytes32', internalType: 'bytes32' },
-      { name: 'isBot', type: 'bool', internalType: 'bool' },
-      { name: 'amount', type: 'uint256', internalType: 'uint256' },
-      { name: 'deadline', type: 'uint256', internalType: 'uint256' },
-    ],
+    type: "function",
+    name: "claimRewards",
+    inputs: [{ name: "token", type: "address", internalType: "address" }],
     outputs: [],
-    stateMutability: 'nonpayable',
+    stateMutability: "nonpayable",
   },
   {
-    type: 'function',
-    name: 'submitVote',
+    type: "function",
+    name: "withdrawHouseFunds",
     inputs: [
-      { name: 'matchId', type: 'bytes32', internalType: 'bytes32' },
-      { name: 'isBot', type: 'bool', internalType: 'bool' },
+      { name: "token", type: "address", internalType: "address" },
+      { name: "amount", type: "uint256", internalType: "uint256" },
     ],
     outputs: [],
-    stateMutability: 'nonpayable',
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "stakeOnMatch",
+    inputs: [
+      { name: "matchId", type: "bytes32", internalType: "bytes32" },
+      { name: "isBot", type: "bool", internalType: "bool" },
+      { name: "deadline", type: "uint256", internalType: "uint256" },
+    ],
+    outputs: [],
+    stateMutability: "payable",
+  },
+  {
+    type: "function",
+    name: "stakeOnMatchUSDC",
+    inputs: [
+      { name: "matchId", type: "bytes32", internalType: "bytes32" },
+      { name: "isBot", type: "bool", internalType: "bool" },
+      { name: "amount", type: "uint256", internalType: "uint256" },
+      { name: "deadline", type: "uint256", internalType: "uint256" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "submitVote",
+    inputs: [
+      { name: "matchId", type: "bytes32", internalType: "bytes32" },
+      { name: "isBot", type: "bool", internalType: "bool" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   // ============ Admin Functions ============
   {
-    type: 'function',
-    name: 'transferAdmin',
-    inputs: [{ name: 'newAdmin', type: 'address', internalType: 'address' }],
+    type: "function",
+    name: "transferAdmin",
+    inputs: [{ name: "newAdmin", type: "address", internalType: "address" }],
     outputs: [],
-    stateMutability: 'nonpayable',
+    stateMutability: "nonpayable",
   },
   {
-    type: 'function',
-    name: 'setPaused',
-    inputs: [{ name: 'paused', type: 'bool', internalType: 'bool' }],
+    type: "function",
+    name: "setPaused",
+    inputs: [{ name: "paused", type: "bool", internalType: "bool" }],
     outputs: [],
-    stateMutability: 'nonpayable',
+    stateMutability: "nonpayable",
   },
   {
-    type: 'function',
-    name: 'setMinEntryFee',
-    inputs: [{ name: 'newFee', type: 'uint256', internalType: 'uint256' }],
+    type: "function",
+    name: "setMinEntryFee",
+    inputs: [{ name: "newFee", type: "uint256", internalType: "uint256" }],
     outputs: [],
-    stateMutability: 'nonpayable',
+    stateMutability: "nonpayable",
   },
   {
-    type: 'function',
-    name: 'emergencyWithdraw',
+    type: "function",
+    name: "emergencyWithdraw",
     inputs: [
-      { name: 'token', type: 'address', internalType: 'address' },
-      { name: 'to', type: 'address', internalType: 'address' },
-      { name: 'amount', type: 'uint256', internalType: 'uint256' },
+      { name: "token", type: "address", internalType: "address" },
+      { name: "to", type: "address", internalType: "address" },
+      { name: "amount", type: "uint256", internalType: "uint256" },
     ],
     outputs: [],
-    stateMutability: 'nonpayable',
+    stateMutability: "nonpayable",
   },
   // ============ View Functions ============
   {
-    type: 'function',
-    name: 'isWalletRegistered',
-    inputs: [{ name: 'wallet', type: 'address', internalType: 'address' }],
-    outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
-    stateMutability: 'view',
+    type: "function",
+    name: "isWalletRegistered",
+    inputs: [{ name: "wallet", type: "address", internalType: "address" }],
+    outputs: [{ name: "", type: "bool", internalType: "bool" }],
+    stateMutability: "view",
   },
   {
-    type: 'function',
-    name: 'hasUserVoted',
+    type: "function",
+    name: "hasUserVoted",
     inputs: [
-      { name: 'matchId', type: 'bytes32', internalType: 'bytes32' },
-      { name: 'user', type: 'address', internalType: 'address' },
+      { name: "matchId", type: "bytes32", internalType: "bytes32" },
+      { name: "user", type: "address", internalType: "address" },
     ],
-    outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
-    stateMutability: 'view',
+    outputs: [{ name: "", type: "bool", internalType: "bool" }],
+    stateMutability: "view",
   },
   {
-    type: 'function',
-    name: 'getUserStake',
+    type: "function",
+    name: "getUserStake",
     inputs: [
-      { name: 'matchId', type: 'bytes32', internalType: 'bytes32' },
-      { name: 'user', type: 'address', internalType: 'address' },
+      { name: "matchId", type: "bytes32", internalType: "bytes32" },
+      { name: "user", type: "address", internalType: "address" },
     ],
-    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
-    stateMutability: 'view',
+    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    stateMutability: "view",
   },
   {
-    type: 'function',
-    name: 'getStakeLimits',
+    type: "function",
+    name: "getStakeLimits",
     inputs: [],
     outputs: [
-      { name: 'minNative', type: 'uint256', internalType: 'uint256' },
-      { name: 'maxNative', type: 'uint256', internalType: 'uint256' },
-      { name: 'minUsdc', type: 'uint256', internalType: 'uint256' },
-      { name: 'maxUsdc', type: 'uint256', internalType: 'uint256' },
+      { name: "minNative", type: "uint256", internalType: "uint256" },
+      { name: "maxNative", type: "uint256", internalType: "uint256" },
+      { name: "minUsdc", type: "uint256", internalType: "uint256" },
+      { name: "maxUsdc", type: "uint256", internalType: "uint256" },
     ],
-    stateMutability: 'pure',
+    stateMutability: "pure",
   },
   {
-    type: 'function',
-    name: 'getContractInfo',
+    type: "function",
+    name: "getContractInfo",
     inputs: [],
     outputs: [
-      { name: '_treasury', type: 'address', internalType: 'address' },
-      { name: '_admin', type: 'address', internalType: 'address' },
-      { name: '_isPaused', type: 'bool', internalType: 'bool' },
-      { name: '_minEntryFee', type: 'uint256', internalType: 'uint256' },
+      { name: "_treasury", type: "address", internalType: "address" },
+      { name: "_admin", type: "address", internalType: "address" },
+      { name: "_isPaused", type: "bool", internalType: "bool" },
+      { name: "_minEntryFee", type: "uint256", internalType: "uint256" },
     ],
-    stateMutability: 'view',
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "getPendingReward",
+    inputs: [
+      { name: "user", type: "address", internalType: "address" },
+      { name: "token", type: "address", internalType: "address" },
+    ],
+    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    stateMutability: "view",
   },
   // ============ Events ============
   {
-    type: 'event',
-    name: 'PlayerRegistered',
+    type: "event",
+    name: "PlayerRegistered",
     inputs: [
-      { name: 'wallet', type: 'address', indexed: true, internalType: 'address' },
-      { name: 'timestamp', type: 'uint256', indexed: false, internalType: 'uint256' },
+      {
+        name: "wallet",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "timestamp",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "feePaid",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
     ],
   },
   {
-    type: 'event',
-    name: 'StakePlaced',
+    type: "event",
+    name: "StakePlaced",
     inputs: [
-      { name: 'wallet', type: 'address', indexed: true, internalType: 'address' },
-      { name: 'matchId', type: 'bytes32', indexed: true, internalType: 'bytes32' },
-      { name: 'isBot', type: 'bool', indexed: false, internalType: 'bool' },
-      { name: 'amount', type: 'uint256', indexed: false, internalType: 'uint256' },
-      { name: 'isNative', type: 'bool', indexed: false, internalType: 'bool' },
+      {
+        name: "wallet",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "matchId",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      { name: "isBot", type: "bool", indexed: false, internalType: "bool" },
+      {
+        name: "amount",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      { name: "isNative", type: "bool", indexed: false, internalType: "bool" },
     ],
   },
   {
-    type: 'event',
-    name: 'VoteSubmitted',
+    type: "event",
+    name: "VoteSubmitted",
     inputs: [
-      { name: 'wallet', type: 'address', indexed: true, internalType: 'address' },
-      { name: 'matchId', type: 'bytes32', indexed: true, internalType: 'bytes32' },
-      { name: 'isBot', type: 'bool', indexed: false, internalType: 'bool' },
+      {
+        name: "wallet",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "matchId",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      { name: "isBot", type: "bool", indexed: false, internalType: "bool" },
     ],
   },
   {
-    type: 'event',
-    name: 'AdminTransferred',
+    type: "event",
+    name: "AdminTransferred",
     inputs: [
-      { name: 'oldAdmin', type: 'address', indexed: true, internalType: 'address' },
-      { name: 'newAdmin', type: 'address', indexed: true, internalType: 'address' },
+      {
+        name: "oldAdmin",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "newAdmin",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
     ],
   },
   {
-    type: 'event',
-    name: 'PauseStatusChanged',
+    type: "event",
+    name: "PauseStatusChanged",
     inputs: [
-      { name: 'isPaused', type: 'bool', indexed: false, internalType: 'bool' },
+      { name: "isPaused", type: "bool", indexed: false, internalType: "bool" },
     ],
   },
   {
-    type: 'event',
-    name: 'MinEntryFeeUpdated',
+    type: "event",
+    name: "MinEntryFeeUpdated",
     inputs: [
-      { name: 'newFee', type: 'uint256', indexed: false, internalType: 'uint256' },
+      {
+        name: "newFee",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
     ],
   },
   {
-    type: 'event',
-    name: 'EmergencyWithdrawal',
+    type: "event",
+    name: "RewardsAllocated",
     inputs: [
-      { name: 'token', type: 'address', indexed: true, internalType: 'address' },
-      { name: 'to', type: 'address', indexed: true, internalType: 'address' },
-      { name: 'amount', type: 'uint256', indexed: false, internalType: 'uint256' },
+      {
+        name: "token",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "totalAmount",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "recipientCount",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+  },
+  {
+    type: "event",
+    name: "Withdrawal",
+    inputs: [
+      {
+        name: "wallet",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "token",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "amount",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+  },
+  {
+    type: "event",
+    name: "EmergencyWithdrawal",
+    inputs: [
+      {
+        name: "token",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      { name: "to", type: "address", indexed: true, internalType: "address" },
+      {
+        name: "amount",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
     ],
   },
   // ============ Errors ============
   {
-    type: 'error',
-    name: 'ContractPaused',
+    type: "error",
+    name: "ContractPaused",
     inputs: [],
   },
   {
-    type: 'error',
-    name: 'InvalidAddress',
+    type: "error",
+    name: "InvalidAddress",
     inputs: [],
   },
   {
-    type: 'error',
-    name: 'InvalidAmount',
+    type: "error",
+    name: "InvalidAmount",
     inputs: [],
   },
   {
-    type: 'error',
-    name: 'InvalidMatchId',
+    type: "error",
+    name: "InvalidMatchId",
     inputs: [],
   },
   {
-    type: 'error',
-    name: 'InvalidDeadline',
+    type: "error",
+    name: "InvalidDeadline",
     inputs: [],
   },
   {
-    type: 'error',
-    name: 'StakeTooHigh',
+    type: "error",
+    name: "StakeTooHigh",
     inputs: [],
   },
   {
-    type: 'error',
-    name: 'StakeTooLow',
+    type: "error",
+    name: "StakeTooLow",
     inputs: [],
   },
   {
-    type: 'error',
-    name: 'InsufficientFee',
+    type: "error",
+    name: "InsufficientFee",
     inputs: [],
   },
   {
-    type: 'error',
-    name: 'AlreadyRegistered',
+    type: "error",
+    name: "AlreadyRegistered",
     inputs: [],
   },
   {
-    type: 'error',
-    name: 'NotRegistered',
+    type: "error",
+    name: "NotRegistered",
     inputs: [],
   },
   {
-    type: 'error',
-    name: 'AlreadyVoted',
+    type: "error",
+    name: "AlreadyVoted",
     inputs: [],
   },
   {
-    type: 'error',
-    name: 'AlreadyStaked',
+    type: "error",
+    name: "AlreadyStaked",
     inputs: [],
   },
   {
-    type: 'error',
-    name: 'ExpiredDeadline',
+    type: "error",
+    name: "ExpiredDeadline",
     inputs: [],
   },
   {
-    type: 'error',
-    name: 'NotAdmin',
+    type: "error",
+    name: "NotAdmin",
     inputs: [],
   },
   {
-    type: 'error',
-    name: 'TransferFailed',
+    type: "error",
+    name: "TransferFailed",
     inputs: [],
   },
   {
-    type: 'error',
-    name: 'USDCTransferFailed',
+    type: "error",
+    name: "USDCTransferFailed",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "NoFundsToWithdraw",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "ArrayLengthMismatch",
     inputs: [],
   },
 ] as const;
 
 // Contract addresses by network
 export const DETECTIVE_GAME_ENTRY_ADDRESSES = {
-  arbitrumOne: '0xF3f9e93B0bdd7C87B261F30eC6a697fAf50f4460' as const,
-  arbitrumSepolia: '0x0000000000000000000000000000000000000000' as const, // Update after testnet deployment
+  arbitrumOne: "0x2d0B651fE940f965AE239Ec6cF6EA35F502394ff" as const,
+  arbitrumSepolia: "0x303B0964B9AbB4AAb60F55a3FB2905BAfB6d30AC" as const,
 } as const;
 
-// Default to mainnet
-export const CONTRACT_ADDRESS = DETECTIVE_GAME_ENTRY_ADDRESSES.arbitrumOne;
+// Default to testnet for the buildathon
+export const CONTRACT_ADDRESS = DETECTIVE_GAME_ENTRY_ADDRESSES.arbitrumSepolia;
 
 // Stake limits for client-side validation
 export const STAKE_LIMITS = {
   native: {
-    min: '100000000000000',     // 0.0001 ETH in wei
-    max: '100000000000000000',  // 0.1 ETH in wei
+    min: "100000000000000", // 0.0001 ETH in wei
+    max: "100000000000000000", // 0.1 ETH in wei
   },
   usdc: {
-    min: 1000000,   // 1 USDC (6 decimals)
+    min: 1000000, // 1 USDC (6 decimals)
     max: 100000000, // 100 USDC (6 decimals)
   },
 } as const;
 
 // Types for TypeScript
-export type DetectiveGameEntryEvents = 
-  | 'PlayerRegistered'
-  | 'StakePlaced'
-  | 'VoteSubmitted'
-  | 'AdminTransferred'
-  | 'PauseStatusChanged'
-  | 'MinEntryFeeUpdated'
-  | 'EmergencyWithdrawal';
+export type DetectiveGameEntryEvents =
+  | "PlayerRegistered"
+  | "StakePlaced"
+  | "VoteSubmitted"
+  | "AdminTransferred"
+  | "PauseStatusChanged"
+  | "MinEntryFeeUpdated"
+  | "EmergencyWithdrawal";
 
 export type DetectiveGameEntryErrors =
-  | 'ContractPaused'
-  | 'InvalidAddress'
-  | 'InvalidAmount'
-  | 'InvalidMatchId'
-  | 'InvalidDeadline'
-  | 'StakeTooHigh'
-  | 'StakeTooLow'
-  | 'InsufficientFee'
-  | 'AlreadyRegistered'
-  | 'NotRegistered'
-  | 'AlreadyVoted'
-  | 'AlreadyStaked'
-  | 'ExpiredDeadline'
-  | 'NotAdmin'
-  | 'TransferFailed'
-  | 'USDCTransferFailed';
+  | "ContractPaused"
+  | "InvalidAddress"
+  | "InvalidAmount"
+  | "InvalidMatchId"
+  | "InvalidDeadline"
+  | "StakeTooHigh"
+  | "StakeTooLow"
+  | "InsufficientFee"
+  | "AlreadyRegistered"
+  | "NotRegistered"
+  | "AlreadyVoted"
+  | "AlreadyStaked"
+  | "ExpiredDeadline"
+  | "NotAdmin"
+  | "TransferFailed"
+  | "USDCTransferFailed";
