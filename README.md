@@ -106,6 +106,15 @@ Detective is a Farcaster-native social deduction game where players chat with op
    npm start
    ```
 
+5. **Enable pre-commit secret scanning**:
+   ```bash
+   git config core.hooksPath .githooks
+   ```
+   This blocks commits when staged changes contain likely secrets. If needed, bypass once with:
+   ```bash
+   git commit --no-verify
+   ```
+
 ## Architecture
 
 ### Tech Stack
