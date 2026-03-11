@@ -63,8 +63,40 @@ Detective is an AI-powered social deduction game on Farcaster. Players engage in
 | **Real-time Chat** | HTTP polling (3s interval)         | Simple, proven                                     |
 | **AI/Bot**         | Venice AI (Llama 3.3 70B)          | Privacy-first, OpenAI-compatible                   |
 | **Farcaster Data** | Neynar API                         | User validation, score filtering, content scraping |
-| **Hosting**        | Vercel                             | Free tier sufficient for this load                 |
+| **Hosting**        | Vercel + self-hosted VPS            | Vercel for frontend, VPS for backend (standalone) |
 | **Styling**        | Tailwind CSS                       | Rapid UI iteration                                 |
+
+---
+
+## Deployment
+
+### Architecture
+- **Frontend**: Vercel (serverless) - serves the Next.js frontend
+- **Backend API**: Self-hosted VPS (`snel-bot`) - runs standalone Next.js API (~84MB)
+
+### Backend Deployment
+
+The backend uses Next.js standalone mode for minimal footprint (~84MB vs 1.4GB).
+
+**Deploy script location**: `scripts/deploy-server.sh`
+
+```bash
+# Run on server
+cd /opt/detective && bash scripts/deploy-server.sh
+```
+
+**How it works**:
+1. Builds Next.js with `output: 'standalone'` - creates minimal bundle
+2. Copies standalone output to `/opt/detective-deploy`
+3. PM2 runs from `/opt/detective-deploy` on port 4000
+4. Original `/opt/detective` kept for source code and future builds
+
+**PM2 management**:
+```bash
+pm2 status          # Check status
+pm2 logs            # View logs
+pm2 restart detective-api  # Restart
+```
 
 ---
 

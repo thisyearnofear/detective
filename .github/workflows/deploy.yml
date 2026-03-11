@@ -1,0 +1,58 @@
+name: Deploy API to Server
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'scripts/**'
+      - 'next.config.js'
+      - 'package.json'
+      - 'tsconfig.json'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Next.js
+        run: npm run build
+        env:
+          NODE_ENV: production
+
+      - name: Create standalone build
+        run: |
+          mkdir -p standalone-deploy
+          cp -r .next/standalone/* standalone-deploy/
+          cp -r .next/static standalone-deploy/
+          cp -r public standalone-deploy/
+
+      - name: Deploy to server via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script: |
+            sudo rm -rf /opt/detective-deploy
+            sudo mkdir -p /opt/detective-deploy
+            cd ${{ github.workspace }}
+            sudo cp -r standalone-deploy/* /opt/detective-deploy/
+            sudo pm2 restart detective-api || sudo pm2 start /opt/detective/ecosystem.config.cjs
+
+      - name: Cleanup
+        if: always()
+        run: rm -rf standalone-deploy

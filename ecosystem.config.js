@@ -1,9 +1,8 @@
-export default {
+module.exports = {
   apps: [{
     name: 'detective-api',
-    script: './node_modules/.bin/next',
-    args: 'start',
-    cwd: '/opt/detective',
+    script: './server.js',
+    cwd: '/opt/detective-deploy',
     env: {
       NODE_ENV: 'production',
       PORT: 4000,
