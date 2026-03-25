@@ -44,6 +44,7 @@ import { saveConversationContext, saveConversationMemory, clearAllConversationCo
 import { extractCoherenceScoresFromMatch, clearConversationState } from "./inference";
 import { GAME_CONSTANTS, GAME_DURATION } from "./gameConstants";
 import { assignNextLLM } from "./openrouter";
+import { uploadGameSnapshot, uploadBotTrainingData, isStorachaEnabled } from "./storacha";
 
 // Destructure from single source of truth
 const MATCH_DURATION = GAME_CONSTANTS.MATCH_DURATION;
@@ -1164,6 +1165,9 @@ class GameManager {
     
     // Save results async (non-blocking)
     this.saveGameResultsToDatabase().catch(console.error);
+    
+    // Upload game snapshot to Storacha decentralized storage (non-blocking)
+    this.uploadGameToStoracha().catch(console.error);
   }
 
   /**
@@ -1352,6 +1356,88 @@ class GameManager {
       );
     } catch (error) {
       console.error(`[saveMatchToDatabase] Failed to save match ${match.id}:`, error);
+    }
+  }
+
+  /**
+   * Upload game snapshot and bot training data to Storacha decentralized storage.
+   * Creates verifiable, immutable records of game integrity and AI behavior.
+   * Non-blocking - failures are logged but don't affect game flow.
+   */
+  private async uploadGameToStoracha(): Promise<void> {
+    if (!isStorachaEnabled()) return;
+
+    try {
+      const leaderboard = this.state!.leaderboard;
+
+      // Collect all LLM models used in this game cycle
+      const llmModelsUsed = [
+        ...new Set(
+          Array.from(this.state!.bots.values())
+            .map((b) => b.llmModelId)
+            .filter(Boolean) as string[]
+        ),
+      ];
+
+      // Upload game snapshot with leaderboard + metadata
+      const snapshotResult = await uploadGameSnapshot({
+        gameId: this.state!.cycleId,
+        cycleNumber: Number(this.state!.cycleId) || 0,
+        playerCount: this.state!.players.size,
+        botCount: this.state!.bots.size,
+        matchCount: this.state!.matches.size,
+        startedAt: new Date(this.state!.registrationEnds).toISOString(),
+        endedAt: new Date().toISOString(),
+        leaderboard: leaderboard.map((entry) => {
+          const player = this.state!.players.get(entry.player.fid);
+          const correctVotes = player
+            ? player.voteHistory.filter((v) => v.correct && !v.forfeit).length
+            : 0;
+          const totalVotes = player ? player.voteHistory.length : 0;
+          return {
+            username: entry.player.username,
+            accuracy: entry.accuracy,
+            totalVotes,
+            correctVotes,
+          };
+        }),
+        llmModelsUsed,
+      });
+
+      if (snapshotResult) {
+        console.log(
+          `[uploadGameToStoracha] Game snapshot: ${snapshotResult.gatewayUrl}`
+        );
+      }
+
+      // Upload each bot's training data for verifiable AI provenance
+      for (const [_fid, bot] of this.state!.bots) {
+        const trainingResult = await uploadBotTrainingData({
+          botUsername: bot.username,
+          originalAuthor: bot.originalAuthor.username,
+          castCount: bot.recentCasts?.length ?? 0,
+          casts: (bot.recentCasts ?? []).map((c: any) => ({
+            text: c.text ?? String(c),
+            timestamp: c.timestamp,
+          })),
+          writingStyle: bot.style ?? "",
+          personality: (bot.personality as Record<string, unknown>) ?? {},
+          capturedAt: new Date().toISOString(),
+          gameId: this.state!.cycleId,
+        });
+
+        if (trainingResult) {
+          console.log(
+            `[uploadGameToStoracha] Bot training (${bot.username}): ${trainingResult.gatewayUrl}`
+          );
+        }
+      }
+
+      console.log(
+        `[uploadGameToStoracha] ✓ Completed uploads for cycle ${this.state!.cycleId}`
+      );
+    } catch (error) {
+      console.error("[uploadGameToStoracha] Failed:", error);
     }
   }
 

@@ -44,12 +44,13 @@ Detective is an AI-powered social deduction game on Farcaster. Players engage in
 │  │ /api/leaderboard - In-memory rankings           │   │
 │  └──────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────┘
-         ↕ (HTTP)             ↕ (HTTP)
-    ┌─────────────┐    ┌──────────────┐
-    │ Neynar API  │    │ LLM Provider │
-    │ (Validate   │    │ (Venice AI)  │
-    │  user score)│    │ (Bot Brain)  │
-    └─────────────┘    └──────────────┘
+         ↕ (HTTP)             ↕ (HTTP)             ↕ (HTTP)
+    ┌─────────────┐    ┌──────────────┐    ┌──────────────┐
+    │ Neynar API  │    │ LLM Provider │    │   Storacha   │
+    │ (Validate   │    │ (Venice AI)  │    │  (IPFS/      │
+    │  user score)│    │ (Bot Brain)  │    │  Filecoin)   │
+    └─────────────┘    └──────────────┘    └──────────────┘
+                                              (Provenance)
 ```
 
 ### Technology Stack
@@ -59,10 +60,12 @@ Detective is an AI-powered social deduction game on Farcaster. Players engage in
 | **Frontend**       | Next.js 15 + TypeScript + React 19 | Mini App SDK built for modern React                |
 | **Backend**        | Next.js API Routes (serverless)    | Unified codebase, Vercel deployment                |
 | **Auth**           | Farcaster SDK + Wagmi + JWT        | SDK for miniapp, wallet verification for web       |
-| **Game State**     | In-memory (Map/Record)             | 50 players = negligible memory footprint           |
+| **Game State**     | In-memory + Redis + PostgreSQL     | Fast + persistent + analytics                      |
 | **Real-time Chat** | HTTP polling (3s interval)         | Simple, proven                                     |
 | **AI/Bot**         | Venice AI (Llama 3.3 70B)          | Privacy-first, OpenAI-compatible                   |
 | **Farcaster Data** | Neynar API                         | User validation, score filtering, content scraping |
+| **Blockchain**     | Arbitrum One (Foundry + viem)      | On-chain registration, sybil resistance            |
+| **Decentralized Storage** | Storacha (IPFS/Filecoin)    | Verifiable game provenance, bot training data      |
 | **Hosting**        | Vercel + self-hosted VPS            | Vercel for frontend, VPS for backend (standalone) |
 | **Styling**        | Tailwind CSS                       | Rapid UI iteration                                 |
 
@@ -192,13 +195,46 @@ CREATE TABLE IF NOT EXISTS player_stats (
 
 ---
 
+### Phase 5: Verifiable Game Provenance with Storacha (COMPLETED)
+
+Decentralized storage integration that makes AI detection data tamper-proof and publicly auditable.
+
+**Core Features**:
+- **Bot Training Data Archival**: Each bot's cast history, personality traits, and writing style uploaded to Storacha (IPFS/Filecoin) as content-addressed JSON files
+- **Game Snapshots**: Leaderboard + metadata stored as directories with verifiable CIDs
+- **Automatic Upload**: Fires on game cycle completion (non-blocking, alongside database save)
+- **Verification API**: `GET /api/storacha/verify?cid={cid}` — anyone can verify game data integrity
+
+#### Integration Architecture
+```
+Game Lifecycle (LIVE → FINISHED)
+    │
+    ├──→ saveGameResultsToDatabase()   (PostgreSQL — internal records)
+    │
+    └──→ uploadGameToStoracha()        (IPFS/Filecoin — public verification)
+              │
+              ├── Game Snapshot (directory)
+              │     ├── leaderboard.json
+              │     └── metadata.json
+              │
+              └── Bot Training Data (per bot)
+                    └── bot-training-{username}-{gameId}.json
+```
+
+#### Technology Stack Addition:
+- **Storacha** (`@storacha/client` v2.1.2): Decentralized hot storage backed by Filecoin
+- **Content Addressing**: All data identified by CID — hash of content, immutable
+- **IPFS Gateway**: Public retrieval at `https://storacha.link/ipfs/{cid}`
+
+---
+
 ## Key Design Decisions
 
-1. **No Database**: Game state in-memory (50 players = ~1-2 MB RAM). Acceptable for MVP.
+1. **Hybrid Storage**: In-memory game state + Redis persistence + PostgreSQL analytics. 50 players = ~1-2 MB RAM; Redis for cross-instance state; PostgreSQL for historical data.
 2. **HTTP Polling**: Simpler than WebSocket for 50 concurrent users.
 3. **Neynar Score > 0.8**: Filters out bots and low-quality accounts upfront.
 4. **Venice AI (Llama 3.3 70B)**: Privacy-first inference with strong impersonation quality.
-5. **Vercaster Free Tier**: Sufficient for MVP load and cost constraints.
+5. **Storacha for Provenance**: Decentralized, content-addressed storage makes game integrity publicly verifiable — critical for the "verifiable AI" narrative.
 
 ### Why This Works for Farcaster
 - **Social Discovery**: Users learn about others through conversation

@@ -9,7 +9,7 @@ Can you tell if you're chatting with a real person or an AI bot trained on their
 The documentation has been consolidated into 6 comprehensive guides covering all aspects of the Detective project:
 
 ### **🏆 Hackathon Submission**
-- [**HACKATHON_SUBMISSION.md**](HACKATHON_SUBMISSION.md) - **Read this first for Arbitrum Buildathon judging criteria and technical highlights.**
+- [**HACKATHON_SUBMISSION.md**](HACKATHON_SUBMISSION.md) - **PL Genesis: Frontiers of Collaboration submission — tracks, sponsor bounties, and technical highlights.**
 
 ### **📋 Core Documentation**
 1. [**CORE_ARCHITECTURE.md**](docs/CORE_ARCHITECTURE.md) - System architecture, advanced features, and scaling guide
@@ -17,6 +17,7 @@ The documentation has been consolidated into 6 comprehensive guides covering all
 3. [**IMPLEMENTATION_ADVANCED.md**](docs/IMPLEMENTATION_ADVANCED.md) - WebSocket implementation, progress log, and advanced features
 4. [**ACCESS_CONTROL_SECURITY.md**](docs/ACCESS_CONTROL_SECURITY.md) - Access control strategy, security features, and deployment scenarios
 5. [**CONTRACT_DEPLOYMENT.md**](docs/CONTRACT_DEPLOYMENT.md) - Smart contract deployment, verification, and operational procedures
+6. [**DEMO_SCRIPT.md**](docs/DEMO_SCRIPT.md) - Video walkthrough script for hackathon submission
 
 ### **📖 What Each Guide Covers**
 
@@ -122,8 +123,11 @@ Detective is a Farcaster-native social deduction game where players chat with op
 - **Backend**: Next.js API Routes (serverless)
 - **Mini App SDK**: `@farcaster/miniapp-sdk` v0.2.1 - Farcaster-native integration
 - **Authentication**: Farcaster Quick Auth (2025 standard) - Edge-deployed JWT tokens
-- **Game State**: In-memory (no database required for MVP)
-- **APIs**: Neynar (Farcaster data), Claude (bot intelligence)
+- **Game State**: In-memory + Redis (Upstash) + PostgreSQL (Neon)
+- **AI/Bot**: Venice AI (Llama 3.3 70B) + OpenRouter multi-model support
+- **Farcaster Data**: Neynar (user data, quality gating, cast scraping)
+- **Blockchain**: Arbitrum One (smart contracts, on-chain registration)
+- **Decentralized Storage**: Storacha (IPFS/Filecoin) — verifiable game provenance
 - **Hosting**: Vercel (free tier)
 
 ### Mini App Setup ✅
@@ -277,6 +281,43 @@ const fid = payload.sub; // User's Farcaster ID
 - `src/app/api/auth/quick-auth/verify/route.ts` - Verification endpoint
 
 **Docs**: See [Farcaster Quick Auth](https://miniapps.farcaster.xyz/docs/sdk/quick-auth)
+
+## Decentralized Storage (Storacha)
+
+Detective stores verifiable game provenance on **Storacha** (IPFS/Filecoin), making AI detection data tamper-proof and publicly audible.
+
+### What Gets Stored
+- **Bot Training Data**: Each bot's cast history + personality profiles (proves which data trained each AI)
+- **Game Snapshots**: Leaderboard + metadata as content-addressed directories
+- **Match Provenance**: Immutable records of each human-vs-AI encounter
+
+### How It Works
+When a game cycle finishes, `uploadGameToStoracha()` automatically uploads:
+1. A game snapshot directory (`leaderboard.json` + `metadata.json`)
+2. Individual bot training data files (cast history, writing style, personality traits)
+
+All data is content-addressed via CID and retrievable at `https://storacha.link/ipfs/{cid}`.
+
+### Setup
+```bash
+npm install -g @storacha/cli
+storacha login your@email.com
+storacha space create detective-game
+```
+```env
+STORACHA_ENABLED=true
+STORACHA_SPACE_DID=did:key:your_space_did_here
+```
+
+### Verification API
+```
+GET /api/storacha/verify?cid={cid}  — Check data exists at a CID
+POST /api/storacha/upload-training-data  — Upload bot training data
+```
+
+**Files**:
+- `src/lib/storacha.ts` - Core integration (client, upload, verification)
+- `src/app/api/storacha/` - API routes
 
 ## API Reference
 
