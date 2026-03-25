@@ -40,7 +40,7 @@ export interface Player extends UserProfile {
   voteHistory: VoteRecord[];
   inactivityStrikes: number; // Track inactivity violations
   lastActiveTime: number;
-  
+
   // ERC-7715 & Staking
   hasPermission?: boolean; // If they've granted ERC-7715 session permissions
   permissionExpiry?: number; // When the permission expires
@@ -57,7 +57,7 @@ export interface VoteRecord {
   opponentUsername?: string;
   opponentType?: "REAL" | "BOT";
   roundNumber?: number;
-  
+
   // Economic Outcome
   stakedAmount?: string; // Amount staked in base units
   stakeCurrency?: "NATIVE" | "USDC"; // Currency used for stake
@@ -168,3 +168,139 @@ export interface GameConfig {
   maxInactivityStrikes: number; // Max strikes before cooldown (3)
   monetizationEnabled: boolean; // Toggles Truth Stake loop and ERC-7715 (monetization)
 }
+
+// ============================================================
+// User Data Consent (for GDPR and data monetization)
+// ============================================================
+
+export interface UserConsentPreferences {
+  allowBotTraining: boolean; // Allow casts to be used for bot training
+  allowDataSale: boolean; // Allow anonymized data to be sold to AI labs
+  receiveTokens: boolean; // Receive native tokens when data is used
+  lastUpdated: number; // Timestamp of last preference change
+}
+
+// ============================================================
+// Storage Tracking (for Storacha/IPFS provenance)
+// ============================================================
+
+export type StorageUploadType =
+  | "bot_training_data"
+  | "game_snapshot"
+  | "match_provenance"
+  | "leaderboard";
+
+export interface StorageUploadRecord {
+  id: string;
+  cycleId: string;
+  type: StorageUploadType;
+  cid: string;
+  gatewayUrl: string;
+  sizeBytes: number;
+  uploadedAt: number;
+  metadata?: Record<string, unknown>;
+}
+
+export interface StorageStats {
+  totalUploads: number;
+  totalSizeBytes: number;
+  uploadsByType: Record<StorageUploadType, number>;
+  uploadsByCycle: number;
+  lastUploadAt: number | null;
+  oldestUploadAt: number | null;
+}
+
+// ============================================================
+// Admin API Contracts (shared between routes and UI)
+// ============================================================
+
+export interface AdminStateSummary {
+  state: GameCycleState;
+  cycleId: string;
+  playerCount: number;
+  botCount: number;
+  matchCount: number;
+  config: GameConfig;
+}
+
+export interface AdminSystemSummary {
+  storachaEnabled: boolean;
+  timestamp: number;
+}
+
+export interface AdminStateResponse {
+  gameState: AdminStateSummary;
+  players: Player[];
+  bots: Bot[];
+  storage: StorageStats | null;
+  system: AdminSystemSummary;
+}
+
+export type AdminStateAction = "transition" | "reset" | "update-config";
+
+export interface AdminStateTransitionPayload {
+  action: "transition";
+  state: GameCycleState;
+}
+
+export interface AdminStateResetPayload {
+  action: "reset";
+}
+
+export interface AdminStateUpdateConfigPayload {
+  action: "update-config";
+  config: Partial<GameConfig>;
+}
+
+export type AdminStateActionPayload =
+  | AdminStateTransitionPayload
+  | AdminStateResetPayload
+  | AdminStateUpdateConfigPayload;
+
+export type AdminStateRequestBody = Partial<{
+  action: AdminStateAction;
+  state: GameCycleState;
+  config: Partial<GameConfig>;
+}>;
+
+export interface AdminActionSuccessResponse {
+  success: true;
+  message: string;
+}
+
+export interface AdminActionErrorResponse {
+  success?: false;
+  error: string;
+}
+
+export type AdminStateActionResponse =
+  | AdminActionSuccessResponse
+  | AdminActionErrorResponse;
+
+export interface AdminBulkRegisterResult {
+  username: string;
+  success: boolean;
+  fid?: number;
+  reason?: string;
+}
+
+export interface AdminBulkRegisterSuccessResponse {
+  success: true;
+  total: number;
+  registered: number;
+  failed: number;
+  results: AdminBulkRegisterResult[];
+}
+
+export interface AdminBulkRegisterErrorResponse {
+  success: false;
+  error: string;
+  total?: number;
+  registered?: number;
+  failed?: number;
+  results?: AdminBulkRegisterResult[];
+}
+
+export type AdminBulkRegisterResponse =
+  | AdminBulkRegisterSuccessResponse
+  | AdminBulkRegisterErrorResponse;

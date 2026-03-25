@@ -183,6 +183,29 @@ class UpstashRedisClient {
     return this.command<number>("SCARD", key);
   }
 
+  // List operations
+  async lpush(key: string, ...values: string[]): Promise<number> {
+    if (values.length === 0) return 0;
+    return this.command<number>("LPUSH", key, ...values);
+  }
+
+  async rpush(key: string, ...values: string[]): Promise<number> {
+    if (values.length === 0) return 0;
+    return this.command<number>("RPUSH", key, ...values);
+  }
+
+  async lrange(key: string, start: number, stop: number): Promise<string[]> {
+    return this.command<string[]>("LRANGE", key, start, stop);
+  }
+
+  async llen(key: string): Promise<number> {
+    return this.command<number>("LLEN", key);
+  }
+
+  async lindex(key: string, index: number): Promise<string | null> {
+    return this.command<string | null>("LINDEX", key, index);
+  }
+
   async ping(): Promise<string> {
     return this.command<string>("PING");
   }

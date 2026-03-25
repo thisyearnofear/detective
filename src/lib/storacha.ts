@@ -10,6 +10,7 @@
 // 5. Export delegation for server use (see docs.storacha.network/how-to/upload)
 
 import type { Client } from "@storacha/client";
+import { recordUpload, isStorageTrackingEnabled } from "./storageTracking";
 
 const STORACHA_ENABLED = process.env.STORACHA_ENABLED === "true";
 const STORACHA_GATEWAY = "https://storacha.link/ipfs";
@@ -97,7 +98,7 @@ export interface GameSnapshot {
  * Returns IPFS CID for verifiable provenance.
  */
 export async function uploadBotTrainingData(
-  data: BotTrainingData
+  data: BotTrainingData,
 ): Promise<{ cid: string; gatewayUrl: string } | null> {
   if (!STORACHA_ENABLED) return null;
 
@@ -107,12 +108,33 @@ export async function uploadBotTrainingData(
     const file = new File(
       [json],
       `bot-training-${data.botUsername}-${data.gameId}.json`,
-      { type: "application/json" }
+      { type: "application/json" },
     );
 
+    const sizeBytes = file.size;
     const cid = await client.uploadFile(file);
     const url = `${STORACHA_GATEWAY}/${cid}`;
-    console.log(`[Storacha] Bot training data uploaded: ${data.botUsername} → ${url}`);
+    console.log(
+      `[Storacha] Bot training data uploaded: ${data.botUsername} → ${url}`,
+    );
+
+    // Record upload metadata for tracking
+    if (isStorageTrackingEnabled()) {
+      await recordUpload({
+        cycleId: data.gameId,
+        type: "bot_training_data",
+        cid: String(cid),
+        gatewayUrl: url,
+        sizeBytes,
+        uploadedAt: Date.now(),
+        metadata: {
+          botUsername: data.botUsername,
+          originalAuthor: data.originalAuthor,
+          castCount: data.castCount,
+        },
+      });
+    }
+
     return { cid: String(cid), gatewayUrl: url };
   } catch (error) {
     console.error("[Storacha] Upload failed:", error);
@@ -124,7 +146,7 @@ export async function uploadBotTrainingData(
  * Upload match provenance (immutable record of each match) to Storacha.
  */
 export async function uploadMatchProvenance(
-  data: MatchProvenance
+  data: MatchProvenance,
 ): Promise<{ cid: string; gatewayUrl: string } | null> {
   if (!STORACHA_ENABLED) return null;
 
@@ -137,7 +159,9 @@ export async function uploadMatchProvenance(
 
     const cid = await client.uploadFile(file);
     const url = `${STORACHA_GATEWAY}/${cid}`;
-    console.log(`[Storacha] Match provenance uploaded: ${data.matchId} → ${url}`);
+    console.log(
+      `[Storacha] Match provenance uploaded: ${data.matchId} → ${url}`,
+    );
     return { cid: String(cid), gatewayUrl: url };
   } catch (error) {
     console.error("[Storacha] Upload failed:", error);
@@ -149,7 +173,7 @@ export async function uploadMatchProvenance(
  * Upload full game snapshot (leaderboard + metadata) as a directory to Storacha.
  */
 export async function uploadGameSnapshot(
-  data: GameSnapshot
+  data: GameSnapshot,
 ): Promise<{ cid: string; gatewayUrl: string } | null> {
   if (!STORACHA_ENABLED) return null;
 
@@ -159,7 +183,7 @@ export async function uploadGameSnapshot(
     const leaderboardFile = new File(
       [JSON.stringify(data.leaderboard, null, 2)],
       "leaderboard.json",
-      { type: "application/json" }
+      { type: "application/json" },
     );
 
     const metadataFile = new File(
@@ -176,16 +200,36 @@ export async function uploadGameSnapshot(
             llmModelsUsed: data.llmModelsUsed,
           },
           null,
-          2
+          2,
         ),
       ],
       "metadata.json",
-      { type: "application/json" }
+      { type: "application/json" },
     );
 
+    const sizeBytes = leaderboardFile.size + metadataFile.size;
     const cid = await client.uploadDirectory([leaderboardFile, metadataFile]);
     const url = `${STORACHA_GATEWAY}/${cid}`;
     console.log(`[Storacha] Game snapshot uploaded: ${data.gameId} → ${url}`);
+
+    // Record upload metadata for tracking
+    if (isStorageTrackingEnabled()) {
+      await recordUpload({
+        cycleId: data.gameId,
+        type: "game_snapshot",
+        cid: String(cid),
+        gatewayUrl: url,
+        sizeBytes,
+        uploadedAt: Date.now(),
+        metadata: {
+          cycleNumber: data.cycleNumber,
+          playerCount: data.playerCount,
+          botCount: data.botCount,
+          matchCount: data.matchCount,
+        },
+      });
+    }
+
     return { cid: String(cid), gatewayUrl: url };
   } catch (error) {
     console.error("[Storacha] Upload failed:", error);
@@ -197,7 +241,7 @@ export async function uploadGameSnapshot(
  * Batch upload match provenances as a single directory for efficiency.
  */
 export async function uploadMatchProvenances(
-  matches: MatchProvenance[]
+  matches: MatchProvenance[],
 ): Promise<Array<{ matchId: string; cid: string; gatewayUrl: string }>> {
   if (!STORACHA_ENABLED || matches.length === 0) return [];
 
@@ -205,17 +249,15 @@ export async function uploadMatchProvenances(
     const client = await getClient();
     const files = matches.map(
       (m) =>
-        new File(
-          [JSON.stringify(m, null, 2)],
-          `match-${m.matchId}.json`,
-          { type: "application/json" }
-        )
+        new File([JSON.stringify(m, null, 2)], `match-${m.matchId}.json`, {
+          type: "application/json",
+        }),
     );
 
     const cid = await client.uploadDirectory(files);
     const url = `${STORACHA_GATEWAY}/${cid}`;
     console.log(
-      `[Storacha] Batch uploaded ${matches.length} match provenances → ${url}`
+      `[Storacha] Batch uploaded ${matches.length} match provenances → ${url}`,
     );
     return matches.map((m) => ({
       matchId: m.matchId,

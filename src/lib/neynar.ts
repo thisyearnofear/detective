@@ -7,7 +7,7 @@ const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
 if (!NEYNAR_API_KEY) {
   throw new Error(
     `[Neynar] FATAL: NEYNAR_API_KEY not set.
-    Get your API key at: https://neynar.com/app/api-keys`
+    Get your API key at: https://neynar.com/app/api-keys`,
   );
 }
 
@@ -53,7 +53,7 @@ function setCached(key: string, data: any): void {
  */
 export async function getFarcasterUserByAddress(
   address: string,
-  signature?: string
+  signature?: string,
 ): Promise<FarcasterUserData | null> {
   const cacheKey = `user-addr-${address.toLowerCase()}`;
   const cached = getCached(cacheKey);
@@ -69,7 +69,7 @@ export async function getFarcasterUserByAddress(
           "Content-Type": "application/json",
           api_key: NEYNAR_API_KEY!,
         },
-      }
+      },
     );
 
     if (!response.ok) {
@@ -101,6 +101,72 @@ export async function getFarcasterUserByAddress(
 }
 
 /**
+ * Lookup a Farcaster user by username and return the FID.
+ *
+ * @param username The Farcaster username.
+ * @returns The FID if found, otherwise null.
+ */
+export async function getFidByUsername(
+  username: string,
+): Promise<number | null> {
+  const normalized = username.trim().replace(/^@/, "").toLowerCase();
+  if (!normalized) return null;
+
+  const cacheKey = `fid-username-${normalized}`;
+  const cached = getCached(cacheKey);
+  if (typeof cached === "number") return cached;
+
+  try {
+    const response = await fetch(
+      `${NEYNAR_BASE_URL}/user/by_username?username=${encodeURIComponent(normalized)}`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          api_key: NEYNAR_API_KEY!,
+        },
+      },
+    );
+
+    if (!response.ok) {
+      if (response.status === 404) return null;
+      throw new Error(`Neynar username lookup error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const user = data.user || data.result?.user;
+    const fid = user?.fid;
+
+    if (!fid || typeof fid !== "number") {
+      return null;
+    }
+
+    setCached(cacheKey, fid);
+    return fid;
+  } catch (error) {
+    console.error(`Error looking up FID for username ${normalized}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Lookup a Farcaster username and fetch full game-ready user data.
+ *
+ * @param username The Farcaster username.
+ * @returns A comprehensive object with all user data for the game.
+ */
+export async function getFarcasterUserDataByUsername(
+  username: string,
+): Promise<FarcasterUserData> {
+  const fid = await getFidByUsername(username);
+  if (!fid) {
+    return { isValid: false, userProfile: null, recentCasts: [], style: "" };
+  }
+
+  return getFarcasterUserData(fid);
+}
+
+/**
  * Fetches all necessary Farcaster data for a user, including profile,
  * validation, recent casts, and inferred writing style.
  *
@@ -108,7 +174,7 @@ export async function getFarcasterUserByAddress(
  * @returns A comprehensive object with all user data for the game.
  */
 export async function getFarcasterUserData(
-  fid: number
+  fid: number,
 ): Promise<FarcasterUserData> {
   try {
     // 1. Fetch user profile for validation and basic info
@@ -120,7 +186,7 @@ export async function getFarcasterUserData(
           "Content-Type": "application/json",
           api_key: NEYNAR_API_KEY!,
         },
-      }
+      },
     );
 
     if (!userResponse.ok)
@@ -155,7 +221,7 @@ export async function getFarcasterUserData(
           "Content-Type": "application/json",
           api_key: NEYNAR_API_KEY!,
         },
-      }
+      },
     );
     if (!feedResponse.ok)
       throw new Error(`Neynar feed API error: ${feedResponse.statusText}`);

@@ -1,6 +1,6 @@
 // src/app/api/auth/web/route.ts
 import { NextResponse } from "next/server";
-import { getFarcasterUserData } from "@/lib/neynar";
+import { getFarcasterUserDataByUsername } from "@/lib/neynar";
 
 /**
  * Web authentication endpoint for non-Farcaster SDK users.
@@ -14,65 +14,18 @@ export async function GET(request: Request) {
     if (!username) {
       return NextResponse.json(
         { error: "Username is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    // Lookup username to get FID via Neynar
-    const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
-
-    if (!NEYNAR_API_KEY) {
-      // Dev mode: Return mock data
-      const mockFid = Math.floor(Math.random() * 10000);
-      return NextResponse.json({
-        success: true,
-        userProfile: {
-          fid: mockFid,
-          username: username,
-          displayName: `${username} (dev)`,
-          pfpUrl: "https://i.imgur.com/vL43u65.jpg",
-        },
-      });
-    }
-
-    // Lookup username to get FID
-    const userLookupResponse = await fetch(
-      `https://api.neynar.com/v2/farcaster/user/by_username?username=${username}`,
-      {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          api_key: NEYNAR_API_KEY,
-        },
-      }
-    );
-
-    if (!userLookupResponse.ok) {
-      return NextResponse.json(
-        { error: "User not found on Farcaster" },
-        { status: 404 }
-      );
-    }
-
-    const userData = await userLookupResponse.json();
-    const user = userData.user || userData.result?.user;
-    const fid = user?.fid;
-
-    if (!fid) {
-      console.error(`Could not find FID for ${username}. Response:`, JSON.stringify(userData));
-      return NextResponse.json(
-        { error: "Could not retrieve user FID" },
-        { status: 404 }
-      );
-    }
-
-    // Fetch full user data (validation, profile, casts, style)
-    const { isValid, userProfile } = await getFarcasterUserData(fid);
+    // Fetch full user data (username lookup + validation + profile + casts + style)
+    const { isValid, userProfile } =
+      await getFarcasterUserDataByUsername(username);
 
     if (!isValid || !userProfile) {
       return NextResponse.json(
         { error: "User does not meet quality criteria (Neynar score < 0.8)" },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
@@ -84,7 +37,7 @@ export async function GET(request: Request) {
     console.error("Error in web authentication:", error);
     return NextResponse.json(
       { error: "An unexpected error occurred" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
