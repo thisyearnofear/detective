@@ -9,20 +9,25 @@ import MobileSwipeableChat from "./MobileSwipeableChat";
 import OnboardingModal, { useOnboarding } from "./OnboardingModal";
 import { useModal } from "@/hooks/useModal";
 import { useViewport } from "@/lib/viewport";
-import { fetcherWithGameNotLive, getApiUrl } from "@/lib/fetcher";
+import { fetcherWithGameNotLive, getApiUrl, requestJson } from "@/lib/fetcher";
 import { syncTimeOffset, resetTimeOffset } from "@/lib/timeSynchronization";
 import { UserProfile } from "@/lib/types";
 
 // Polling intervals - single source of truth
 const POLLING_INTERVALS = {
-  ACTIVE_GAME: 1000,      // Normal active game polling - faster for responsive updates
-  ROUND_TRANSITION: 500,  // Fast polling during round transitions
-  POST_GAME_WAIT: 1000,   // Minimal polling while waiting for next cycle (detects cycleId change)
+  ACTIVE_GAME: 1000, // Normal active game polling - faster for responsive updates
+  ROUND_TRANSITION: 500, // Fast polling during round transitions
+  POST_GAME_WAIT: 1000, // Minimal polling while waiting for next cycle (detects cycleId change)
 } as const;
 
 type GameResults = {
   accuracy: number;
-  roundResults: Array<{ roundNumber: number; correct: boolean; opponentUsername: string; opponentType: "REAL" | "BOT" }>;
+  roundResults: Array<{
+    roundNumber: number;
+    correct: boolean;
+    opponentUsername: string;
+    opponentType: "REAL" | "BOT";
+  }>;
   playerRank: number;
   totalPlayers: number;
 };
@@ -55,20 +60,24 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
   const [newMatchIds, setNewMatchIds] = useState<Set<string>>(new Set());
   const [gameFinished, setGameFinished] = useState(false);
   const [roundResults, setRoundResults] = useState<RoundResult[]>([]);
-  const [batchReveals, setBatchReveals] = useState<Array<{
-    opponent: UserProfile;
-    actualType: "REAL" | "BOT";
-    llmModelId?: string;
-    llmModelName?: string;
-    userLlmGuess?: string;
-  }>>([]);
+  const [batchReveals, setBatchReveals] = useState<
+    Array<{
+      opponent: UserProfile;
+      actualType: "REAL" | "BOT";
+      llmModelId?: string;
+      llmModelName?: string;
+      userLlmGuess?: string;
+    }>
+  >([]);
   // Track if we've ever successfully loaded matches (to prevent premature error display)
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [consecutiveErrors, setConsecutiveErrors] = useState(0);
   // Track round transitions for loading state
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [lastRound, setLastRound] = useState(0);
-  const [transitionTimeoutMessage, setTransitionTimeoutMessage] = useState<"preparing" | "delayed" | null>(null);
+  const [transitionTimeoutMessage, setTransitionTimeoutMessage] = useState<
+    "preparing" | "delayed" | null
+  >(null);
   const transitionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const transitionWarningRef = useRef<NodeJS.Timeout | null>(null);
   const [isPreparingRound, setIsPreparingRound] = useState(false);
@@ -81,7 +90,9 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
 
   // Typing indicator state - managed at container level to persist through polling cycles
   const typingStateRef = useRef<Record<string, { expiresAt: number }>>({}); // matchId -> { expiresAt }
-  const [typingIndicators, setTypingIndicators] = useState<Record<string, boolean>>({}); // matchId -> isTyping
+  const [typingIndicators, setTypingIndicators] = useState<
+    Record<string, boolean>
+  >({}); // matchId -> isTyping
   const typingCleanupRef = useRef<NodeJS.Timeout | null>(null);
 
   // Time synchronization - now centralized in timeSynchronization.ts
@@ -92,7 +103,7 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
   const refreshInterval = isTransitioning
     ? POLLING_INTERVALS.ROUND_TRANSITION
     : gameFinished
-      ? POLLING_INTERVALS.POST_GAME_WAIT  // Keep polling to detect new cycle
+      ? POLLING_INTERVALS.POST_GAME_WAIT // Keep polling to detect new cycle
       : POLLING_INTERVALS.ACTIVE_GAME;
 
   // Poll for active matches
@@ -100,16 +111,20 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
     data: matchData,
     error,
     mutate,
-  } = useSWR(getApiUrl(`/api/match/active?fid=${fid}`), fetcherWithGameNotLive, {
-    refreshInterval,
-    dedupingInterval: 1000, // Prevent duplicate requests within 1s window
-    refreshWhenHidden: true, // Mobile: Keep polling when app backgrounded
-    revalidateOnFocus: true, // Mobile: Refresh when user returns
-    keepPreviousData: true,
-    shouldRetryOnError: true,
-    errorRetryCount: 3,
-    errorRetryInterval: 1000,
-  });
+  } = useSWR(
+    getApiUrl(`/api/match/active?fid=${fid}`),
+    fetcherWithGameNotLive,
+    {
+      refreshInterval,
+      dedupingInterval: 1000, // Prevent duplicate requests within 1s window
+      refreshWhenHidden: true, // Mobile: Keep polling when app backgrounded
+      revalidateOnFocus: true, // Mobile: Refresh when user returns
+      keepPreviousData: true,
+      shouldRetryOnError: true,
+      errorRetryCount: 3,
+      errorRetryInterval: 1000,
+    },
+  );
 
   // Track successful loads and errors, sync time offset on first poll only
   useEffect(() => {
@@ -128,7 +143,7 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
         lastValidRoundRef.current = matchData.currentRound;
       }
     } else if (error) {
-      setConsecutiveErrors(prev => prev + 1);
+      setConsecutiveErrors((prev) => prev + 1);
     }
   }, [matchData, error]);
 
@@ -138,7 +153,9 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
     if (matchData?.cycleId && matchData.cycleId !== lastCycleIdRef.current) {
       if (lastCycleIdRef.current !== "") {
         // CycleId changed - new game cycle started, reset all state
-        console.log(`[MultiChatContainer] New cycle detected: ${lastCycleIdRef.current} → ${matchData.cycleId}`);
+        console.log(
+          `[MultiChatContainer] New cycle detected: ${lastCycleIdRef.current} → ${matchData.cycleId}`,
+        );
         setGameFinished(false);
         setRoundResults([]);
         setVotes({});
@@ -165,18 +182,29 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
       // Extra safeguard: ensure at least one result
       roundResults.length > 0
     ) {
-      console.log(`[MultiChatContainer] Game finished. Round ${matchData.currentRound}/${matchData.totalRounds}, Results: ${roundResults.length}`);
+      console.log(
+        `[MultiChatContainer] Game finished. Round ${matchData.currentRound}/${matchData.totalRounds}, Results: ${roundResults.length}`,
+      );
       setGameFinished(true);
 
       // Call game finish callback with final results
-      if (onGameFinish && matchData.playerRank !== undefined && matchData.totalPlayers) {
-        const accuracy = (roundResults.filter((r) => r.correct).length / roundResults.length) * 100;
-        console.log(`[MultiChatContainer] Game finished - calling onGameFinish callback with results:`, {
-          accuracy: accuracy.toFixed(1) + '%',
-          roundsCompleted: roundResults.length,
-          playerRank: matchData.playerRank,
-          totalPlayers: matchData.totalPlayers,
-        });
+      if (
+        onGameFinish &&
+        matchData.playerRank !== undefined &&
+        matchData.totalPlayers
+      ) {
+        const accuracy =
+          (roundResults.filter((r) => r.correct).length / roundResults.length) *
+          100;
+        console.log(
+          `[MultiChatContainer] Game finished - calling onGameFinish callback with results:`,
+          {
+            accuracy: accuracy.toFixed(1) + "%",
+            roundsCompleted: roundResults.length,
+            playerRank: matchData.playerRank,
+            totalPlayers: matchData.totalPlayers,
+          },
+        );
         onGameFinish({
           accuracy,
           roundResults,
@@ -184,14 +212,26 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
           totalPlayers: matchData.totalPlayers,
         });
       } else {
-        console.warn(`[MultiChatContainer] Game finished but cannot call callback:`, {
-          hasCallback: !!onGameFinish,
-          playerRank: matchData.playerRank,
-          totalPlayers: matchData.totalPlayers,
-        });
+        console.warn(
+          `[MultiChatContainer] Game finished but cannot call callback:`,
+          {
+            hasCallback: !!onGameFinish,
+            playerRank: matchData.playerRank,
+            totalPlayers: matchData.totalPlayers,
+          },
+        );
       }
     }
-  }, [matchData?.currentRound, matchData?.totalRounds, matchData?.matches?.length, matchData?.playerRank, matchData?.totalPlayers, gameFinished, roundResults.length, onGameFinish]);
+  }, [
+    matchData?.currentRound,
+    matchData?.totalRounds,
+    matchData?.matches?.length,
+    matchData?.playerRank,
+    matchData?.totalPlayers,
+    gameFinished,
+    roundResults.length,
+    onGameFinish,
+  ]);
 
   // Track round transitions for loading state
   useEffect(() => {
@@ -208,18 +248,24 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
         setTransitionTimeoutMessage("preparing");
 
         // Clear any existing timeouts
-        if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
-        if (transitionWarningRef.current) clearTimeout(transitionWarningRef.current);
+        if (transitionTimeoutRef.current)
+          clearTimeout(transitionTimeoutRef.current);
+        if (transitionWarningRef.current)
+          clearTimeout(transitionWarningRef.current);
 
         // Warn after 9 seconds (reveals: 6s + grace: 3s) if still transitioning
         transitionWarningRef.current = setTimeout(() => {
-          console.warn(`[MultiChatContainer] Round transition taking longer than expected (>9s)`);
+          console.warn(
+            `[MultiChatContainer] Round transition taking longer than expected (>9s)`,
+          );
           setTransitionTimeoutMessage("delayed");
         }, 9000);
 
         // Force clear after 15 seconds max (safety net)
         transitionTimeoutRef.current = setTimeout(() => {
-          console.warn(`[MultiChatContainer] Transition timeout after 15s, clearing isTransitioning`);
+          console.warn(
+            `[MultiChatContainer] Transition timeout after 15s, clearing isTransitioning`,
+          );
           setIsTransitioning(false);
           setTransitionTimeoutMessage(null);
         }, 15000);
@@ -231,16 +277,26 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
     if (matchData?.matches?.length > 0 && isTransitioning) {
       setIsTransitioning(false);
       setTransitionTimeoutMessage(null);
-      if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
-      if (transitionWarningRef.current) clearTimeout(transitionWarningRef.current);
+      if (transitionTimeoutRef.current)
+        clearTimeout(transitionTimeoutRef.current);
+      if (transitionWarningRef.current)
+        clearTimeout(transitionWarningRef.current);
     }
-  }, [matchData?.currentRound, matchData?.matches?.length, lastRound, isTransitioning, batchReveals.length]);
+  }, [
+    matchData?.currentRound,
+    matchData?.matches?.length,
+    lastRound,
+    isTransitioning,
+    batchReveals.length,
+  ]);
 
   // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {
-      if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
-      if (transitionWarningRef.current) clearTimeout(transitionWarningRef.current);
+      if (transitionTimeoutRef.current)
+        clearTimeout(transitionTimeoutRef.current);
+      if (transitionWarningRef.current)
+        clearTimeout(transitionWarningRef.current);
     };
   }, []);
 
@@ -260,38 +316,54 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
           newMatches.add(match.id);
         }
 
-        // Only trigger if match is marked as staked, we haven't done it yet, 
+        // Only trigger if match is marked as staked, we haven't done it yet,
         // and we have session permissions
         if (
           match.isStaked &&
           !executedStakesRef.current.has(match.id) &&
           !match.voteLocked
         ) {
-          console.log(`[MultiChatContainer] Detected new staked match: ${match.id}`);
+          console.log(
+            `[MultiChatContainer] Detected new staked match: ${match.id}`,
+          );
 
           try {
-            const { executeSessionStake, getSessionPermissions, isPermissionValid } = await import('@/lib/erc7715');
+            const {
+              executeSessionStake,
+              getSessionPermissions,
+              isPermissionValid,
+            } = await import("@/lib/erc7715");
             const { context, expiry } = getSessionPermissions();
 
             if (context && isPermissionValid(expiry || 0)) {
               // Mark as executed immediately to prevent duplicate calls during async ops
               executedStakesRef.current.add(match.id);
 
-              const currentVote = votes[match.id] || match.currentVote || "REAL";
+              const currentVote =
+                votes[match.id] || match.currentVote || "REAL";
               const isBot = currentVote === "BOT";
               const amountWei = match.stakedAmount || "1000000000000000"; // Default 0.001 ETH if not specified
 
-              const bundleId = await executeSessionStake(match.id, isBot, amountWei);
+              const bundleId = await executeSessionStake(
+                match.id,
+                isBot,
+                amountWei,
+              );
 
               if (bundleId) {
-                console.log(`[MultiChatContainer] ✓ Background stake submitted for match ${match.id}. Bundle: ${bundleId}`);
+                console.log(
+                  `[MultiChatContainer] ✓ Background stake submitted for match ${match.id}. Bundle: ${bundleId}`,
+                );
               } else {
                 // If it failed, we might want to try again later or show a hint
                 executedStakesRef.current.delete(match.id);
               }
             }
           } catch (err) {
-            console.error(`[MultiChatContainer] Failed to execute background stake:`, err);
+            console.error(
+              `[MultiChatContainer] Failed to execute background stake:`,
+              err,
+            );
           }
         }
       });
@@ -329,20 +401,26 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
         setRoundResults(newResults);
       }
     }
-  }, [matchData?.voteHistory?.length, matchData?.voteHistory?.map((v: any) => v.roundNumber).join(",")]);
+  }, [
+    matchData?.voteHistory?.length,
+    matchData?.voteHistory?.map((v: any) => v.roundNumber).join(","),
+  ]);
 
   // Show reveal screen via modal when round ends
   useEffect(() => {
-    if (
-      batchReveals.length > 0 &&
-      matchData?.matches?.length === 0
-    ) {
+    if (batchReveals.length > 0 && matchData?.matches?.length === 0) {
       // Show reveal modal with 5s auto-close
-      showModal('reveal',
+      showModal(
+        "reveal",
         {
           reveals: batchReveals,
           stats: {
-            accuracy: roundResults.length > 0 ? (roundResults.filter((r) => r.correct).length / roundResults.length) * 100 : 0,
+            accuracy:
+              roundResults.length > 0
+                ? (roundResults.filter((r) => r.correct).length /
+                    roundResults.length) *
+                  100
+                : 0,
             correct: roundResults.filter((r) => r.correct).length,
             total: roundResults.length,
             playerRank: matchData?.playerRank,
@@ -352,11 +430,19 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
         },
         {
           autoClose: 5000,
-          onClose: () => setBatchReveals([])
-        }
+          onClose: () => setBatchReveals([]),
+        },
       );
     }
-  }, [batchReveals.length, matchData?.matches?.length, matchData?.currentRound, matchData?.playerRank, matchData?.totalPlayers, roundResults.length, showModal]);
+  }, [
+    batchReveals.length,
+    matchData?.matches?.length,
+    matchData?.currentRound,
+    matchData?.playerRank,
+    matchData?.totalPlayers,
+    roundResults.length,
+    showModal,
+  ]);
 
   // Handle typing indicator - persists across polling cycles via ref
   const handleTypingStart = useCallback((matchId: string, duration: number) => {
@@ -408,7 +494,7 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
       setVotes((prev): VoteState => ({ ...prev, [matchId]: newVote }));
 
       try {
-        await fetch(getApiUrl("/api/match/vote"), {
+        await requestJson<any>("/api/match/vote", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ matchId, vote: newVote, fid }),
@@ -419,7 +505,7 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
         setVotes((prev): VoteState => ({ ...prev, [matchId]: previousVote }));
       }
     },
-    [fid, mutate, votes]
+    [fid, mutate, votes],
   );
 
   // Handle match completion - collect reveal data
@@ -429,27 +515,37 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
       if (isPreparingRound) return;
 
       try {
-        const response = await fetch(getApiUrl("/api/match/vote"), {
+        const result = await requestJson<any>("/api/match/vote", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ matchId, fid }),
         });
 
-        const result = await response.json();
-
-        if (response.ok && result.isCorrect !== undefined) {
+        if (result.isCorrect !== undefined) {
           // ERC-7715: Background On-Chain Vote
           try {
-            const { executeSessionVote, getSessionPermissions, isPermissionValid } = await import('@/lib/erc7715');
+            const {
+              executeSessionVote,
+              getSessionPermissions,
+              isPermissionValid,
+            } = await import("@/lib/erc7715");
             const { context, expiry } = getSessionPermissions();
 
             if (context && isPermissionValid(expiry || 0)) {
               const currentVote = votes[matchId] || "REAL";
               executeSessionVote(matchId, currentVote === "BOT")
-                .then(bundleId => {
-                  if (bundleId) console.log(`[MultiChatContainer] ✓ Background on-chain vote submitted for match ${matchId}`);
+                .then((bundleId) => {
+                  if (bundleId)
+                    console.log(
+                      `[MultiChatContainer] ✓ Background on-chain vote submitted for match ${matchId}`,
+                    );
                 })
-                .catch(err => console.error(`[MultiChatContainer] Background vote failed:`, err));
+                .catch((err) =>
+                  console.error(
+                    `[MultiChatContainer] Background vote failed:`,
+                    err,
+                  ),
+                );
             }
           } catch (err) {
             console.warn(`[MultiChatContainer] Background vote skipped:`, err);
@@ -461,7 +557,8 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
             // Collect reveal data for batch display
             setBatchReveals((prev) => {
               // Prevent duplicates
-              if (prev.some((r) => r.opponent.fid === match.opponent.fid)) return prev;
+              if (prev.some((r) => r.opponent.fid === match.opponent.fid))
+                return prev;
               return [
                 ...prev,
                 {
@@ -481,7 +578,7 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
           }
         }
 
-        if (!response.ok) {
+        if (result?.error) {
           console.error("Failed to lock vote:", result.error);
         }
       } catch (error) {
@@ -494,22 +591,27 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
       // Also refresh after a short delay to catch any async updates
       setTimeout(() => mutate(), 500);
     },
-    [fid, mutate, matchData, isPreparingRound]
+    [fid, mutate, matchData, isPreparingRound],
   );
 
   // Memoize bound handlers to prevent new function references on every render
-  const boundHandlersRef = useRef<Map<string, { onVoteToggle: () => void; onComplete: () => void }>>(new Map());
+  const boundHandlersRef = useRef<
+    Map<string, { onVoteToggle: () => void; onComplete: () => void }>
+  >(new Map());
 
   // Get or create stable handlers for a match ID
-  const getStableHandlers = useCallback((matchId: string) => {
-    if (!boundHandlersRef.current.has(matchId)) {
-      boundHandlersRef.current.set(matchId, {
-        onVoteToggle: () => handleVoteToggle(matchId),
-        onComplete: () => handleMatchComplete(matchId),
-      });
-    }
-    return boundHandlersRef.current.get(matchId)!;
-  }, [handleVoteToggle, handleMatchComplete]);
+  const getStableHandlers = useCallback(
+    (matchId: string) => {
+      if (!boundHandlersRef.current.has(matchId)) {
+        boundHandlersRef.current.set(matchId, {
+          onVoteToggle: () => handleVoteToggle(matchId),
+          onComplete: () => handleMatchComplete(matchId),
+        });
+      }
+      return boundHandlersRef.current.get(matchId)!;
+    },
+    [handleVoteToggle, handleMatchComplete],
+  );
 
   // Memoize slots to prevent ChatWindow from re-mounting on every matchData refresh
   // Use a ref to maintain stable references when match content hasn't changed
@@ -552,9 +654,13 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
       }
 
       // Check if this is actually a different match or just a re-render
-      const messageCountChanged = (previousMatch?.messages?.length || 0) !== (currentMatch?.messages?.length || 0);
-      const messageContentChanged = messageCountChanged ||
-        JSON.stringify(previousMatch?.messages) !== JSON.stringify(currentMatch?.messages);
+      const messageCountChanged =
+        (previousMatch?.messages?.length || 0) !==
+        (currentMatch?.messages?.length || 0);
+      const messageContentChanged =
+        messageCountChanged ||
+        JSON.stringify(previousMatch?.messages) !==
+          JSON.stringify(currentMatch?.messages);
 
       if (
         !previousMatch ||
@@ -570,7 +676,11 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
       }
     }
 
-    if (hasChanges || Object.keys(previousSlotsRef.current).length !== Object.keys(newSlots).length) {
+    if (
+      hasChanges ||
+      Object.keys(previousSlotsRef.current).length !==
+        Object.keys(newSlots).length
+    ) {
       previousSlotsRef.current = newSlots;
       return newSlots;
     }
@@ -594,7 +704,9 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
     return (
       <div className="bg-slate-800 rounded-lg p-6 text-center">
         <p className="text-gray-400">Waiting for game to start...</p>
-        <p className="text-sm text-gray-500 mt-2">Current state: {matchData.currentState}</p>
+        <p className="text-sm text-gray-500 mt-2">
+          Current state: {matchData.currentState}
+        </p>
       </div>
     );
   }
@@ -661,9 +773,10 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
 
   if (matches.length === 0 || isPreparingRound) {
     // Show loading state if transitioning between rounds
-    const loaderMessage = transitionTimeoutMessage === "delayed"
-      ? "Taking longer than expected... Stand by"
-      : "Preparing next round...";
+    const loaderMessage =
+      transitionTimeoutMessage === "delayed"
+        ? "Taking longer than expected... Stand by"
+        : "Preparing next round...";
 
     return (
       <LoadingOverlay
@@ -680,9 +793,7 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
     <>
       {/* Onboarding Modal */}
       {showOnboarding && (
-        <OnboardingModal
-          onComplete={handleOnboardingComplete}
-        />
+        <OnboardingModal onComplete={handleOnboardingComplete} />
       )}
 
       {/* Main Game UI */}
@@ -731,7 +842,9 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
                       className="bg-slate-800/50 rounded-lg p-6 border-2 border-dashed border-slate-700"
                     >
                       <div className="text-center text-gray-500">
-                        <p className="text-lg font-medium mb-2">Chat Slot {slotNumber}</p>
+                        <p className="text-lg font-medium mb-2">
+                          Chat Slot {slotNumber}
+                        </p>
                         <p className="text-sm">Waiting for opponent...</p>
                       </div>
                     </div>
@@ -740,7 +853,9 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
 
                 const currentVote = votes[match.id] || "REAL";
                 const voteColor =
-                  currentVote === "BOT" ? "border-red-500/50" : "border-green-500/50";
+                  currentVote === "BOT"
+                    ? "border-red-500/50"
+                    : "border-green-500/50";
 
                 // Get stable handlers to prevent ChatWindow remounting
                 const stableHandlers = getStableHandlers(match.id);
@@ -770,7 +885,9 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
                       }}
                       isOpponentTyping={typingIndicators[match.id] || false}
                       onTypingStart={handleTypingStart}
-                      monetizationEnabled={matchData?.config?.monetizationEnabled}
+                      monetizationEnabled={
+                        matchData?.config?.monetizationEnabled
+                      }
                     />
                   </div>
                 );
@@ -794,7 +911,8 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
             </h3>
             <div className="flex flex-wrap justify-center gap-3 text-xs">
               <div className="bg-slate-800/50 rounded-full px-3 py-1.5 border border-slate-600/50">
-                <span className="text-green-400">👤</span> = Human | <span className="text-red-400">🤖</span> = Bot
+                <span className="text-green-400">👤</span> = Human |{" "}
+                <span className="text-red-400">🤖</span> = Bot
               </div>
               <div className="bg-slate-800/50 rounded-full px-3 py-1.5 border border-slate-600/50">
                 ⏱️ 60 sec rounds

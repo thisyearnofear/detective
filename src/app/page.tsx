@@ -10,7 +10,7 @@ import GameStateView from "@/components/game/GameStateView";
 import CaseStatusCard from "@/components/game/CaseStatusCard";
 import Leaderboard from "@/components/Leaderboard";
 import CollapsibleSection from "@/components/CollapsibleSection";
-import { fetcher, getApiUrl } from "@/lib/fetcher";
+import { fetcher, getApiUrl, requestJson } from "@/lib/fetcher";
 
 // Main component for the application's home page
 export default function Home() {
@@ -18,10 +18,15 @@ export default function Home() {
   const [isSdkLoading, setIsSdkLoading] = useState(true);
   const [introComplete, setIntroComplete] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
-  const [lastGameState, setLastGameState] = useState<string>('');
+  const [lastGameState, setLastGameState] = useState<string>("");
   const [gameResults, setGameResults] = useState<{
     accuracy: number;
-    roundResults: Array<{ roundNumber: number; correct: boolean; opponentUsername: string; opponentType: "REAL" | "BOT" }>;
+    roundResults: Array<{
+      roundNumber: number;
+      correct: boolean;
+      opponentUsername: string;
+      opponentType: "REAL" | "BOT";
+    }>;
     playerRank: number;
     totalPlayers: number;
   } | null>(null);
@@ -36,8 +41,14 @@ export default function Home() {
 
   // Use SWR for polling the game state
   // PERFORMANT: Adaptive polling - deduped requests prevent double-fetching
-  const { data: gameState, error: gameStateError, mutate: mutateGameState } = useSWR(
-    sdkUser ? getApiUrl(`/api/game/status?fid=${sdkUser.fid}`) : getApiUrl("/api/game/status"),
+  const {
+    data: gameState,
+    error: gameStateError,
+    mutate: mutateGameState,
+  } = useSWR(
+    sdkUser
+      ? getApiUrl(`/api/game/status?fid=${sdkUser.fid}`)
+      : getApiUrl("/api/game/status"),
     fetcher,
     {
       refreshInterval: 1000,
@@ -54,7 +65,11 @@ export default function Home() {
       setShowLeaderboard(true);
     }
     // Also show stats if transitioning from FINISHED to REGISTRATION
-    if (lastGameState === 'FINISHED' && gameState?.state === 'REGISTRATION' && gameResults) {
+    if (
+      lastGameState === "FINISHED" &&
+      gameState?.state === "REGISTRATION" &&
+      gameResults
+    ) {
       setShowLeaderboard(true);
     }
     if (gameState?.state) {
@@ -64,53 +79,49 @@ export default function Home() {
 
   // Reset leaderboard view when starting a new game
   useEffect(() => {
-    if (gameState?.state === 'LIVE') {
+    if (gameState?.state === "LIVE") {
       setShowLeaderboard(false);
     }
   }, [gameState?.state]);
 
   const handleLogout = () => {
     setSdkUser(null);
-    localStorage.removeItem('auth-token');
-    localStorage.removeItem('cached-user');
+    localStorage.removeItem("auth-token");
+    localStorage.removeItem("cached-user");
   };
 
   useEffect(() => {
     // Try to restore auth from localStorage on mount
     const restoreAuth = async () => {
       try {
-        const token = localStorage.getItem('auth-token');
-        const cachedUser = localStorage.getItem('cached-user');
+        const token = localStorage.getItem("auth-token");
+        const cachedUser = localStorage.getItem("cached-user");
 
         if (token && cachedUser) {
           // Verify token is still valid on server
-          const response = await fetch(getApiUrl('/api/auth/quick-auth/verify'), {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
+          const userData = await requestJson<any>(
+            "/api/auth/quick-auth/verify",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ token }),
             },
-            body: JSON.stringify({ token }),
-          });
+          );
 
-          if (response.ok) {
-            const userData = await response.json();
-            setSdkUser({
-              fid: userData.fid,
-              username: userData.username || '',
-              displayName: userData.displayName || '',
-              pfpUrl: userData.pfpUrl || '',
-            });
-          } else {
-            // Token invalid - clear it
-            localStorage.removeItem('auth-token');
-            localStorage.removeItem('cached-user');
-          }
+          setSdkUser({
+            fid: userData.fid,
+            username: userData.username || "",
+            displayName: userData.displayName || "",
+            pfpUrl: userData.pfpUrl || "",
+          });
         }
       } catch (error) {
-        console.error('Failed to restore auth:', error);
-        localStorage.removeItem('auth-token');
-        localStorage.removeItem('cached-user');
+        console.error("Failed to restore auth:", error);
+        localStorage.removeItem("auth-token");
+        localStorage.removeItem("cached-user");
       } finally {
         setIsSdkLoading(false);
       }
@@ -127,13 +138,11 @@ export default function Home() {
   }) => {
     setSdkUser({
       fid: userProfile.fid,
-      username: userProfile.username || '',
-      displayName: userProfile.displayName || '',
-      pfpUrl: userProfile.pfpUrl || '',
+      username: userProfile.username || "",
+      displayName: userProfile.displayName || "",
+      pfpUrl: userProfile.pfpUrl || "",
     });
   };
-
-
 
   // Unified game state view - consolidates all game phase logic
   const renderGameState = () => {
@@ -146,9 +155,11 @@ export default function Home() {
         displayName={sdkUser.displayName}
         pfpUrl={sdkUser.pfpUrl}
         gameState={gameState}
-        onRequestRefresh={(force) => mutateGameState(undefined, { revalidate: force })}
+        onRequestRefresh={(force) =>
+          mutateGameState(undefined, { revalidate: force })
+        }
         onGameFinish={(results) => {
-          console.log('[page.tsx] onGameFinish callback received:', results);
+          console.log("[page.tsx] onGameFinish callback received:", results);
           setGameResults(results);
         }}
       />
@@ -161,7 +172,9 @@ export default function Home() {
       <div className="min-h-screen flex items-center justify-center relative">
         <div className="text-center">
           <SpinningDetective size="xl" className="mb-6" />
-          <h1 className="hero-title text-3xl font-black text-stroke">🔍 Detective</h1>
+          <h1 className="hero-title text-3xl font-black text-stroke">
+            🔍 Detective
+          </h1>
           <p className="text-gray-400 text-sm">Loading...</p>
         </div>
       </div>
@@ -181,7 +194,10 @@ export default function Home() {
   }
 
   // Generate grid images array
-  const gridImages = Array.from({ length: 9 }, (_, i) => `/grid-images/${i + 1}.jpg`);
+  const gridImages = Array.from(
+    { length: 9 },
+    (_, i) => `/grid-images/${i + 1}.jpg`,
+  );
 
   return (
     <main className="min-h-screen flex items-center justify-center relative overflow-hidden px-4 z-0">
@@ -193,17 +209,22 @@ export default function Home() {
 
       {/* Layer 3: Content Container - Perfect centering */}
       <div className="relative z-20 w-full max-w-2xl flex flex-col items-center justify-center min-h-screen">
-
         {/* Hero Section - The DETECTIVE Title - Centered with entrance animation */}
-        <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-1000 ${introComplete ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-          <h1 className={`hero-title text-6xl sm:text-7xl md:text-[10rem] font-black text-white tracking-tighter leading-none select-none mix-blend-overlay opacity-90 text-center transition-all duration-700 ${introComplete ? '' : 'animate-in'}`}
-            style={{ animationDelay: '100ms' }}>
+        <div
+          className={`absolute inset-0 flex items-center justify-center transition-opacity duration-1000 ${introComplete ? "opacity-0 pointer-events-none" : "opacity-100"}`}
+        >
+          <h1
+            className={`hero-title text-6xl sm:text-7xl md:text-[10rem] font-black text-white tracking-tighter leading-none select-none mix-blend-overlay opacity-90 text-center transition-all duration-700 ${introComplete ? "" : "animate-in"}`}
+            style={{ animationDelay: "100ms" }}
+          >
             DETECTIVE
           </h1>
         </div>
 
         {/* Main Content - Fades in after hero disappears */}
-        <div className={`w-full flex flex-col items-center transition-all duration-1000 ${introComplete ? 'opacity-100' : 'opacity-0'}`}>
+        <div
+          className={`w-full flex flex-col items-center transition-all duration-1000 ${introComplete ? "opacity-100" : "opacity-0"}`}
+        >
           {!sdkUser ? (
             // Not authenticated - Show Farcaster gate
             <div className="w-full max-w-md flex flex-col items-center space-y-8">
@@ -213,7 +234,9 @@ export default function Home() {
                   <span className="text-4xl">🔍</span>
                 </div>
                 <div className="space-y-3">
-                  <h2 className="text-2xl font-black text-white tracking-tight">Can you spot the AI?</h2>
+                  <h2 className="text-2xl font-black text-white tracking-tight">
+                    Can you spot the AI?
+                  </h2>
                   <p className="text-sm text-gray-300 leading-relaxed">
                     Chat with opponents. Figure out who's real.
                   </p>
@@ -250,10 +273,16 @@ export default function Home() {
                   <div className="space-y-4">
                     {[
                       { icon: "1️⃣", text: "Register when a game opens" },
-                      { icon: "2️⃣", text: "Chat with 2 opponents simultaneously" },
-                      { icon: "3️⃣", text: "Vote: Real human or AI bot?" }
+                      {
+                        icon: "2️⃣",
+                        text: "Chat with 2 opponents simultaneously",
+                      },
+                      { icon: "3️⃣", text: "Vote: Real human or AI bot?" },
                     ].map((rule, i) => (
-                      <div key={i} className="flex items-center gap-3 text-left">
+                      <div
+                        key={i}
+                        className="flex items-center gap-3 text-left"
+                      >
                         <span className="text-xl">{rule.icon}</span>
                         <p className="text-sm font-semibold text-white/90 leading-relaxed">
                           {rule.text}
@@ -267,27 +296,51 @@ export default function Home() {
                 <CollapsibleSection title="Features">
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div className="bg-white/8 border-2 border-white/15 rounded-xl p-4 hover:bg-white/12 hover:border-white/25 transition-all duration-300 text-left group">
-                      <div className="text-2xl mb-2 group-hover:scale-110 transition-transform">📊</div>
-                      <div className="font-bold text-white text-sm mb-1.5">4 Leaderboard Modes</div>
-                      <div className="text-xs text-gray-300 leading-relaxed">Current • Career • Insights • Multi-Chain</div>
+                      <div className="text-2xl mb-2 group-hover:scale-110 transition-transform">
+                        📊
+                      </div>
+                      <div className="font-bold text-white text-sm mb-1.5">
+                        4 Leaderboard Modes
+                      </div>
+                      <div className="text-xs text-gray-300 leading-relaxed">
+                        Current • Career • Insights • Multi-Chain
+                      </div>
                     </div>
 
                     <div className="bg-white/8 border-2 border-white/15 rounded-xl p-4 hover:bg-white/12 hover:border-white/25 transition-all duration-300 text-left group">
-                      <div className="text-2xl mb-2 group-hover:scale-110 transition-transform">🌐</div>
-                      <div className="font-bold text-white text-sm mb-1.5">Multi-Chain Support</div>
-                      <div className="text-xs text-gray-300 leading-relaxed">Arbitrum • Monad • Cross-Chain</div>
+                      <div className="text-2xl mb-2 group-hover:scale-110 transition-transform">
+                        🌐
+                      </div>
+                      <div className="font-bold text-white text-sm mb-1.5">
+                        Multi-Chain Support
+                      </div>
+                      <div className="text-xs text-gray-300 leading-relaxed">
+                        Arbitrum • Monad • Cross-Chain
+                      </div>
                     </div>
 
                     <div className="bg-white/8 border-2 border-white/15 rounded-xl p-4 hover:bg-white/12 hover:border-white/25 transition-all duration-300 text-left group">
-                      <div className="text-2xl mb-2 group-hover:scale-110 transition-transform">⚡</div>
-                      <div className="font-bold text-white text-sm mb-1.5">Real-Time Analytics</div>
-                      <div className="text-xs text-gray-300 leading-relaxed">Competitive insights • Trend analysis</div>
+                      <div className="text-2xl mb-2 group-hover:scale-110 transition-transform">
+                        ⚡
+                      </div>
+                      <div className="font-bold text-white text-sm mb-1.5">
+                        Real-Time Analytics
+                      </div>
+                      <div className="text-xs text-gray-300 leading-relaxed">
+                        Competitive insights • Trend analysis
+                      </div>
                     </div>
 
                     <div className="bg-white/8 border-2 border-white/15 rounded-xl p-4 hover:bg-white/12 hover:border-white/25 transition-all duration-300 text-left group">
-                      <div className="text-2xl mb-2 group-hover:scale-110 transition-transform">🤖</div>
-                      <div className="font-bold text-white text-sm mb-1.5">AI Opponents</div>
-                      <div className="text-xs text-gray-300 leading-relaxed">Personalized • Adaptive • Fair</div>
+                      <div className="text-2xl mb-2 group-hover:scale-110 transition-transform">
+                        🤖
+                      </div>
+                      <div className="font-bold text-white text-sm mb-1.5">
+                        AI Opponents
+                      </div>
+                      <div className="text-xs text-gray-300 leading-relaxed">
+                        Personalized • Adaptive • Fair
+                      </div>
                     </div>
                   </div>
                 </CollapsibleSection>
@@ -320,9 +373,13 @@ export default function Home() {
                   )}
                   <div className="flex-1">
                     <p className="text-xs text-gray-300 mb-1">Playing as</p>
-                    <p className="text-xl font-bold text-white">@{sdkUser.username}</p>
+                    <p className="text-xl font-bold text-white">
+                      @{sdkUser.username}
+                    </p>
                     {sdkUser.displayName && (
-                      <p className="text-sm text-gray-300">{sdkUser.displayName}</p>
+                      <p className="text-sm text-gray-300">
+                        {sdkUser.displayName}
+                      </p>
                     )}
                   </div>
                   <div className="flex gap-2">
@@ -330,7 +387,7 @@ export default function Home() {
                       onClick={() => setShowLeaderboard(!showLeaderboard)}
                       className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-white/10 hover:bg-white/20 text-white border border-white/20"
                     >
-                      {showLeaderboard ? '← Back to Investigation' : '🏆 Stats'}
+                      {showLeaderboard ? "← Back to Investigation" : "🏆 Stats"}
                     </button>
                     <button
                       onClick={handleLogout}
@@ -360,9 +417,11 @@ export default function Home() {
                   {/* Contextual Header */}
                   <div className="bg-gradient-to-r from-purple-900/30 to-blue-900/30 border border-purple-500/30 rounded-xl p-4">
                     <div className="text-xs text-gray-400 uppercase tracking-widest mb-2">
-                      {lastGameState === 'FINISHED' ? '🎉 Latest Game Results' : '📊 Your Career Stats'}
+                      {lastGameState === "FINISHED"
+                        ? "🎉 Latest Game Results"
+                        : "📊 Your Career Stats"}
                     </div>
-                    {lastGameState === 'FINISHED' && (
+                    {lastGameState === "FINISHED" && (
                       <p className="text-sm text-gray-300">
                         Great job! Here's how you performed in your last game.
                       </p>
@@ -372,8 +431,14 @@ export default function Home() {
                   {/* Leaderboard */}
                   <Leaderboard
                     fid={sdkUser.fid}
-                    mode={lastGameState === 'FINISHED' && gameResults ? 'career' : 'career'}
-                    isGameEnd={lastGameState === 'FINISHED' && gameResults ? true : false}
+                    mode={
+                      lastGameState === "FINISHED" && gameResults
+                        ? "career"
+                        : "career"
+                    }
+                    isGameEnd={
+                      lastGameState === "FINISHED" && gameResults ? true : false
+                    }
                     accuracy={gameResults?.accuracy}
                     roundResults={gameResults?.roundResults}
                     playerRank={gameResults?.playerRank}

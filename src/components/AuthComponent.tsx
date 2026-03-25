@@ -1,21 +1,21 @@
-'use client';
+"use client";
 
 /**
  * Unified Authentication Component (December 2025)
- * 
+ *
  * Smart routing based on context:
  * - MiniApp: Auto-connects via Quick Auth SDK
  * - Web: Shows SignInButton with QR code flow
- * 
+ *
  * Both paths converge at single server verification endpoint.
  * Reference: https://miniapps.farcaster.xyz/docs/sdk/quick-auth
  */
 
-import { useEffect, useState } from 'react';
-import { sdk } from '@farcaster/miniapp-sdk';
-import { SignInButton } from '@farcaster/auth-kit';
-import { getApiUrl } from '@/lib/fetcher';
-import SpinningDetective from './SpinningDetective';
+import { useEffect, useState } from "react";
+import { sdk } from "@farcaster/miniapp-sdk";
+import { SignInButton } from "@farcaster/auth-kit";
+import { requestJson } from "@/lib/fetcher";
+import SpinningDetective from "./SpinningDetective";
 
 export type AuthUser = {
   fid: number;
@@ -37,36 +37,31 @@ type VerifyResponse = {
   pfpUrl?: string;
 };
 
-type AuthStep = 'detecting' | 'authenticating' | 'webauth' | 'error';
+type AuthStep = "detecting" | "authenticating" | "webauth" | "error";
 
 export default function AuthComponent({
   onAuthSuccess,
   onError,
   onExploreWithoutAuth,
 }: Props) {
-  const [step, setStep] = useState<AuthStep>('detecting');
+  const [step, setStep] = useState<AuthStep>("detecting");
   const [error, setError] = useState<string | null>(null);
 
   /**
    * Unified server verification for both MiniApp and Web flows
    * DRY: Single source of truth for token validation
    */
-  const verifyTokenOnServer = async (token: string): Promise<VerifyResponse> => {
-    const response = await fetch(getApiUrl('/api/auth/quick-auth/verify'), {
-      method: 'POST',
+  const verifyTokenOnServer = async (
+    token: string,
+  ): Promise<VerifyResponse> => {
+    return requestJson<VerifyResponse>("/api/auth/quick-auth/verify", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ token }),
     });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to verify authentication');
-    }
-
-    return response.json();
   };
 
   /**
@@ -75,19 +70,22 @@ export default function AuthComponent({
    */
   const handleAuthSuccess = async (token: string) => {
     try {
-      setStep('authenticating');
-      
+      setStep("authenticating");
+
       // Verify token on server
       const userData = await verifyTokenOnServer(token);
 
       // Store token and user data for session persistence
-      localStorage.setItem('auth-token', token);
-      localStorage.setItem('cached-user', JSON.stringify({
-        fid: userData.fid,
-        username: userData.username,
-        displayName: userData.displayName,
-        pfpUrl: userData.pfpUrl,
-      }));
+      localStorage.setItem("auth-token", token);
+      localStorage.setItem(
+        "cached-user",
+        JSON.stringify({
+          fid: userData.fid,
+          username: userData.username,
+          displayName: userData.displayName,
+          pfpUrl: userData.pfpUrl,
+        }),
+      );
 
       // Notify parent component
       onAuthSuccess(
@@ -97,7 +95,7 @@ export default function AuthComponent({
           displayName: userData.displayName,
           pfpUrl: userData.pfpUrl,
         },
-        token
+        token,
       );
 
       // Signal ready to Farcaster (if in MiniApp context)
@@ -107,9 +105,10 @@ export default function AuthComponent({
         // Not in MiniApp context - that's fine
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Authentication failed';
+      const errorMessage =
+        err instanceof Error ? err.message : "Authentication failed";
       setError(errorMessage);
-      setStep('error');
+      setStep("error");
       onError?.(errorMessage);
     }
   };
@@ -125,39 +124,41 @@ export default function AuthComponent({
         let token: string | null = null;
         let inMiniApp = false;
 
-          // Try Quick Auth (only available in MiniApp)
-          try {
-            // Check if we're likely in a miniapp context first
-            const isPossiblyMiniApp = 
-              typeof window !== 'undefined' && (
-                window.parent !== window ||
-                navigator.userAgent.includes('Farcaster') ||
-                navigator.userAgent.includes('Warpcast') ||
-                document.referrer.includes('warpcast.com') ||
-                document.referrer.includes('farcaster.xyz')
-              );
-            
-            if (!isPossiblyMiniApp) {
-              // Skip Quick Auth entirely if we're clearly not in a miniapp
-              inMiniApp = false;
-            } else {
-              const result = await Promise.race([
-                sdk.quickAuth.getToken(),
-                new Promise((_, reject) => 
-                  setTimeout(() => reject(new Error('timeout')), 2000)
-                )
-              ]);
-              
-              const quickAuthResult = result as { token?: string };
-              token = quickAuthResult?.token || null;
-              inMiniApp = !!token;
-            }
-          } catch (quickAuthErr) {
-            // Not in MiniApp or SDK error - will show web auth
-            // Suppress SDK internal errors (e.g., RpcResponse parsing failures)
-            console.log('[AuthComponent] Quick Auth unavailable:', quickAuthErr instanceof Error ? quickAuthErr.message : 'SDK error');
+        // Try Quick Auth (only available in MiniApp)
+        try {
+          // Check if we're likely in a miniapp context first
+          const isPossiblyMiniApp =
+            typeof window !== "undefined" &&
+            (window.parent !== window ||
+              navigator.userAgent.includes("Farcaster") ||
+              navigator.userAgent.includes("Warpcast") ||
+              document.referrer.includes("warpcast.com") ||
+              document.referrer.includes("farcaster.xyz"));
+
+          if (!isPossiblyMiniApp) {
+            // Skip Quick Auth entirely if we're clearly not in a miniapp
             inMiniApp = false;
+          } else {
+            const result = await Promise.race([
+              sdk.quickAuth.getToken(),
+              new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("timeout")), 2000),
+              ),
+            ]);
+
+            const quickAuthResult = result as { token?: string };
+            token = quickAuthResult?.token || null;
+            inMiniApp = !!token;
           }
+        } catch (quickAuthErr) {
+          // Not in MiniApp or SDK error - will show web auth
+          // Suppress SDK internal errors (e.g., RpcResponse parsing failures)
+          console.log(
+            "[AuthComponent] Quick Auth unavailable:",
+            quickAuthErr instanceof Error ? quickAuthErr.message : "SDK error",
+          );
+          inMiniApp = false;
+        }
 
         // If in MiniApp and got token, authenticate
         if (inMiniApp && token) {
@@ -166,11 +167,12 @@ export default function AuthComponent({
         }
 
         // Not in MiniApp - show web auth UI
-        setStep('webauth');
+        setStep("webauth");
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Authentication failed';
+        const errorMessage =
+          err instanceof Error ? err.message : "Authentication failed";
         setError(errorMessage);
-        setStep('error');
+        setStep("error");
         onError?.(errorMessage);
       }
     };
@@ -181,7 +183,7 @@ export default function AuthComponent({
   // =========================================================================
   // RENDER: Detecting
   // =========================================================================
-  if (step === 'detecting') {
+  if (step === "detecting") {
     return (
       <div className="flex flex-col items-center justify-center space-y-6">
         <SpinningDetective />
@@ -196,7 +198,7 @@ export default function AuthComponent({
   // =========================================================================
   // RENDER: Authenticating (MiniApp Quick Auth)
   // =========================================================================
-  if (step === 'authenticating') {
+  if (step === "authenticating") {
     return (
       <div className="flex flex-col items-center justify-center space-y-6">
         <SpinningDetective />
@@ -211,13 +213,15 @@ export default function AuthComponent({
   // =========================================================================
   // RENDER: Web Auth (Browser QR Code Flow)
   // =========================================================================
-  if (step === 'webauth') {
+  if (step === "webauth") {
     return (
       <div className="space-y-6">
         <div className="text-center space-y-4">
           <div className="text-4xl">📱</div>
           <div>
-            <h3 className="text-lg font-bold text-white mb-2">Sign in with Farcaster</h3>
+            <h3 className="text-lg font-bold text-white mb-2">
+              Sign in with Farcaster
+            </h3>
             <p className="text-sm text-gray-300">
               Connect your Farcaster account using the button below
             </p>
@@ -238,7 +242,9 @@ export default function AuthComponent({
             onSuccess={async (res) => {
               try {
                 if (!res.signature || !res.message || !res.fid) {
-                  throw new Error('Invalid sign-in response: missing signature, message, or FID');
+                  throw new Error(
+                    "Invalid sign-in response: missing signature, message, or FID",
+                  );
                 }
 
                 // Create a temporary token from the signature and profile data
@@ -251,19 +257,20 @@ export default function AuthComponent({
                     pfpUrl: res.pfpUrl,
                     message: res.message,
                     signature: res.signature,
-                  })
+                  }),
                 );
 
                 // Call unified auth handler
                 await handleAuthSuccess(tempToken);
               } catch (err) {
-                const errorMsg = err instanceof Error ? err.message : 'Sign-in failed';
+                const errorMsg =
+                  err instanceof Error ? err.message : "Sign-in failed";
                 setError(errorMsg);
                 onError?.(errorMsg);
               }
             }}
             onError={(err) => {
-              const errorMsg = err?.message || 'Sign-in failed';
+              const errorMsg = err?.message || "Sign-in failed";
               setError(errorMsg);
               onError?.(errorMsg);
             }}
@@ -290,7 +297,7 @@ export default function AuthComponent({
   // =========================================================================
   // RENDER: Error State
   // =========================================================================
-  if (step === 'error') {
+  if (step === "error") {
     return (
       <div className="space-y-6">
         <div className="bg-red-500/15 border-2 border-red-500/30 rounded-xl p-4 text-red-200 text-sm text-center">

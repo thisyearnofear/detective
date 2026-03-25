@@ -1,7 +1,12 @@
-'use client';
+"use client";
 
-import { IDKitRequestWidget, orbLegacy, type IDKitResult } from '@worldcoin/idkit';
-import { useState, useCallback, useEffect } from 'react';
+import {
+  IDKitRequestWidget,
+  orbLegacy,
+  type IDKitResult,
+} from "@worldcoin/idkit";
+import { useState, useCallback, useEffect } from "react";
+import { requestJson } from "@/lib/fetcher";
 
 type WorldIdVerificationProps = {
   onVerified: (result: IDKitResult) => void;
@@ -21,7 +26,7 @@ type RPContext = {
 export default function WorldIdVerification({
   onVerified,
   onError,
-  actionName = 'play-detective',
+  actionName = "play-detective",
   enabled = true,
 }: WorldIdVerificationProps) {
   const [verified, setVerified] = useState(false);
@@ -29,17 +34,18 @@ export default function WorldIdVerification({
   const [rpContext, setRpContext] = useState<RPContext | null>(null);
   const [open, setOpen] = useState(false);
 
-  const appId = (process.env.NEXT_PUBLIC_WORLD_APP_ID || 'app_staging_placeholder') as `app_${string}`;
+  const appId = (process.env.NEXT_PUBLIC_WORLD_APP_ID ||
+    "app_staging_placeholder") as `app_${string}`;
   const action = actionName;
 
   useEffect(() => {
     if (!enabled) return;
 
     fetch(`/api/auth/world-id/rp-context?action=${action}`)
-      .then(res => res.json())
-      .then(data => {
+      .then((res) => res.json())
+      .then((data) => {
         if (data.error) {
-          console.warn('[World ID] RP context error:', data.error);
+          console.warn("[World ID] RP context error:", data.error);
         } else {
           setRpContext({
             rp_id: data.rp_id,
@@ -50,40 +56,44 @@ export default function WorldIdVerification({
           });
         }
       })
-      .catch(err => console.error('[World ID] Failed to fetch RP context:', err));
+      .catch((err) =>
+        console.error("[World ID] Failed to fetch RP context:", err),
+      );
   }, [action, enabled]);
 
-  const handleVerify = useCallback(async (result: IDKitResult) => {
-    try {
-      const response = await fetch('/api/auth/world-id/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idkitResponse: result }),
-      });
+  const handleVerify = useCallback(
+    async (result: IDKitResult) => {
+      try {
+        await requestJson<any>("/api/auth/world-id/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ idkitResponse: result }),
+        });
 
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Verification failed');
+        setVerified(true);
+        onVerified(result);
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Verification failed";
+        setError(errorMessage);
+        onError?.(errorMessage);
       }
-
-      setVerified(true);
-      onVerified(result);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Verification failed';
-      setError(errorMessage);
-      onError?.(errorMessage);
-    }
-  }, [onVerified, onError]);
+    },
+    [onVerified, onError],
+  );
 
   const handleSuccess = useCallback(() => {
-    console.log('[World ID] Verification successful');
+    console.log("[World ID] Verification successful");
   }, []);
 
-  const handleError = useCallback((errorCode: string) => {
-    console.error('[World ID] Error:', errorCode);
-    setError(`Verification error: ${errorCode}`);
-    onError?.(errorCode);
-  }, [onError]);
+  const handleError = useCallback(
+    (errorCode: string) => {
+      console.error("[World ID] Error:", errorCode);
+      setError(`Verification error: ${errorCode}`);
+      onError?.(errorCode);
+    },
+    [onError],
+  );
 
   if (!enabled) return null;
   if (verified) {
@@ -103,8 +113,12 @@ export default function WorldIdVerification({
           <div className="flex items-start gap-3">
             <div className="text-2xl">🛡️</div>
             <div>
-              <h3 className="text-white font-semibold mb-1">Verify You're Human</h3>
-              <p className="text-gray-300 text-sm">Loading World ID verification...</p>
+              <h3 className="text-white font-semibold mb-1">
+                Verify You're Human
+              </h3>
+              <p className="text-gray-300 text-sm">
+                Loading World ID verification...
+              </p>
             </div>
           </div>
         </div>
@@ -118,10 +132,12 @@ export default function WorldIdVerification({
         <div className="flex items-start gap-3">
           <div className="text-2xl">🛡️</div>
           <div>
-            <h3 className="text-white font-semibold mb-1">Verify You're Human</h3>
+            <h3 className="text-white font-semibold mb-1">
+              Verify You're Human
+            </h3>
             <p className="text-gray-300 text-sm">
-              To play Detective, verify you're a unique human. 
-              This prevents bots and ensures fair gameplay. Your identity stays private.
+              To play Detective, verify you're a unique human. This prevents
+              bots and ensures fair gameplay. Your identity stays private.
             </p>
           </div>
         </div>
@@ -129,7 +145,7 @@ export default function WorldIdVerification({
 
       <button
         onClick={() => setOpen(true)}
-        className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 
+        className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700
                    text-white font-semibold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2"
       >
         <span>Verify with World ID</span>
