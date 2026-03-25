@@ -1,14 +1,14 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { farcaster } from '@/lib/viewport';
-import MobileNavigationTabs from './MobileNavigationTabs';
-import Leaderboard from './Leaderboard';
-import ChatWindow from './ChatWindow';
-import BriefingRoom from './game/BriefingRoom';
+import { useState, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { farcaster } from "@/lib/viewport";
+import MobileNavigationTabs from "./MobileNavigationTabs";
+import Leaderboard from "./Leaderboard";
+import ChatWindow from "./ChatWindow";
+import BriefingRoom from "./game/BriefingRoom";
 
-type Tab = 'game' | 'leaderboard' | 'profile';
+type Tab = "game" | "leaderboard" | "profile";
 
 type Props = {
   fid: number;
@@ -16,14 +16,14 @@ type Props = {
   sdkUser: any;
   // Game-related props
   matches?: any[];
-  currentVotes?: Record<string, 'REAL' | 'BOT'>;
-  onVoteToggle?: (matchId: string) => void;
-  onMatchComplete?: (matchId: string) => void;
+  currentVotes?: Record<string, "REAL" | "BOT">;
+  onVoteToggleAction?: (matchId: string) => void;
+  onMatchCompleteAction?: (matchId: string) => void;
   currentRound?: number;
   totalRounds?: number;
   // Other handlers
-  onQuickMatch?: () => void;
-  onChallengePlayer?: (targetFid: number) => void;
+  onQuickMatchAction?: () => void;
+  onChallengePlayerAction?: (targetFid: number) => void;
 };
 
 export default function MobileAppContainer({
@@ -32,13 +32,13 @@ export default function MobileAppContainer({
   sdkUser,
   matches = [],
   currentVotes = {},
-  onVoteToggle = () => { },
-  onMatchComplete = () => { },
+  onVoteToggleAction = () => {},
+  onMatchCompleteAction = () => {},
   currentRound = 1,
   totalRounds = 5,
-  onQuickMatch
+  onQuickMatchAction,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<Tab>('game');
+  const [activeTab, setActiveTab] = useState<Tab>("game");
   const [currentRank, setCurrentRank] = useState<number>();
   const [rankChange, setRankChange] = useState<number>();
   const unreadNotifications = 0; // Using a constant since state is not modified
@@ -53,38 +53,42 @@ export default function MobileAppContainer({
   // Memoize callbacks to prevent ChatWindow re-renders
   const handleVoteToggle = useCallback(() => {
     if (matches[0]?.id) {
-      onVoteToggle(matches[0].id);
+      onVoteToggleAction(matches[0].id);
     }
-  }, [matches[0]?.id, onVoteToggle]);
+  }, [matches[0]?.id, onVoteToggleAction]);
 
   const handleMatchComplete = useCallback(() => {
     if (matches[0]?.id) {
-      onMatchComplete(matches[0].id);
+      onMatchCompleteAction(matches[0].id);
     }
-  }, [matches[0]?.id, onMatchComplete]);
+  }, [matches[0]?.id, onMatchCompleteAction]);
 
   // Auto-switch to appropriate tab based on game state
   useEffect(() => {
-    if (gameState?.state === 'REGISTRATION' && activeTab === 'game') {
+    if (gameState?.state === "REGISTRATION" && activeTab === "game") {
       // Stay on game tab during registration
-    } else if (gameState?.state === 'LIVE' && matches.length > 0 && activeTab !== 'game') {
+    } else if (
+      gameState?.state === "LIVE" &&
+      matches.length > 0 &&
+      activeTab !== "game"
+    ) {
       // Auto-switch to game when matches are active
-      setActiveTab('game');
+      setActiveTab("game");
     }
   }, [gameState?.state, matches.length, activeTab]);
 
   // Get current game state for UI
   const getGameState = () => {
-    if (gameState?.state === 'REGISTRATION') return 'lobby';
-    if (gameState?.state === 'LIVE' && matches.length > 0) return 'playing';
-    if (gameState?.state === 'LIVE' && matches.length === 0) return 'results';
-    return 'idle';
+    if (gameState?.state === "REGISTRATION") return "lobby";
+    if (gameState?.state === "LIVE" && matches.length > 0) return "playing";
+    if (gameState?.state === "LIVE" && matches.length === 0) return "results";
+    return "idle";
   };
 
   const renderTabContent = () => {
     switch (activeTab) {
-      case 'game':
-        if (gameState?.state === 'REGISTRATION') {
+      case "game":
+        if (gameState?.state === "REGISTRATION") {
           return (
             <div className="p-4">
               <BriefingRoom
@@ -96,7 +100,7 @@ export default function MobileAppContainer({
           );
         }
 
-        if (gameState?.state === 'LIVE' && matches.length > 0) {
+        if (gameState?.state === "LIVE" && matches.length > 0) {
           return (
             <div className="flex flex-col h-full">
               {/* Chat header */}
@@ -107,13 +111,13 @@ export default function MobileAppContainer({
                   </span>
                 </div>
               </div>
-              
+
               {/* Enhanced ChatWindow */}
               <div className="flex-1 p-4">
                 <ChatWindow
                   fid={fid}
                   match={matches[0]}
-                  currentVote={currentVotes[matches[0]?.id] || 'REAL'}
+                  currentVote={currentVotes[matches[0]?.id] || "REAL"}
                   onVoteToggle={handleVoteToggle}
                   onComplete={handleMatchComplete}
                   variant="minimal"
@@ -135,11 +139,13 @@ export default function MobileAppContainer({
               <div className="text-6xl mb-4">🔍</div>
               <h2 className="text-xl font-bold text-white mb-2">Detective</h2>
 
-              {gameState?.state === 'LIVE' ? (
+              {gameState?.state === "LIVE" ? (
                 <>
-                  <p className="text-gray-400 mb-6">Waiting for next round...</p>
+                  <p className="text-gray-400 mb-6">
+                    Waiting for next round...
+                  </p>
                   <button
-                    onClick={() => setActiveTab('leaderboard')}
+                    onClick={() => setActiveTab("leaderboard")}
                     className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors"
                   >
                     View Leaderboard
@@ -147,10 +153,15 @@ export default function MobileAppContainer({
                 </>
               ) : (
                 <>
-                  <p className="text-gray-400 mb-6">Ready to test your detective skills?</p>
-                  {onQuickMatch && (
+                  <p className="text-gray-400 mb-6">
+                    Ready to test your detective skills?
+                  </p>
+                  <p className="text-gray-400 mb-6">
+                    Ready to test your detective skills?
+                  </p>
+                  {onQuickMatchAction && (
                     <button
-                      onClick={onQuickMatch}
+                      onClick={onQuickMatchAction}
                       className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors"
                     >
                       Quick Match
@@ -162,33 +173,42 @@ export default function MobileAppContainer({
           </div>
         );
 
-      case 'leaderboard':
+      case "leaderboard":
         return (
           <div className="h-full overflow-hidden">
             <Leaderboard fid={fid} />
           </div>
         );
 
-      case 'profile':
+      case "profile":
         return (
           <div className="p-4 space-y-6">
             {/* User Profile Header */}
             <div className="bg-slate-900/50 border border-white/10 rounded-xl p-6 backdrop-blur-sm text-center">
               <div className="w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full mx-auto mb-4 flex items-center justify-center">
                 <span className="text-white text-2xl font-bold">
-                  {sdkUser?.username?.slice(0, 2).toUpperCase() || '🔍'}
+                  {sdkUser?.username?.slice(0, 2).toUpperCase() || "🔍"}
                 </span>
               </div>
-              <h2 className="text-xl font-bold text-white mb-1">@{sdkUser?.username || 'detective'}</h2>
-              <p className="text-gray-400 text-sm">{sdkUser?.displayName || 'Anonymous Detective'}</p>
+              <h2 className="text-xl font-bold text-white mb-1">
+                @{sdkUser?.username || "detective"}
+              </h2>
+              <p className="text-gray-400 text-sm">
+                {sdkUser?.displayName || "Anonymous Detective"}
+              </p>
 
               {currentRank && (
                 <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
                   <div className="text-sm text-blue-400 mb-1">Current Rank</div>
-                  <div className="text-2xl font-bold text-white">#{currentRank}</div>
+                  <div className="text-2xl font-bold text-white">
+                    #{currentRank}
+                  </div>
                   {rankChange && rankChange !== 0 && (
-                    <div className={`text-sm ${rankChange > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {rankChange > 0 ? '↗' : '↘'} {Math.abs(rankChange)} this week
+                    <div
+                      className={`text-sm ${rankChange > 0 ? "text-green-400" : "text-red-400"}`}
+                    >
+                      {rankChange > 0 ? "↗" : "↘"} {Math.abs(rankChange)} this
+                      week
                     </div>
                   )}
                 </div>
@@ -198,20 +218,22 @@ export default function MobileAppContainer({
             {/* Quick Actions */}
             <div className="grid grid-cols-2 gap-3">
               <button
-                onClick={() => setActiveTab('leaderboard')}
+                onClick={() => setActiveTab("leaderboard")}
                 className="bg-slate-900/50 border border-white/10 rounded-xl p-4 text-center hover:border-white/20 transition-colors"
               >
                 <div className="text-2xl mb-2">🏆</div>
                 <div className="text-sm font-medium text-white">Rankings</div>
               </button>
 
-              {onQuickMatch && (
+              {onQuickMatchAction && (
                 <button
-                  onClick={onQuickMatch}
+                  onClick={onQuickMatchAction}
                   className="bg-slate-900/50 border border-white/10 rounded-xl p-4 text-center hover:border-white/20 transition-colors"
                 >
                   <div className="text-2xl mb-2">⚡</div>
-                  <div className="text-sm font-medium text-white">Quick Match</div>
+                  <div className="text-sm font-medium text-white">
+                    Quick Match
+                  </div>
                 </button>
               )}
             </div>
