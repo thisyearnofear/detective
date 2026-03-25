@@ -228,6 +228,49 @@ Game Lifecycle (LIVE → FINISHED)
 
 ---
 
+### Phase 6: World ID 4.0 Integration (COMPLETED)
+
+Human verification using World ID 4.0 for sybil resistance and hackathon eligibility.
+
+**Core Features**:
+- **RP Signatures**: Server-side signature generation using `signRequest()` for secure verification requests
+- **v4 Verification API**: Uses the new `/api/v4/verify/{rp_id}` endpoint
+- **Backward Compatibility**: Accepts both v3 and v4 proofs via `allow_legacy_proofs`
+- **Controlled Widget**: `IDKitRequestWidget` with controlled open state
+
+#### Integration Architecture
+```
+User clicks "Verify with World ID"
+    │
+    ├─→ Fetch RP context: GET /api/auth/world-id/rp-context?action=play-detective
+    │       └─→ Server signs request with RP Signing Key
+    │
+    ├─→ IDKit opens with rp_context (rp_id, nonce, signature, timestamps)
+    │
+    ├─→ User completes orb/selfie verification in World App
+    │
+    └─→ Post verification: POST /api/auth/world-id/verify
+            └─→ Forward to https://developer.world.org/api/v4/verify/{rp_id}
+```
+
+#### API Endpoints
+- `GET /api/auth/world-id/rp-context` — Get signed RP context for verification request
+- `POST /api/auth/world-id/verify` — Verify proof with World ID v4 API
+
+#### Environment Variables Required
+```env
+NEXT_PUBLIC_WORLD_APP_ID=app_xxxxxxxx    # From developer.world.org
+NEXT_PUBLIC_WORLD_RP_ID=rp_xxxxxxxx      # From developer.world.org
+WORLD_RP_SIGNING_KEY=0x...               # Secret - from developer portal
+```
+
+#### Technology Stack Addition:
+- **World ID 4.0** (`@worldcoin/idkit` v4.0.10): React SDK for verification widget
+- **@worldcoin/idkit/signing**: Pure JS for server-side RP signature generation
+- **v4 Verify API**: `POST https://developer.world.org/api/v4/verify/{rp_id}`
+
+---
+
 ## Key Design Decisions
 
 1. **Hybrid Storage**: In-memory game state + Redis persistence + PostgreSQL analytics. 50 players = ~1-2 MB RAM; Redis for cross-instance state; PostgreSQL for historical data.
@@ -235,6 +278,7 @@ Game Lifecycle (LIVE → FINISHED)
 3. **Neynar Score > 0.8**: Filters out bots and low-quality accounts upfront.
 4. **Venice AI (Llama 3.3 70B)**: Privacy-first inference with strong impersonation quality.
 5. **Storacha for Provenance**: Decentralized, content-addressed storage makes game integrity publicly verifiable — critical for the "verifiable AI" narrative.
+6. **World ID for Sybil Resistance**: Additional layer of human verification for hackathon eligibility and anti-sybil protection.
 
 ### Why This Works for Farcaster
 - **Social Discovery**: Users learn about others through conversation

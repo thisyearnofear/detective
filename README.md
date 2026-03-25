@@ -319,6 +319,43 @@ POST /api/storacha/upload-training-data  — Upload bot training data
 - `src/lib/storacha.ts` - Core integration (client, upload, verification)
 - `src/app/api/storacha/` - API routes
 
+## World ID 4.0 Verification
+
+Detective integrates **World ID 4.0** for additional sybil resistance and hackathon eligibility.
+
+### What It Does
+- Verifies users are unique humans via orb or selfie credential
+- Uses RP signatures for secure verification requests (v4 requirement)
+- Accepts both v3 and v4 proofs for backward compatibility
+
+### How It Works
+1. Player clicks "Verify with World ID"
+2. Frontend fetches RP context from `GET /api/auth/world-id/rp-context`
+3. Server signs the request with RP Signing Key
+4. IDKit widget opens with signed context
+5. User verifies in World App
+6. Proof sent to `POST /api/auth/world-id/verify` → forwarded to World ID v4 API
+
+### Setup
+```env
+# Get from https://developer.world.org
+NEXT_PUBLIC_WORLD_APP_ID=app_xxxxxxxx
+NEXT_PUBLIC_WORLD_RP_ID=rp_xxxxxxxx
+WORLD_RP_SIGNING_KEY=your_hex_signing_key
+```
+
+### API Endpoints
+```
+GET /api/auth/world-id/rp-context?action=play-detective  — Get signed RP context
+POST /api/auth/world-id/verify                             — Verify proof with World ID
+```
+
+**Files**:
+- `src/lib/worldid.ts` - RP signature generation
+- `src/components/WorldIdVerification.tsx` - React component
+- `src/app/api/auth/world-id/rp-context/route.ts` - RP context endpoint
+- `src/app/api/auth/world-id/verify/route.ts` - Verification endpoint
+
 ## API Reference
 
 ### Game Management
