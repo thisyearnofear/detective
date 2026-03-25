@@ -34,7 +34,7 @@ type GameResults = {
 
 type Props = {
   fid: number;
-  onGameFinish?: (results: GameResults) => void;
+  onGameFinishAction?: (results: GameResults) => void;
 };
 
 type VoteState = Record<string, "REAL" | "BOT">;
@@ -50,7 +50,7 @@ type RoundResult = {
   llmCorrect?: boolean;
 };
 
-export default function MultiChatContainer({ fid, onGameFinish }: Props) {
+export default function MultiChatContainer({ fid, onGameFinishAction }: Props) {
   const { show: showModal } = useModal();
   const { isMobile } = useViewport();
   const { shouldShowOnboarding } = useOnboarding();
@@ -189,7 +189,7 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
 
       // Call game finish callback with final results
       if (
-        onGameFinish &&
+        onGameFinishAction &&
         matchData.playerRank !== undefined &&
         matchData.totalPlayers
       ) {
@@ -205,7 +205,7 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
             totalPlayers: matchData.totalPlayers,
           },
         );
-        onGameFinish({
+        onGameFinishAction({
           accuracy,
           roundResults,
           playerRank: matchData.playerRank,
@@ -215,7 +215,7 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
         console.warn(
           `[MultiChatContainer] Game finished but cannot call callback:`,
           {
-            hasCallback: !!onGameFinish,
+            hasCallback: !!onGameFinishAction,
             playerRank: matchData.playerRank,
             totalPlayers: matchData.totalPlayers,
           },
@@ -230,7 +230,7 @@ export default function MultiChatContainer({ fid, onGameFinish }: Props) {
     matchData?.totalPlayers,
     gameFinished,
     roundResults.length,
-    onGameFinish,
+    onGameFinishAction,
   ]);
 
   // Track round transitions for loading state

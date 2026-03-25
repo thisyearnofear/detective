@@ -9,8 +9,8 @@ import { useState, useCallback, useEffect } from "react";
 import { requestJson } from "@/lib/fetcher";
 
 type WorldIdVerificationProps = {
-  onVerified: (result: IDKitResult) => void;
-  onError?: (error: string) => void;
+  onVerifiedAction: (result: IDKitResult) => void;
+  onErrorAction?: (error: string) => void;
   actionName?: string;
   enabled?: boolean;
 };
@@ -24,8 +24,8 @@ type RPContext = {
 };
 
 export default function WorldIdVerification({
-  onVerified,
-  onError,
+  onVerifiedAction,
+  onErrorAction,
   actionName = "play-detective",
   enabled = true,
 }: WorldIdVerificationProps) {
@@ -71,15 +71,15 @@ export default function WorldIdVerification({
         });
 
         setVerified(true);
-        onVerified(result);
+        onVerifiedAction(result);
       } catch (err) {
         const errorMessage =
           err instanceof Error ? err.message : "Verification failed";
         setError(errorMessage);
-        onError?.(errorMessage);
+        onErrorAction?.(errorMessage);
       }
     },
-    [onVerified, onError],
+    [onVerifiedAction, onErrorAction],
   );
 
   const handleSuccess = useCallback(() => {
@@ -90,9 +90,9 @@ export default function WorldIdVerification({
     (errorCode: string) => {
       console.error("[World ID] Error:", errorCode);
       setError(`Verification error: ${errorCode}`);
-      onError?.(errorCode);
+      onErrorAction?.(errorCode);
     },
-    [onError],
+    [onErrorAction],
   );
 
   if (!enabled) return null;

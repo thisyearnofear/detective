@@ -25,9 +25,9 @@ export type AuthUser = {
 };
 
 type Props = {
-  onAuthSuccess: (user: AuthUser, token: string) => void;
-  onError?: (error: string) => void;
-  onExploreWithoutAuth?: () => void;
+  onAuthSuccessAction: (user: AuthUser, token: string) => void;
+  onErrorAction?: (error: string) => void;
+  onExploreWithoutAuthAction?: () => void;
 };
 
 type VerifyResponse = {
@@ -40,9 +40,9 @@ type VerifyResponse = {
 type AuthStep = "detecting" | "authenticating" | "webauth" | "error";
 
 export default function AuthComponent({
-  onAuthSuccess,
-  onError,
-  onExploreWithoutAuth,
+  onAuthSuccessAction,
+  onErrorAction,
+  onExploreWithoutAuthAction,
 }: Props) {
   const [step, setStep] = useState<AuthStep>("detecting");
   const [error, setError] = useState<string | null>(null);
@@ -88,7 +88,7 @@ export default function AuthComponent({
       );
 
       // Notify parent component
-      onAuthSuccess(
+      onAuthSuccessAction(
         {
           fid: userData.fid,
           username: userData.username,
@@ -109,7 +109,7 @@ export default function AuthComponent({
         err instanceof Error ? err.message : "Authentication failed";
       setError(errorMessage);
       setStep("error");
-      onError?.(errorMessage);
+      onErrorAction?.(errorMessage);
     }
   };
 
@@ -173,12 +173,12 @@ export default function AuthComponent({
           err instanceof Error ? err.message : "Authentication failed";
         setError(errorMessage);
         setStep("error");
-        onError?.(errorMessage);
+        onErrorAction?.(errorMessage);
       }
     };
 
     detectContextAndAuth();
-  }, [onAuthSuccess, onError]);
+  }, [onAuthSuccessAction, onErrorAction]);
 
   // =========================================================================
   // RENDER: Detecting
@@ -266,13 +266,13 @@ export default function AuthComponent({
                 const errorMsg =
                   err instanceof Error ? err.message : "Sign-in failed";
                 setError(errorMsg);
-                onError?.(errorMsg);
+                onErrorAction?.(errorMsg);
               }
             }}
             onError={(err) => {
               const errorMsg = err?.message || "Sign-in failed";
               setError(errorMsg);
-              onError?.(errorMsg);
+              onErrorAction?.(errorMsg);
             }}
             hideSignOut={true}
           />
@@ -282,9 +282,9 @@ export default function AuthComponent({
           Don't have Farcaster? Download the app or visit farcaster.xyz
         </p>
 
-        {onExploreWithoutAuth && (
+        {onExploreWithoutAuthAction && (
           <button
-            onClick={onExploreWithoutAuth}
+            onClick={onExploreWithoutAuthAction}
             className="w-full bg-white/10 hover:bg-white/15 border border-white/20 rounded-xl px-4 py-3 text-white font-semibold transition-colors text-sm"
           >
             Continue Without Auth
@@ -312,9 +312,9 @@ export default function AuthComponent({
           >
             Try Again
           </button>
-          {onExploreWithoutAuth && (
+          {onExploreWithoutAuthAction && (
             <button
-              onClick={onExploreWithoutAuth}
+              onClick={onExploreWithoutAuthAction}
               className="flex-1 bg-white/10 hover:bg-white/15 border border-white/20 rounded-xl px-4 py-3 text-white font-semibold transition-colors text-sm"
             >
               Continue Without Auth

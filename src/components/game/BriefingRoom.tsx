@@ -13,7 +13,7 @@ import DetectiveToast from "../DetectiveToast";
 type Props = {
   currentPlayer: UserProfile;
   isRegistrationOpen?: boolean;
-  onRequestRefresh?: (force?: boolean) => void;
+  onRequestRefreshAction?: (force?: boolean) => void;
   gameState: {
     cycleId: string;
     state: string;
@@ -32,7 +32,7 @@ type Props = {
 export default function BriefingRoom({
   currentPlayer,
   isRegistrationOpen = true,
-  onRequestRefresh,
+  onRequestRefreshAction,
   gameState,
 }: Props) {
   const [isLoading, setIsLoading] = useState(false);
@@ -134,7 +134,7 @@ export default function BriefingRoom({
       });
       console.log("[BriefingRoom] Investigation join success:", data);
       setIsRegistered(true);
-      onRequestRefresh?.(true); // Force bypass SWR dedup to ensure fresh data
+      onRequestRefreshAction?.(true); // Force bypass SWR dedup to ensure fresh data
 
       // Keep modal visible briefly to show success, then close
       setTimeout(() => {
@@ -173,7 +173,7 @@ export default function BriefingRoom({
         body: JSON.stringify({ fid: currentPlayer.fid }),
       });
 
-      onRequestRefresh?.(true);
+      onRequestRefreshAction?.(true);
     } catch (err: any) {
       setError(err.message);
     } finally {

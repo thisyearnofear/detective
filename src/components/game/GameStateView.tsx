@@ -1,15 +1,20 @@
-'use client';
+"use client";
 
-import { useEffect } from 'react';
-import { GameCycleState } from '@/lib/types';
-import { sendGameStartNotification } from '@/lib/farcasterAuth';
-import BriefingRoom from './BriefingRoom';
-import GameActiveView from './GameActiveView';
-import GameFinishedView from '@/components/GameFinishedView';
+import { useEffect } from "react";
+import { GameCycleState } from "@/lib/types";
+import { sendGameStartNotification } from "@/lib/farcasterAuth";
+import BriefingRoom from "./BriefingRoom";
+import GameActiveView from "./GameActiveView";
+import GameFinishedView from "@/components/GameFinishedView";
 
 type GameResults = {
   accuracy: number;
-  roundResults: Array<{ roundNumber: number; correct: boolean; opponentUsername: string; opponentType: "REAL" | "BOT" }>;
+  roundResults: Array<{
+    roundNumber: number;
+    correct: boolean;
+    opponentUsername: string;
+    opponentType: "REAL" | "BOT";
+  }>;
   playerRank: number;
   totalPlayers: number;
 };
@@ -27,13 +32,13 @@ type Props = {
     gameEnds: number;
     isRegistered: boolean;
   };
-  onRequestRefresh?: (force?: boolean) => void;
-  onGameFinish?: (results: GameResults) => void;
+  onRequestRefreshAction?: (force?: boolean) => void;
+  onGameFinishAction?: (results: GameResults) => void;
 };
 
 /**
  * GameStateView - Unified orchestrator for all game states
- * 
+ *
  * Responsibilities:
  * - Routes between REGISTRATION, LIVE, and FINISHED states
  * - Handles game start notifications
@@ -46,14 +51,14 @@ export default function GameStateView({
   displayName,
   pfpUrl,
   gameState,
-  onRequestRefresh,
-  onGameFinish,
+  onRequestRefreshAction,
+  onGameFinishAction,
 }: Props) {
   const currentPlayer = { fid, username, displayName, pfpUrl };
 
   // Send notification when game transitions to LIVE
   useEffect(() => {
-    if (gameState?.state === 'LIVE') {
+    if (gameState?.state === "LIVE") {
       const message = `Your Detective game is starting! Good luck, ${username}! 🔍`;
       sendGameStartNotification(message).catch(console.warn);
     }
@@ -61,16 +66,16 @@ export default function GameStateView({
 
   // State machine: Route to appropriate view based on game state
   switch (gameState.state as GameCycleState) {
-    case 'REGISTRATION':
+    case "REGISTRATION":
       return (
         <BriefingRoom
           currentPlayer={currentPlayer}
           gameState={gameState}
-          onRequestRefresh={onRequestRefresh}
+          onRequestRefreshAction={onRequestRefreshAction}
         />
       );
 
-    case 'LIVE':
+    case "LIVE":
       // Player missed registration window
       if (!gameState.isRegistered) {
         return (
@@ -89,17 +94,17 @@ export default function GameStateView({
         <GameActiveView
           fid={fid}
           cycleId={gameState.cycleId}
-          onGameFinish={onGameFinish}
+          onGameFinishAction={onGameFinishAction}
         />
       );
 
-    case 'FINISHED':
+    case "FINISHED":
       return (
         <GameFinishedView
-          onRequestRefresh={onRequestRefresh}
+          onRequestRefresh={onRequestRefreshAction}
           nextRegistrationTime={gameState.registrationEnds}
           onPlayAgain={() => {
-            onRequestRefresh?.(true);
+            onRequestRefreshAction?.(true);
           }}
         />
       );

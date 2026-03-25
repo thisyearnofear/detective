@@ -155,10 +155,10 @@ export default function Home() {
         displayName={sdkUser.displayName}
         pfpUrl={sdkUser.pfpUrl}
         gameState={gameState}
-        onRequestRefresh={(force) =>
+        onRequestRefreshAction={(force) =>
           mutateGameState(undefined, { revalidate: force })
         }
-        onGameFinish={(results) => {
+        onGameFinishAction={(results) => {
           console.log("[page.tsx] onGameFinish callback received:", results);
           setGameResults(results);
         }}
@@ -262,7 +262,7 @@ export default function Home() {
               {/* Authentication - Unified MiniApp + Web */}
               <div className="w-full">
                 <AuthComponent
-                  onAuthSuccess={(user, _token) => handleWebAuth(user)}
+                  onAuthSuccessAction={(user, _token) => handleWebAuth(user)}
                 />
               </div>
 
