@@ -1,20 +1,21 @@
 /**
  * Centralized API configuration and fetcher functions
  * DRY: Single source of truth for API base URL and fetching logic
- * 
- * Usage: 
+ *
+ * Usage:
  * - useSWR(getApiUrl('/api/endpoint'), fetcher)
  * - await fetch(getApiUrl('/api/endpoint'), options)
+ * - await requestJson<ResponseType>('/api/endpoint', options)
  */
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "";
 
 /**
  * Build full API URL from relative path
  * Routes to dedicated backend when configured, falls back to relative URL
  */
 export function getApiUrl(path: string): string {
-  if (BACKEND_URL && path.startsWith('/api/')) {
+  if (BACKEND_URL && path.startsWith("/api/")) {
     return `${BACKEND_URL}${path}`;
   }
   return path;
@@ -23,7 +24,7 @@ export function getApiUrl(path: string): string {
 /**
  * Centralized SWR fetcher function
  * Single source of truth for API data fetching
- * 
+ *
  * Usage: useSWR(getApiUrl('/api/endpoint'), fetcher)
  */
 
@@ -35,6 +36,35 @@ export const fetcher = async (url: string) => {
   }
   return res.json();
 };
+
+/**
+ * Typed JSON request helper for API calls.
+ * Centralizes URL resolution and HTTP error handling while preserving response typing.
+ *
+ * Usage:
+ * - const data = await requestJson<MyResponse>('/api/admin/state');
+ * - const data = await requestJson<MyResponse>('/api/admin/state', {
+ *     method: 'POST',
+ *     headers: { 'Content-Type': 'application/json' },
+ *     body: JSON.stringify(payload),
+ *   });
+ */
+export async function requestJson<T>(
+  url: string,
+  init?: RequestInit,
+): Promise<T> {
+  const res = await fetch(getApiUrl(url), {
+    cache: "no-store",
+    ...init,
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`HTTP ${res.status}${text ? `: ${text}` : ""}`);
+  }
+
+  return (await res.json()) as T;
+}
 
 /**
  * SWR fetcher with error handling for 403 (game not live)

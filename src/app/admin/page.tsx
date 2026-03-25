@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import AnimatedGridBackdrop from "@/components/AnimatedGridBackdrop";
 import StarfieldBackground from "@/components/StarfieldBackground";
-import { fetcher, getApiUrl } from "@/lib/fetcher";
+import { fetcher, getApiUrl, requestJson } from "@/lib/fetcher";
 import type {
   AdminBulkRegisterResponse,
   AdminStateActionPayload,
+  AdminStateActionResponse,
   AdminStateResponse,
   Bot,
   Player,
@@ -162,13 +163,14 @@ export default function AdminPage() {
     setMessage(null);
 
     try {
-      const response = await fetch(getApiUrl("/api/admin/register-bulk"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ usernames: usernameList }),
-      });
-
-      const data: AdminBulkRegisterResponse = await response.json();
+      const data = await requestJson<AdminBulkRegisterResponse>(
+        "/api/admin/register-bulk",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ usernames: usernameList }),
+        },
+      );
 
       if (data.success) {
         setMessage({
@@ -201,13 +203,14 @@ export default function AdminPage() {
         action: "transition",
         state: newState,
       };
-      const response = await fetch(getApiUrl("/api/admin/state"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await response.json();
+      const data = await requestJson<AdminStateActionResponse>(
+        "/api/admin/state",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
 
       if (data.success) {
         setMessage({ type: "success", text: data.message });
@@ -228,13 +231,14 @@ export default function AdminPage() {
 
     try {
       const payload: AdminStateActionPayload = { action: "reset" };
-      const response = await fetch(getApiUrl("/api/admin/state"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await response.json();
+      const data = await requestJson<AdminStateActionResponse>(
+        "/api/admin/state",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
 
       if (data.success) {
         setMessage({ type: "success", text: data.message });
@@ -259,13 +263,14 @@ export default function AdminPage() {
         action: "update-config",
         config: { monetizationEnabled: newEnabled },
       };
-      const response = await fetch(getApiUrl("/api/admin/state"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await response.json();
+      const data = await requestJson<AdminStateActionResponse>(
+        "/api/admin/state",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
       if (data.success) {
         setMessage({
           type: "success",

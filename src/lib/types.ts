@@ -268,14 +268,14 @@ export interface AdminActionSuccessResponse {
   message: string;
 }
 
-export interface AdminActionErrorResponse {
+export interface ApiErrorResponse {
   success?: false;
   error: string;
 }
 
 export type AdminStateActionResponse =
   | AdminActionSuccessResponse
-  | AdminActionErrorResponse;
+  | ApiErrorResponse;
 
 export interface AdminBulkRegisterResult {
   username: string;
@@ -292,9 +292,8 @@ export interface AdminBulkRegisterSuccessResponse {
   results: AdminBulkRegisterResult[];
 }
 
-export interface AdminBulkRegisterErrorResponse {
+export interface AdminBulkRegisterErrorResponse extends ApiErrorResponse {
   success: false;
-  error: string;
   total?: number;
   registered?: number;
   failed?: number;
