@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { NegotiationMatch, ResourcePool, NegotiationAction } from "@/lib/types";
 import { validateProposal } from "@/lib/gameMode";
 
@@ -23,6 +23,25 @@ export default function NegotiationInterface({ match, onAction, isProcessing = f
     hats: Math.floor(match.resourcePool.hats / 2),
     balls: Math.floor(match.resourcePool.balls / 2),
   });
+  
+  // Calculate time remaining
+  const [timeRemaining, setTimeRemaining] = useState(0);
+  
+  useEffect(() => {
+    const updateTimer = () => {
+      const remaining = Math.max(0, match.endTime - Date.now());
+      setTimeRemaining(remaining);
+    };
+    
+    updateTimer();
+    const interval = setInterval(updateTimer, 100);
+    return () => clearInterval(interval);
+  }, [match.endTime]);
+  
+  const formatTime = (ms: number) => {
+    const seconds = Math.floor(ms / 1000);
+    return `${seconds}s`;
+  };
   
   // Calculate their share automatically
   const theirShare: ResourcePool = {
@@ -78,6 +97,73 @@ export default function NegotiationInterface({ match, onAction, isProcessing = f
 
   return (
     <div className="w-full space-y-4">
+      {/* Timer */}
+      <div className="flex items-center justify-between">
+        <div className="text-xs text-gray-400">
+          Round {match.rounds.length + 1} of 5
+        </div>
+        <div className={`text-sm font-bold ${timeRemaining < 10000 ? 'text-red-400 animate-pulse' : 'text-gray-300'}`}>
+          ⏱️ {formatTime(timeRemaining)}
+        </div>
+      </div>
+
+      {/* Outcome Display (if match finished) */}
+      {match.outcome && (
+        <div className={`border-2 rounded-xl p-4 text-center ${
+          match.outcome.dealReached 
+            ? 'bg-green-900/20 border-green-500/50' 
+            : 'bg-red-900/20 border-red-500/50'
+        }`}>
+          <div className="text-3xl mb-2">
+            {match.outcome.dealReached ? '🤝' : '💔'}
+          </div>
+          <div className="text-lg font-bold text-white mb-1">
+            {match.outcome.dealReached ? 'Deal Reached!' : 'No Deal'}
+          </div>
+          <div className="text-sm text-gray-300">
+            Your score: {(match.outcome.playerScore * 100).toFixed(0)}%
+          </div>
+          <div className="text-xs text-gray-400 mt-2">
+            {match.outcome.dealReached 
+              ? `Agreement reached in ${match.outcome.rounds} rounds`
+              : 'Time ran out - both players lose 50%'
+            }
+          </div>
+        </div>
+      )}
+
+      {/* Negotiation History */}
+      {match.rounds.length > 0 && (
+        <div className="bg-white/5 border border-white/10 rounded-xl p-3 max-h-40 overflow-y-auto">
+          <div className="text-xs text-gray-400 uppercase tracking-widest mb-2">
+            History
+          </div>
+          <div className="space-y-2">
+            {match.rounds.slice(-5).map((round, idx) => {
+              const isPlayer = round.actor === match.player.fid;
+              return (
+                <div
+                  key={idx}
+                  className={`text-xs p-2 rounded ${
+                    isPlayer ? 'bg-purple-900/20 border-l-2 border-purple-500' : 'bg-blue-900/20 border-l-2 border-blue-500'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-semibold text-white">
+                      {isPlayer ? 'You' : match.opponent.username}
+                    </span>
+                    <span className="text-gray-500">
+                      {round.action === 'propose' ? '📝' : round.action === 'accept' ? '✅' : '❌'}
+                    </span>
+                  </div>
+                  <div className="text-gray-300">{round.message}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Resource Pool Display */}
       <div className="bg-gradient-to-br from-purple-900/30 to-blue-900/30 border-2 border-purple-500/30 rounded-xl p-4">
         <div className="text-xs text-gray-400 uppercase tracking-widest mb-3">
@@ -203,60 +289,59 @@ export default function NegotiationInterface({ match, onAction, isProcessing = f
       </div>
 
       {/* Message Input */}
-      <div className="space-y-2">
-        <input
-          type="text"
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          placeholder="Add a message..."
-          disabled={isProcessing}
-          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && canPropose) {
-              handlePropose();
-            }
-          }}
-        />
-      </div>
+      {!match.outcome && (
+        <>
+          <div className="space-y-2">
+            <input
+              type="text"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Add a message..."
+              disabled={isProcessing}
+              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && canPropose) {
+                  handlePropose();
+                }
+              }}
+            />
+          </div>
 
-      {/* Action Buttons */}
-      <div className="grid grid-cols-3 gap-2">
-        <button
-          onClick={handlePropose}
-          disabled={!canPropose || isProcessing}
-          className="px-4 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:opacity-50 text-white font-semibold rounded-xl transition-all"
-        >
-          Propose
-        </button>
-        
-        <button
-          onClick={handleAccept}
-          disabled={!match.currentProposal || isProcessing}
-          className="px-4 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:opacity-50 text-white font-semibold rounded-xl transition-all"
-        >
-          Accept
-        </button>
-        
-        <button
-          onClick={handleReject}
-          disabled={isProcessing}
-          className="px-4 py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:opacity-50 text-white font-semibold rounded-xl transition-all"
-        >
-          Reject
-        </button>
-      </div>
+          {/* Action Buttons */}
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              onClick={handlePropose}
+              disabled={!canPropose || isProcessing}
+              className="px-4 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:opacity-50 text-white font-semibold rounded-xl transition-all"
+            >
+              Propose
+            </button>
+            
+            <button
+              onClick={handleAccept}
+              disabled={!match.currentProposal || isProcessing}
+              className="px-4 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:opacity-50 text-white font-semibold rounded-xl transition-all"
+            >
+              Accept
+            </button>
+            
+            <button
+              onClick={handleReject}
+              disabled={isProcessing}
+              className="px-4 py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:opacity-50 text-white font-semibold rounded-xl transition-all"
+            >
+              Reject
+            </button>
+          </div>
 
-      {/* Validation Error */}
-      {!validation.valid && (
-        <div className="text-xs text-red-400 text-center">
-          {validation.error}
-        </div>
+          {/* Validation Error */}
+          {!validation.valid && (
+            <div className="text-xs text-red-400 text-center">
+              {validation.error}
+            </div>
+          )}
+        </>
       )}
-
-      {/* Round Counter */}
-      <div className="text-center text-xs text-gray-500">
-        Round {match.rounds.length + 1} of 5
-      </div>
     </div>
   );
 }
