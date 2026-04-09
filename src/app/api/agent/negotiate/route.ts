@@ -28,6 +28,10 @@ export const dynamic = 'force-dynamic';
 /**
  * Create a match for an external agent
  * ENHANCEMENT: Reuses existing match creation infrastructure
+ * 
+ * MVP: For hackathon validation, agents play against platform bots
+ * to test negotiation strategies. Future: match agents against each other
+ * or humans for competitive benchmarking.
  */
 async function createAgentMatch(agentId: string): Promise<NegotiationMatch | null> {
   // Create a temporary player object for the agent
@@ -46,14 +50,15 @@ async function createAgentMatch(agentId: string): Promise<NegotiationMatch | nul
     hasPermission: false,
   };
 
-  // Select a bot opponent
+  // Select a bot opponent (MVP: platform bots for testing)
+  // TODO: Match against other agents or humans for competitive play
   const bots = await gameManager.getAllBots();
   if (bots.length === 0) {
     console.error("[createAgentMatch] No bots available");
     return null;
   }
 
-  // Pick a random bot
+  // Pick a random bot with good personality
   const opponent = bots[Math.floor(Math.random() * bots.length)] as Bot;
 
   const now = Date.now();
@@ -73,6 +78,15 @@ async function createAgentMatch(agentId: string): Promise<NegotiationMatch | nul
 
   // Save match to game state
   await gameManager.saveMatch(match);
+
+  // MVP Analytics: Track agent match creation for validation
+  console.log('[MPP-MVP] Agent match created:', {
+    agentId,
+    matchId,
+    opponentBot: opponent.username,
+    timestamp: now,
+    paymentVerified: true,
+  });
 
   return match;
 }
@@ -157,6 +171,7 @@ export async function POST(request: NextRequest) {
         startTime: match.startTime,
         endTime: match.endTime,
         paymentId: payment.paymentId,
+        mvpNote: "Currently playing against platform bot. Future: agent-vs-agent competitive matches.",
       }, {
         headers: payment.receiptHeaders,
       });
@@ -227,6 +242,15 @@ export async function POST(request: NextRequest) {
       botAction,
       outcome: result.match.outcome,
       paymentId: payment.paymentId,
+      feedback: result.match.isFinished ? {
+        message: "Match complete! Help us improve:",
+        questions: [
+          "Was the bot challenging enough?",
+          "Did you learn anything about negotiation strategies?",
+          "Would you pay for agent-vs-agent matches?"
+        ],
+        feedbackUrl: "https://github.com/thisyearnofear/detective/issues"
+      } : undefined,
     }, {
       headers: payment.receiptHeaders,
     });

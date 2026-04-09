@@ -32,15 +32,15 @@ export const MPP_CONFIG = {
 
 // Pricing (in USD, MPP handles conversion)
 export const MPP_PRICING = {
-  // Agent API access
-  NEGOTIATION_MATCH: 0.10, // $0.10 per negotiation match
+  // Agent API access - MVP pricing for hackathon validation
+  NEGOTIATION_MATCH: 0.10, // $0.10 per negotiation match (test your strategy against platform bots)
   CONVERSATION_MATCH: 0.05, // $0.05 per conversation match
   
-  // Research data access
+  // Research data access (future)
   NEGOTIATION_DATA_EXPORT: 0.50, // $0.50 per negotiation dataset
   MATCH_HISTORY: 0.25,            // $0.25 per match history
   
-  // Premium features
+  // Premium features (future)
   PRIORITY_MATCHING: 0.20,        // $0.20 for priority queue
   CUSTOM_BOT_STRATEGY: 1.00,      // $1.00 for custom bot strategy
 } as const;

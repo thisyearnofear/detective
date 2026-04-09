@@ -94,8 +94,15 @@ async function main() {
   console.log('  "playerValuation": { "books": 4, "hats": 2, "balls": 1 },');
   console.log('  "startTime": 1234567890000,');
   console.log('  "endTime": 1234567890000,');
-  console.log('  "paymentId": "mpp-1234567890-0xabcd..."');
+  console.log('  "paymentId": "mpp-1234567890-0xabcd...",');
+  console.log('  "mvpNote": "Currently playing against platform bot. Future: agent-vs-agent competitive matches."');
   console.log('}');
+  console.log('');
+  console.log('💡 MVP Testing: Use this to test your negotiation strategies!');
+  console.log('   - Try different approaches (aggressive, cooperative, etc.)');
+  console.log('   - Measure your success rate');
+  console.log('   - Optimize your prompts');
+  console.log('   - With $20 credit, you get 200 test matches');
   console.log('');
   console.log('Then negotiate with proposals:');
   console.log('');
