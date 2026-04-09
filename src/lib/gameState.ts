@@ -113,6 +113,7 @@ class GameManager {
           playerSessions: sessions,
           leaderboard: [],
           config: stateMeta.config || {
+            mode: 'conversation', // Default to conversation mode
             gameDurationMs: GAME_DURATION,
             matchDurationMs: MATCH_DURATION,
             simultaneousMatches: SIMULTANEOUS_MATCHES,
@@ -195,6 +196,7 @@ class GameManager {
       playerSessions: new Map(),
       leaderboard: [],
       config: {
+        mode: 'conversation', // Default to conversation mode
         gameDurationMs: GAME_DURATION,
         matchDurationMs: MATCH_DURATION,
         simultaneousMatches: SIMULTANEOUS_MATCHES,
@@ -737,6 +739,40 @@ class GameManager {
   }
 
   /**
+   * Save a match (public method for external use)
+   */
+  async saveMatch(match: Match): Promise<void> {
+    await this.ensureInitialized();
+    this.state!.matches.set(match.id, match);
+    await persistence.saveMatch(match);
+  }
+
+  /**
+   * Handle negotiation match timeout (public method for external use)
+   */
+  async handleNegotiationTimeout(matchId: string): Promise<boolean> {
+    await this.ensureInitialized();
+    
+    const match = this.state!.matches.get(matchId);
+    if (!match) return false;
+    
+    // Only handle negotiation matches
+    if (match.mode !== 'negotiation') return false;
+    
+    // Import negotiation module
+    const { handleNegotiationTimeout } = await import("./negotiation");
+    const { isNegotiationMatch } = await import("./gameMode");
+    
+    if (!isNegotiationMatch(match)) return false;
+    
+    // Handle timeout
+    const updatedMatch = handleNegotiationTimeout(match);
+    await this.saveMatch(updatedMatch);
+    
+    return true;
+  }
+
+  /**
    * Get all matches (admin only).
    */
   async getAllMatches(): Promise<Match[]> {
@@ -932,12 +968,44 @@ class GameManager {
     const isStaked = !!(this.state!.config.monetizationEnabled && player.hasPermission);
     const stakedAmount = isStaked ? GAME_CONSTANTS.MATCH_STAKE_WEI : "0";
 
+    const matchId = `match-${player.fid}-${opponent.fid}-${now}-s${slotNumber}`;
+    const gameMode = this.state!.config.mode || 'conversation';
+
+    // MODULAR: Create mode-specific match
+    if (gameMode === 'negotiation') {
+      const { createNegotiationMatch } = require("./negotiation");
+      const negotiationMatch = createNegotiationMatch(
+        matchId,
+        player,
+        opponent,
+        slotNumber,
+        session.currentRound,
+        roundStartTime,
+        roundEndTime
+      );
+      
+      // Add staking info
+      negotiationMatch.isStaked = isStaked;
+      negotiationMatch.stakedAmount = stakedAmount;
+      negotiationMatch.payoutStatus = isStaked ? "PENDING" : undefined;
+
+      this.state!.matches.set(negotiationMatch.id, negotiationMatch);
+      persistence.saveMatch(negotiationMatch).catch(console.error);
+
+      const facedCount = session.facedOpponents.get(opponent.fid) || 0;
+      session.facedOpponents.set(opponent.fid, facedCount + 1);
+
+      return negotiationMatch;
+    }
+
+    // Default: Conversation mode
     const match: Match = {
-      id: `match-${player.fid}-${opponent.fid}-${now}-s${slotNumber}`,
+      id: matchId,
+      mode: 'conversation',
       player,
       opponent,
       startTime: roundStartTime,
-      endTime: roundEndTime, // All matches in this round have same endTime
+      endTime: roundEndTime,
       messages: [],
       isVotingComplete: false,
       isFinished: false,
@@ -954,7 +1022,7 @@ class GameManager {
     this.state!.matches.set(match.id, match);
     persistence.saveMatch(match).catch(console.error);
 
-    // Bot proactive opening
+    // Bot proactive opening (conversation mode only)
     if (opponent.type === "BOT" && opponent.personality) {
       const { generateProactiveOpening } = require("./botProactive");
       const openingMessage = generateProactiveOpening(opponent.personality);
@@ -1291,6 +1359,19 @@ class GameManager {
 
     for (const [matchId, match] of this.state!.matches) {
       const timeSinceEnd = now - match.endTime;
+
+      // Handle negotiation match timeout
+      if (match.mode === 'negotiation' && !match.isFinished && match.endTime <= now) {
+        const { handleNegotiationTimeout } = await import("./negotiation");
+        const { isNegotiationMatch } = await import("./gameMode");
+        
+        if (isNegotiationMatch(match)) {
+          const updatedMatch = handleNegotiationTimeout(match);
+          this.state!.matches.set(matchId, updatedMatch);
+          await persistence.saveMatch(updatedMatch);
+          console.log(`[cleanupOldMatches] Negotiation match ${matchId} timed out (no deal)`);
+        }
+      }
 
       if (match.voteLocked && match.isFinished && timeSinceEnd > GRACE_PERIOD_MS) {
         matchesToDelete.push(matchId);

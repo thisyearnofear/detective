@@ -21,6 +21,7 @@ interface GameStatusResponse {
   gameEnds?: number;
   minPlayers: number;
   maxPlayers: number;
+  mode: string; // Current game mode
 }
 
 /**
@@ -59,6 +60,7 @@ export async function GET(request: NextRequest) {
   // Poll with retry for upstream dependencies
   try {
     const gameState = await withRetry(() => gameManager.getGameState(), RETRY_PRESETS.fast);
+    const config = await gameManager.getConfig();
     
     const response: GameStatusResponse = {
       state: gameState?.state || "REGISTRATION",
@@ -68,6 +70,7 @@ export async function GET(request: NextRequest) {
       gameEnds: gameState?.gameEnds,
       minPlayers: 1,
       maxPlayers: 100,
+      mode: config?.mode || 'conversation',
     };
 
     return NextResponse.json(response);

@@ -3,6 +3,9 @@
 // Represents the overall state of a game cycle
 export type GameCycleState = "REGISTRATION" | "LIVE" | "FINISHED";
 
+// Represents the game mode
+export type GameMode = "conversation" | "negotiation";
+
 // Represents the type of opponent a player can face
 export type OpponentType = "REAL" | "BOT";
 
@@ -72,6 +75,7 @@ export interface VoteRecord {
 // Represents a single conversation match
 export interface Match {
   id: string;
+  mode?: GameMode; // Optional for backward compatibility, defaults to 'conversation'
   player: Player;
   opponent: Player | Bot;
   startTime: number;
@@ -160,6 +164,7 @@ export interface GameState {
 
 // Game configuration parameters
 export interface GameConfig {
+  mode: GameMode; // Game mode: conversation or negotiation
   gameDurationMs: number; // Total game duration (5 minutes = 300000)
   matchDurationMs: number; // Each match duration (1 minute = 60000)
   simultaneousMatches: number; // Number of concurrent chats (2)
@@ -167,6 +172,61 @@ export interface GameConfig {
   inactivityForfeitMs: number; // Auto-forfeit after this time (45000)
   maxInactivityStrikes: number; // Max strikes before cooldown (3)
   monetizationEnabled: boolean; // Toggles Truth Stake loop and ERC-7715 (monetization)
+}
+
+// ============================================================
+// Negotiation Mode Types (extends base Match interface)
+// ============================================================
+
+export type NegotiationAction = "propose" | "accept" | "reject";
+
+export interface ResourcePool {
+  books: number;
+  hats: number;
+  balls: number;
+}
+
+export interface ResourceValuation {
+  books: number; // Value per unit (0-10)
+  hats: number;
+  balls: number;
+}
+
+export interface NegotiationProposal {
+  id: string;
+  proposer: number; // FID
+  myShare: ResourcePool;
+  theirShare: ResourcePool;
+  message: string;
+  timestamp: number;
+}
+
+export interface NegotiationRound {
+  roundNumber: number;
+  action: NegotiationAction;
+  proposal?: NegotiationProposal;
+  message: string;
+  timestamp: number;
+  actor: number; // FID
+}
+
+export interface NegotiationOutcome {
+  dealReached: boolean;
+  finalProposal?: NegotiationProposal;
+  playerScore: number; // 0.0 to 1.0, or -0.5 for no deal
+  opponentScore: number;
+  rounds: number;
+}
+
+// Extends Match for negotiation-specific data
+export interface NegotiationMatch extends Match {
+  mode: 'negotiation';
+  resourcePool: ResourcePool;
+  playerValuation: ResourceValuation;
+  opponentValuation: ResourceValuation;
+  rounds: NegotiationRound[];
+  currentProposal?: NegotiationProposal;
+  outcome?: NegotiationOutcome;
 }
 
 // ============================================================
