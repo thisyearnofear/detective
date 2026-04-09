@@ -89,6 +89,28 @@ curl http://localhost:3000/api/admin/state | jq '.bots[] | {username, llmModelNa
 # Expected: Different models assigned (Llama, Claude, Gemini, etc.)
 ```
 
+### Negotiation Mode
+
+```bash
+# Set game mode to negotiation
+curl -X POST http://localhost:3000/api/admin/state \
+  -H "x-admin-secret: your-secret" \
+  -H "Content-Type: application/json" \
+  -d '{"action":"update-config","config":{"mode":"negotiation"}}'
+
+# Check current mode
+curl http://localhost:3000/api/game/status | jq '.mode'
+
+# Test negotiation action
+curl -X POST http://localhost:3000/api/negotiation/action \
+  -H "Content-Type: application/json" \
+  -d '{"matchId":"match-123","action":"propose","message":"Fair split","proposal":{"myShare":{"books":2,"hats":2,"balls":2},"theirShare":{"books":1,"hats":1,"balls":1}}}'
+
+# Run test scripts
+node scripts/test-negotiation.js
+ADMIN_SECRET=your-secret node scripts/test-negotiation-flow.js
+```
+
 ### Storacha Upload
 
 ```bash

@@ -74,7 +74,13 @@ pm2 logs            # View logs
 pm2 restart detective-api  # Restart
 ```
 
-## Game Mechanics
+## Game Modes
+
+Detective supports multiple game modes, configurable per game cycle.
+
+### Mode 1: Conversation (Default)
+
+Players chat with opponents and guess: Human or AI?
 
 ### Core Loop
 1. **Registration**: Users opt-in via Farcaster mini app, validated via Neynar (score > 0.8)
@@ -118,6 +124,36 @@ pm2 restart detective-api  # Restart
 - Accuracy calculated per user: (Correct Guesses / Total Guesses) × 100
 - Tiebreaker: Speed of correct answers
 - Leaderboard sorted by accuracy then speed
+
+### Mode 2: Negotiation
+
+Players negotiate resource splits with AI opponents over 5 rounds.
+
+**Resources**: Books, Hats, Balls (2-4 of each per match)
+- Hidden valuations: 2, 4, 6, 8, or 10 points per unit
+- Goal: Maximize your score by getting high-value items
+
+**Actions**:
+1. **Propose**: Offer a resource split (must sum to pool)
+2. **Accept**: Accept current proposal (ends match)
+3. **Reject**: Reject and continue negotiating
+
+**Scoring**:
+- Deal reached: Normalized score 0.0–1.0 based on your valuation
+- No deal: -0.5 penalty for both players
+- 5 rounds maximum, 1 minute per round, auto-timeout
+
+**Bot Strategy**: LLM-powered with behavioral economics tactics (anchoring, framing, reciprocity, loss aversion, urgency). Falls back to heuristic if LLM unavailable.
+
+**API**: `POST /api/negotiation/action` with `{ matchId, action, message, proposal? }`
+
+**UI Components**: `ModeSelector` (mode display/selection), `NegotiationInterface` (resource sliders, proposal builder, score preview, action buttons, round history).
+
+**Type Guards**: `isNegotiationMatch(match)`, `calculateMatchScore(match)`, `validateProposal(myShare, theirShare, pool)` — all in `src/lib/gameMode.ts`.
+
+**Backward Compatibility**: `Match.mode` is optional (defaults to `'conversation'`). Mode can be switched between games, not mid-game. All existing APIs remain unchanged.
+
+**Admin**: Set mode via `POST /api/admin/state` with `{ action: "update-config", config: { mode: "negotiation" } }`.
 
 ## Advanced Features
 
