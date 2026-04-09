@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import AnimatedGridBackdrop from "@/components/AnimatedGridBackdrop";
 import StarfieldBackground from "@/components/StarfieldBackground";
-import { fetcher, getApiUrl, requestJson } from "@/lib/fetcher";
+import { getApiUrl, requestJson } from "@/lib/fetcher";
 import type {
   AdminBulkRegisterResponse,
   AdminStateActionPayload,
@@ -165,14 +165,18 @@ export default function AdminPage() {
   // Poll admin data every 2 seconds for responsive updates
   const { data: adminData, mutate, error: adminError } = useSWR<AdminStateResponse>(
     getApiUrl("/api/admin/state"),
-    (url) => fetch(url, { headers: getAuthHeaders() }).then(r => {
-      if (r.status === 401) {
+    async (url: string) => {
+      const response = await fetch(url, { headers: getAuthHeaders() });
+      if (response.status === 401) {
         // Show secret prompt if unauthorized
         setShowSecretPrompt(true);
         throw new Error("Unauthorized - admin access required");
       }
-      return r.json();
-    }),
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      return response.json();
+    },
     {
       refreshInterval: 1000,
       revalidateOnFocus: true,
