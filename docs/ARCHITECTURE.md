@@ -236,6 +236,20 @@ NEXT_PUBLIC_WORLD_RP_ID=rp_xxxxxxxx
 WORLD_RP_SIGNING_KEY=0x...
 ```
 
+### Phase 7: Machine Payments Protocol (MPP)
+
+Agent-to-agent micropayments via Tempo blockchain (pathUSD/USDC). Built on HTTP 402 standard.
+
+**Flow**: Agent requests resource → `402 Payment Required` + `WWW-Authenticate` header → mppx CLI signs payment credential → retries with `Authorization: Payment` → server verifies on Tempo → returns resource with `Payment-Receipt` header.
+
+**Implementation**: `src/lib/mpp.ts` (middleware `requireMPPPayment()`, `verifyTempoPayment()` via Tempo RPC). MPP-enabled endpoints: `POST /api/agent/negotiate`.
+
+**Pricing**: Negotiation $0.10, Conversation $0.05, Data export $0.50, Match history $0.25.
+
+**Config**: `MPP_ENABLED=true`, `MPP_WALLET_ADDRESS=0x...`, `TEMPO_RPC_URL=https://rpc.tempo.xyz`. Dev mode (`NODE_ENV=development`) skips blockchain verification.
+
+**Testing**: `./scripts/test-mpp.sh` or `npx mppx <url> --method POST -J '{"data":"..."}'`. Hackathon participants get $20 Tempo credit.
+
 ## Key Design Decisions
 
 1. **Hybrid Storage**: In-memory game state + Redis persistence + PostgreSQL analytics
