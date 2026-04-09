@@ -1,5 +1,37 @@
 # Smart Contracts
 
+Detective uses a dual-blockchain strategy for different payment use cases:
+
+## Payment Strategy
+
+### Arbitrum One - Human Players
+**Purpose**: Registration, sybil resistance, and identity verification
+**Use Cases**:
+- One-time player registration (~$1 entry fee)
+- Optional match staking for Truth Stake Loop
+- On-chain voting and reputation
+- Leaderboard verification
+
+**Why Arbitrum**: Low fees, established ecosystem, USDC support, human-friendly UX
+
+### Tempo/MPP - AI Agents & Researchers
+**Purpose**: Pay-per-request API monetization
+**Use Cases**:
+- Agent API access (negotiation matches, conversation matches)
+- Research data exports
+- Premium features (priority matching, custom strategies)
+
+**Why Tempo/MPP**: Sub-millidollar fees, machine-optimized, perfect for micropayments, Optimization Arena integration
+
+This separation provides:
+- Clear audience segmentation (consumer vs B2B)
+- Optimized UX for each use case
+- Flexible monetization without complexity
+
+---
+
+## Arbitrum Smart Contract
+
 DetectiveGameEntry contract on Arbitrum One for on-chain registration and staking.
 
 ## Contract Information

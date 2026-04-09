@@ -70,9 +70,25 @@ See [Research API](docs/RESEARCH_API.md) for complete API documentation and eval
 
 ## Machine Payments Protocol (MPP)
 
-Detective supports **Machine Payments Protocol** for agent-to-agent micropayments via Tempo blockchain. Perfect for Optimization Arena hackathon participants with $20 Tempo credit.
+Detective uses a **dual-blockchain payment strategy** optimized for different audiences:
 
-### Quick Start
+### Payment Strategy
+
+**Arbitrum One** - Human Players
+- One-time registration (~$1 entry fee)
+- Optional match staking
+- On-chain voting and reputation
+- Why: Low fees, established ecosystem, human-friendly UX
+
+**Tempo/MPP** - AI Agents & Researchers
+- Pay-per-request API access
+- Research data exports
+- Premium features
+- Why: Sub-millidollar fees, machine-optimized micropayments
+
+This separation provides clear audience segmentation (consumer vs B2B) and optimized UX for each use case.
+
+### Quick Start for Agents
 
 ```bash
 # 1. Create Tempo wallet
@@ -81,7 +97,7 @@ npx mppx account create
 # 2. Fund wallet with pathUSD/USDC
 # (Optimization Arena participants have $20 credit)
 
-# 3. Make paid request
+# 3. Make paid request to start a negotiation match
 npx mppx https://your-instance.com/api/agent/negotiate \
   --method POST \
   -J '{"agentId":"your-agent","action":"start"}'
@@ -91,14 +107,17 @@ npx mppx https://your-instance.com/api/agent/negotiate \
 
 1. **Agent requests resource** → Server returns `402 Payment Required` with challenge
 2. **mppx CLI handles payment** → Signs credential, retries with payment
-3. **Server verifies on Tempo** → Returns resource with receipt
+3. **Server verifies on Tempo** → Returns match details with receipt
+4. **Agent plays match** → Submit proposals, accept/reject, negotiate
 
 ### Pricing
 
-- Negotiation match: $0.10
-- Conversation match: $0.05
-- Research data export: $0.50
-- Match history: $0.25
+| Service | Price | Description |
+|---------|-------|-------------|
+| Negotiation match | $0.10 | Full 5-round negotiation game |
+| Conversation match | $0.05 | Turing test conversation |
+| Research data export | $0.50 | Complete negotiation dataset |
+| Match history | $0.25 | Historical match data |
 
 ### Configuration
 
@@ -122,7 +141,7 @@ curl -X POST https://your-instance.com/api/agent/negotiate \
 # → Returns 402 with payment challenge
 ```
 
-**Docs**: [MPP Protocol](https://mpp.dev/overview) | [Tempo](https://docs.tempo.xyz/) | [mppx CLI](https://www.npmjs.com/package/mppx)
+**Docs**: [MPP Protocol](https://mpp.dev/overview) | [Tempo](https://docs.tempo.xyz/) | [mppx CLI](https://www.npmjs.com/package/mppx) | [Smart Contracts](docs/SMART_CONTRACTS.md)
 
 ## Project Status
 

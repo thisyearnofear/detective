@@ -18,12 +18,77 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
-import { handleNegotiationAction, generateBotNegotiationAction } from "@/lib/negotiation";
+import { handleNegotiationAction, generateBotNegotiationAction, createNegotiationMatch } from "@/lib/negotiation";
 import { isNegotiationMatch } from "@/lib/gameMode";
 import { requireMPPPayment, getMPPPricing } from "@/lib/mpp";
-import type { NegotiationAction } from "@/lib/types";
+import type { NegotiationAction, NegotiationMatch, Bot } from "@/lib/types";
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * Create a match for an external agent
+ * ENHANCEMENT: Reuses existing match creation infrastructure
+ */
+async function createAgentMatch(agentId: string): Promise<NegotiationMatch | null> {
+  // Create a temporary player object for the agent
+  const agentPlayer = {
+    fid: Math.abs(hashString(agentId)), // Generate consistent FID from agentId
+    username: agentId,
+    displayName: agentId,
+    pfpUrl: "",
+    type: "REAL" as const,
+    isRegistered: true,
+    isReady: true,
+    score: 0,
+    voteHistory: [],
+    inactivityStrikes: 0,
+    lastActiveTime: Date.now(),
+    hasPermission: false,
+  };
+
+  // Select a bot opponent
+  const bots = await gameManager.getAllBots();
+  if (bots.length === 0) {
+    console.error("[createAgentMatch] No bots available");
+    return null;
+  }
+
+  // Pick a random bot
+  const opponent = bots[Math.floor(Math.random() * bots.length)] as Bot;
+
+  const now = Date.now();
+  const matchId = `agent-match-${agentId}-${now}`;
+  const matchDuration = 5 * 60 * 1000; // 5 minutes for agent matches
+
+  // ENHANCEMENT: Reuse createNegotiationMatch from negotiation.ts
+  const match = createNegotiationMatch(
+    matchId,
+    agentPlayer,
+    opponent,
+    1, // slotNumber
+    1, // roundNumber
+    now,
+    now + matchDuration
+  );
+
+  // Save match to game state
+  await gameManager.saveMatch(match);
+
+  return match;
+}
+
+/**
+ * Simple string hash function for generating consistent FIDs
+ */
+function hashString(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  return hash;
+}
 
 /**
  * GET /api/agent/negotiate
@@ -69,11 +134,28 @@ export async function POST(request: NextRequest) {
     // Handle negotiation action
     if (action === 'start') {
       // Create a new match for the agent
-      // TODO: Implement agent match creation
+      const match = await createAgentMatch(agentId);
+      
+      if (!match) {
+        return NextResponse.json(
+          { error: "Failed to create match - no available opponents" },
+          { status: 503 }
+        );
+      }
+
       return NextResponse.json({
         success: true,
-        message: "Match creation not yet implemented",
+        matchId: match.id,
         agentId,
+        opponent: {
+          fid: match.opponent.fid,
+          username: match.opponent.username,
+          type: match.opponent.type,
+        },
+        resourcePool: match.resourcePool,
+        playerValuation: match.playerValuation,
+        startTime: match.startTime,
+        endTime: match.endTime,
         paymentId: payment.paymentId,
       }, {
         headers: payment.receiptHeaders,
