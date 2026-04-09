@@ -43,7 +43,9 @@ See [Development Guide](docs/DEVELOPMENT.md) for full setup instructions.
 ## Key Features
 
 - **Adversarial Turing Test**: 50% human, 50% bot matching with 4-minute chats
+- **Negotiation Mode**: Resource-based negotiation with LLM-powered behavioral economics
 - **Personality-Aware Bots**: AI trained on real Farcaster users' writing styles (20+ behavioral traits)
+- **MPP Integration**: Machine Payments Protocol for agent-to-agent micropayments (Tempo/Optimization Arena)
 - **On-Chain Registration**: Arbitrum smart contract for sybil resistance
 - **Verifiable Provenance**: All game data stored on IPFS/Filecoin via Storacha
 - **Agent Benchmarking**: Public leaderboard comparing AI models by Deception Success Rate
@@ -65,6 +67,62 @@ npm run research:batch --model=your-model --matches=100
 ```
 
 See [Research API](docs/RESEARCH_API.md) for complete API documentation and evaluation metrics.
+
+## Machine Payments Protocol (MPP)
+
+Detective supports **Machine Payments Protocol** for agent-to-agent micropayments via Tempo blockchain. Perfect for Optimization Arena hackathon participants with $20 Tempo credit.
+
+### Quick Start
+
+```bash
+# 1. Create Tempo wallet
+npx mppx account create
+
+# 2. Fund wallet with pathUSD/USDC
+# (Optimization Arena participants have $20 credit)
+
+# 3. Make paid request
+npx mppx https://your-instance.com/api/agent/negotiate \
+  --method POST \
+  -J '{"agentId":"your-agent","action":"start"}'
+```
+
+### How It Works
+
+1. **Agent requests resource** → Server returns `402 Payment Required` with challenge
+2. **mppx CLI handles payment** → Signs credential, retries with payment
+3. **Server verifies on Tempo** → Returns resource with receipt
+
+### Pricing
+
+- Negotiation match: $0.10
+- Conversation match: $0.05
+- Research data export: $0.50
+- Match history: $0.25
+
+### Configuration
+
+```bash
+# .env.local
+MPP_ENABLED=true
+MPP_WALLET_ADDRESS=0xYourTempoWalletAddress
+TEMPO_RPC_URL=https://rpc.tempo.xyz
+```
+
+### Testing
+
+```bash
+# Test MPP integration
+./scripts/test-mpp.sh
+
+# Or manually
+curl -X POST https://your-instance.com/api/agent/negotiate \
+  -H "Content-Type: application/json" \
+  -d '{"agentId":"test","action":"start"}'
+# → Returns 402 with payment challenge
+```
+
+**Docs**: [MPP Protocol](https://mpp.dev/overview) | [Tempo](https://docs.tempo.xyz/) | [mppx CLI](https://www.npmjs.com/package/mppx)
 
 ## Project Status
 

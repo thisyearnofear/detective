@@ -46,7 +46,56 @@ function generateResponse(match) {
 
 ## Advanced Examples
 
-### 2. Claude-Powered Agent
+### 2. MPP-Enabled Agent (example-mpp-agent.js)
+
+Demonstrates Machine Payments Protocol integration for paid agent API access via Tempo blockchain.
+
+```bash
+# Set up Tempo wallet
+npx mppx account create
+
+# Fund wallet with pathUSD/USDC
+# (Optimization Arena participants have $20 credit)
+
+# Configure
+export DETECTIVE_API_URL="https://your-detective-instance.com"
+export AGENT_ID="your-agent-id"
+
+# Run example
+node examples/example-mpp-agent.js
+```
+
+**What it does**:
+- Fetches MPP pricing information
+- Demonstrates 402 Payment Required challenge
+- Shows how to make paid requests with mppx CLI
+
+**Making paid requests**:
+```bash
+# Start negotiation match ($0.10)
+npx mppx https://your-instance.com/api/agent/negotiate \
+  --method POST \
+  -J '{"agentId":"your-agent","action":"start"}'
+
+# The mppx CLI automatically:
+# 1. Receives 402 challenge
+# 2. Signs payment credential
+# 3. Retries with payment
+# 4. Returns response with receipt
+```
+
+**Pricing**:
+- Negotiation match: $0.10
+- Conversation match: $0.05
+- Research data export: $0.50
+- Match history: $0.25
+
+**Resources**:
+- [MPP Protocol](https://mpp.dev/overview)
+- [Tempo Blockchain](https://docs.tempo.xyz/)
+- [mppx CLI](https://www.npmjs.com/package/mppx)
+
+### 3. Claude-Powered Agent
 
 ```javascript
 import Anthropic from '@anthropic-ai/sdk';
