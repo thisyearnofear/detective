@@ -131,11 +131,48 @@ export default function AdminPage() {
     text: string;
   } | null>(null);
   const [showResetModal, setShowResetModal] = useState(false);
+  
+  // Admin secret for Bearer token auth (optional, stored in sessionStorage)
+  const [adminSecret, setAdminSecret] = useState<string>("");
+  const [showSecretPrompt, setShowSecretPrompt] = useState(false);
+
+  // Load admin secret from sessionStorage on mount
+  useEffect(() => {
+    const stored = sessionStorage.getItem("admin_secret");
+    if (stored) {
+      setAdminSecret(stored);
+    }
+  }, []);
+
+  // Save admin secret to sessionStorage when it changes
+  useEffect(() => {
+    if (adminSecret) {
+      sessionStorage.setItem("admin_secret", adminSecret);
+    }
+  }, [adminSecret]);
+
+  // Helper to get headers with optional Bearer token
+  const getAuthHeaders = () => {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (adminSecret) {
+      headers["Authorization"] = `Bearer ${adminSecret}`;
+    }
+    return headers;
+  };
 
   // Poll admin data every 2 seconds for responsive updates
-  const { data: adminData, mutate } = useSWR<AdminStateResponse>(
+  const { data: adminData, mutate, error: adminError } = useSWR<AdminStateResponse>(
     getApiUrl("/api/admin/state"),
-    fetcher,
+    (url) => fetch(url, { headers: getAuthHeaders() }).then(r => {
+      if (r.status === 401) {
+        // Show secret prompt if unauthorized
+        setShowSecretPrompt(true);
+        throw new Error("Unauthorized - admin access required");
+      }
+      return r.json();
+    }),
     {
       refreshInterval: 1000,
       revalidateOnFocus: true,
@@ -167,7 +204,7 @@ export default function AdminPage() {
         "/api/admin/register-bulk",
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ usernames: usernameList }),
         },
       );
@@ -207,7 +244,7 @@ export default function AdminPage() {
         "/api/admin/state",
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: getAuthHeaders(),
           body: JSON.stringify(payload),
         },
       );
@@ -235,7 +272,7 @@ export default function AdminPage() {
         "/api/admin/state",
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: getAuthHeaders(),
           body: JSON.stringify(payload),
         },
       );
@@ -267,7 +304,7 @@ export default function AdminPage() {
         "/api/admin/state",
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: getAuthHeaders(),
           body: JSON.stringify(payload),
         },
       );
@@ -291,6 +328,63 @@ export default function AdminPage() {
 
   return (
     <main className="min-h-screen flex items-center justify-center relative overflow-hidden">
+      {/* Admin Secret Prompt Modal */}
+      {showSecretPrompt && !adminSecret && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative bg-gray-900/95 border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl backdrop-blur-md">
+            <div className="flex justify-center mb-4">
+              <div className="w-16 h-16 rounded-full bg-blue-900/30 border border-blue-500/30 flex items-center justify-center">
+                <span className="text-3xl">🔐</span>
+              </div>
+            </div>
+            <h3 className="text-xl font-light text-white/90 text-center mb-2">
+              Admin Authentication
+            </h3>
+            <p className="text-sm text-white/60 text-center mb-6">
+              Enter admin secret or log in with your Farcaster account (FID {5254})
+            </p>
+            <input
+              type="password"
+              placeholder="Admin secret (optional)"
+              value={adminSecret}
+              onChange={(e) => setAdminSecret(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && adminSecret) {
+                  setShowSecretPrompt(false);
+                  forceRefresh();
+                }
+              }}
+              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-white/30 mb-4"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowSecretPrompt(false);
+                  router.push("/");
+                }}
+                className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowSecretPrompt(false);
+                  forceRefresh();
+                }}
+                disabled={!adminSecret}
+                className="flex-1 px-4 py-3 bg-blue-600/30 border border-blue-500/50 rounded-lg text-sm font-medium text-blue-200 hover:bg-blue-600/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Continue
+              </button>
+            </div>
+            <p className="text-xs text-white/40 text-center mt-4">
+              Secret is stored in sessionStorage only
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Layer 1: Starfield (deepest) */}
       <StarfieldBackground />
 

@@ -1,60 +1,159 @@
-// src/lib/adminAuth.ts
-import type { NextRequest } from "next/server";
-import { getTokenFromHeader } from "@/lib/auth";
-
 /**
- * Admin auth policy:
- * - Production: ADMIN_SECRET is REQUIRED. Missing secret rejects all admin requests.
- * - Development/Test: If ADMIN_SECRET is missing, allow a well-known local fallback.
- *
- * This keeps local workflows simple while preventing accidental weak auth in production.
+ * Admin Authentication
+ * 
+ * Two-tier auth system:
+ * 1. FID-based: Check if logged-in Farcaster user is in admin allowlist
+ * 2. Secret-based: Check Bearer token against ADMIN_SECRET env var
+ * 
+ * Either method grants admin access.
  */
 
-const LOCAL_DEV_ADMIN_SECRET = "detective-admin-secret";
+import { NextRequest, NextResponse } from "next/server";
 
-function isProduction(): boolean {
-  return process.env.NODE_ENV === "production";
+// Admin FID allowlist (add your FIDs here)
+const ADMIN_FIDS = new Set([
+  5254, // thisyearnofear
+  // Add more admin FIDs here
+]);
+
+// Get admin secret from env
+const ADMIN_SECRET = process.env.ADMIN_SECRET || "";
+
+export interface AdminAuthResult {
+  authorized: boolean;
+  method?: "fid" | "secret";
+  fid?: number;
+  error?: string;
 }
 
 /**
- * Returns the active admin secret or null if none is configured for the environment.
+ * Check if a request is authorized for admin access
+ * 
+ * Checks in order:
+ * 1. Bearer token matches ADMIN_SECRET
+ * 2. Logged-in FID is in ADMIN_FIDS allowlist
  */
-export function getAdminSecret(): string | null {
-  const configured = process.env.ADMIN_SECRET?.trim();
-
-  if (configured) {
-    return configured;
-  }
-
-  // Never allow fallback in production.
-  if (isProduction()) {
-    return null;
-  }
-
-  return LOCAL_DEV_ADMIN_SECRET;
-}
-
-/**
- * Extract bearer token from a Next.js request.
- */
-export function getBearerTokenFromRequest(request: NextRequest): string | null {
+export async function checkAdminAuth(request: NextRequest): Promise<AdminAuthResult> {
+  // Method 1: Check Bearer token
   const authHeader = request.headers.get("authorization");
-  return getTokenFromHeader(authHeader);
+  if (authHeader?.startsWith("Bearer ")) {
+    const token = authHeader.substring(7);
+    
+    if (ADMIN_SECRET && token === ADMIN_SECRET) {
+      return {
+        authorized: true,
+        method: "secret",
+      };
+    }
+  }
+
+  // Method 2: Check FID from session/cookie
+  // Try to get FID from various sources
+  const fid = await getAuthenticatedFid(request);
+  
+  if (fid && ADMIN_FIDS.has(fid)) {
+    return {
+      authorized: true,
+      method: "fid",
+      fid,
+    };
+  }
+
+  // No valid auth found
+  return {
+    authorized: false,
+    error: "Unauthorized: Admin access requires either valid Bearer token or admin FID",
+  };
 }
 
 /**
- * Verifies whether the provided token matches the active admin secret.
+ * Simple boolean check for admin access (backwards compatible)
  */
-export function isValidAdminToken(token: string | null | undefined): boolean {
-  const secret = getAdminSecret();
-  if (!secret || !token) return false;
-  return token === secret;
+export async function isAdminRequest(request: NextRequest): Promise<boolean> {
+  const auth = await checkAdminAuth(request);
+  
+  if (auth.authorized) {
+    console.log(`[Admin] Authorized via ${auth.method}${auth.fid ? ` (FID: ${auth.fid})` : ""}`);
+  }
+  
+  return auth.authorized;
 }
 
 /**
- * Verifies admin auth directly from request headers.
+ * Get authenticated FID from request
+ * Checks multiple sources in order of preference
  */
-export function isAdminRequest(request: NextRequest): boolean {
-  const token = getBearerTokenFromRequest(request);
-  return isValidAdminToken(token);
+async function getAuthenticatedFid(request: NextRequest): Promise<number | null> {
+  // 1. Check x-farcaster-fid header (set by Farcaster auth)
+  const fidHeader = request.headers.get("x-farcaster-fid");
+  if (fidHeader) {
+    const fid = parseInt(fidHeader, 10);
+    if (!isNaN(fid)) return fid;
+  }
+
+  // 2. Check cookie (Farcaster Quick Auth sets this)
+  const cookies = request.cookies;
+  const fidCookie = cookies.get("farcaster_fid")?.value;
+  if (fidCookie) {
+    const fid = parseInt(fidCookie, 10);
+    if (!isNaN(fid)) return fid;
+  }
+
+  // 3. Check query param (fallback for testing)
+  const url = new URL(request.url);
+  const fidParam = url.searchParams.get("fid");
+  if (fidParam) {
+    const fid = parseInt(fidParam, 10);
+    if (!isNaN(fid)) return fid;
+  }
+
+  return null;
+}
+
+/**
+ * Middleware wrapper for admin routes
+ * Returns 401 response if not authorized
+ */
+export async function requireAdminAuth(
+  request: NextRequest,
+  handler: (request: NextRequest) => Promise<Response>
+): Promise<Response> {
+  const auth = await checkAdminAuth(request);
+
+  if (!auth.authorized) {
+    return NextResponse.json(
+      {
+        error: "Unauthorized",
+        message: auth.error,
+        hint: "Use Bearer token or log in with admin FID",
+      },
+      { status: 401 }
+    );
+  }
+
+  // Add auth info to request for logging
+  console.log(`[Admin] Authorized via ${auth.method}${auth.fid ? ` (FID: ${auth.fid})` : ""}`);
+
+  return handler(request);
+}
+
+/**
+ * Check if admin auth is configured
+ */
+export function isAdminAuthConfigured(): boolean {
+  return ADMIN_SECRET.length > 0 || ADMIN_FIDS.size > 0;
+}
+
+/**
+ * Get admin configuration info (for debugging)
+ */
+export function getAdminAuthInfo() {
+  return {
+    secretConfigured: ADMIN_SECRET.length > 0,
+    allowedFids: Array.from(ADMIN_FIDS),
+    authMethods: [
+      ADMIN_SECRET ? "Bearer token" : null,
+      ADMIN_FIDS.size > 0 ? "FID allowlist" : null,
+    ].filter(Boolean),
+  };
 }
