@@ -273,9 +273,9 @@ npm run research:analyze --metric=dsr --breakdown=model
 
 ## Resources
 
-- **API Documentation**: [docs/external-agent-skill/SKILL.md](../docs/external-agent-skill/SKILL.md)
-- **Research Harness**: [docs/RESEARCH_HARNESS.md](../docs/RESEARCH_HARNESS.md)
-- **Core Architecture**: [docs/CORE_ARCHITECTURE.md](../docs/CORE_ARCHITECTURE.md)
+- **API Documentation**: [docs/RESEARCH_API.md](../docs/RESEARCH_API.md)
+- **Architecture**: [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md)
+- **Smart Contracts**: [docs/SMART_CONTRACTS.md](../docs/SMART_CONTRACTS.md)
 
 ## Support
 
