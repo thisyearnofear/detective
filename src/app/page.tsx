@@ -32,12 +32,20 @@ export default function Home() {
   } | null>(null);
 
   useEffect(() => {
-    // Auto-advance intro after 2 seconds
+    // Check if user has completed onboarding before - skip intro for returning users
+    const hasSeenIntro = localStorage.getItem("detective_onboarding_complete");
+    if (hasSeenIntro) {
+      setIntroComplete(true);
+      return;
+    }
+    // Auto-advance intro after 2 seconds for new users
     const timer = setTimeout(() => {
       setIntroComplete(true);
     }, 2000);
     return () => clearTimeout(timer);
   }, []);
+
+  const skipIntro = () => setIntroComplete(true);
 
   // Use SWR for polling the game state
   // PERFORMANT: Adaptive polling - deduped requests prevent double-fetching
@@ -211,7 +219,7 @@ export default function Home() {
       <div className="relative z-20 w-full max-w-2xl flex flex-col items-center justify-center min-h-screen">
         {/* Hero Section - The DETECTIVE Title - Centered with entrance animation */}
         <div
-          className={`absolute inset-0 flex items-center justify-center transition-opacity duration-1000 ${introComplete ? "opacity-0 pointer-events-none" : "opacity-100"}`}
+          className={`absolute inset-0 flex flex-col items-center justify-center transition-opacity duration-1000 ${introComplete ? "opacity-0 pointer-events-none" : "opacity-100"}`}
         >
           <h1
             className={`hero-title text-6xl sm:text-7xl md:text-[10rem] font-black text-white tracking-tighter leading-none select-none mix-blend-overlay opacity-90 text-center transition-all duration-700 ${introComplete ? "" : "animate-in"}`}
@@ -219,6 +227,12 @@ export default function Home() {
           >
             DETECTIVE
           </h1>
+          <button
+            onClick={skipIntro}
+            className="mt-8 text-sm text-white/50 hover:text-white/80 transition-colors"
+          >
+            Skip →
+          </button>
         </div>
 
         {/* Main Content - Fades in after hero disappears */}
