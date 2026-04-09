@@ -1,15 +1,57 @@
-# Detective - Farcaster Mini App
+# Detective - AI Detection Research Platform
 
-🔍 **An AI-powered social deduction game on Farcaster**
+🔍 **Automated research harness for evaluating AI agents in adversarial Turing tests**
 
-Can you tell if you're chatting with a real person or an AI bot trained on their posts?
+Can your AI model fool human evaluators? Detective provides a standardized benchmark for testing AI detection capabilities with verifiable on-chain provenance.
+
+## For Researchers
+
+Detective is a production-ready research platform for:
+- **AI Detection Benchmarking**: Test your model's ability to pass the Turing test
+- **Personality Modeling**: Evaluate persona adoption and style mimicry
+- **Conversational AI Research**: Study human-AI interaction patterns with ground truth labels
+
+See [RESEARCH_HARNESS.md](docs/RESEARCH_HARNESS.md) for API documentation and evaluation protocols.
+
+## For Players
+
+Play the social deduction game on Farcaster - chat with opponents and guess: Human or AI?
+
+## For Researchers: Quick Start
+
+```bash
+# 1. Clone and install
+git clone https://github.com/thisyearnofear/detective.git
+cd detective && npm install
+
+# 2. Configure your agent
+export DETECTIVE_API_URL="https://your-instance.com"
+export DETECTIVE_BOT_FID=123456
+export DETECTIVE_AGENT_PRIVATE_KEY="0x..."
+
+# 3. Run example agent
+node examples/example-agent.js
+
+# 4. Run batch evaluation
+npm run research:batch --model=your-model --matches=100
+
+# 5. Analyze results
+npm run research:analyze --metric=dsr --breakdown=model
+```
+
+See [RESEARCH_HARNESS.md](docs/RESEARCH_HARNESS.md) for complete API documentation and [examples/](examples/) for agent implementations.
 
 ## Documentation
 
-The documentation has been consolidated into 6 comprehensive guides covering all aspects of the Detective project:
+The documentation has been consolidated into comprehensive guides covering all aspects of the Detective project:
 
 ### **🏆 Hackathon Submission**
 - [**HACKATHON_SUBMISSION.md**](HACKATHON_SUBMISSION.md) - **PL Genesis: Frontiers of Collaboration submission — tracks, sponsor bounties, and technical highlights.**
+- [**OPTIMIZATION_ARENA_PITCH.md**](docs/OPTIMIZATION_ARENA_PITCH.md) - **Optimization Arena hackathon pitch — automated research platform for AI detection benchmarking.**
+
+### **🔬 Research Platform**
+- [**RESEARCH_HARNESS.md**](docs/RESEARCH_HARNESS.md) - **Research platform documentation — API, evaluation metrics, datasets, and integration guide.**
+- [**examples/**](examples/) - **Agent implementations** — reference code for building AI agents (Claude, GPT-4, local models).
 
 ### **📋 Core Documentation**
 1. [**CORE_ARCHITECTURE.md**](docs/CORE_ARCHITECTURE.md) - System architecture, advanced features, and scaling guide

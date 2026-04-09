@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import '@farcaster/auth-kit/styles.css';
 import { RootProviders } from '@/components/Providers';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 const miniAppEmbed = {
   version: '1',
@@ -77,9 +78,11 @@ export default function RootLayout({
         <meta name="theme-color" content="#0f172a" />
       </head>
       <body className="text-white">
-        <RootProviders>
-          {children}
-        </RootProviders>
+        <ErrorBoundary>
+          <RootProviders>
+            {children}
+          </RootProviders>
+        </ErrorBoundary>
         {/* SVG Filter for Gooey Effect */}
         <svg className="svg-filters" xmlns="http://www.w3.org/2000/svg" version="1.1">
           <defs>
