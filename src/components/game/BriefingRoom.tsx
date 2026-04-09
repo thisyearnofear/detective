@@ -9,6 +9,7 @@ import { requestJson } from "@/lib/fetcher";
 import ErrorCard from "../ErrorCard";
 import ArbitrumRegistrationModal from "../ArbitrumRegistrationModal";
 import DetectiveToast from "../DetectiveToast";
+import ModeSelector from "./ModeSelector";
 
 type Props = {
   currentPlayer: UserProfile;
@@ -242,6 +243,16 @@ export default function BriefingRoom({
             : `${spotsLeft} spot${spotsLeft !== 1 ? "s" : ""} remaining`}
         </p>
       </div>
+
+      {/* Game Mode Display */}
+      {gameState?.config?.mode && (
+        <div className="w-full">
+          <ModeSelector 
+            currentMode={gameState.config.mode as any}
+            disabled={true}
+          />
+        </div>
+      )}
 
       {/* Registration Progress */}
       <div className="bg-slate-900/50 border border-white/10 rounded-xl p-4 md:p-6 backdrop-blur-sm">
