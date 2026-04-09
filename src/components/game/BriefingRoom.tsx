@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Player, UserProfile } from "@/lib/types";
 import { useCountdown } from "@/hooks/useCountdown";
 import { useRegistrationFlow } from "@/hooks/useRegistrationFlow";
@@ -221,6 +221,14 @@ export default function BriefingRoom({
   const hasMinPlayers = registeredPlayers.length >= GAME_CONSTANTS.MIN_PLAYERS;
   const countdownActive = hasMinPlayers && timeLeft < 999999999; // Countdown started
 
+  // Estimate wait time based on registration rate
+  const estimatedWaitMinutes = useMemo(() => {
+    if (hasMinPlayers) return 0; // Game starting soon
+    const playersNeeded = GAME_CONSTANTS.MIN_PLAYERS - registeredPlayers.length;
+    // Assume ~2 players join per minute (conservative estimate)
+    return Math.ceil(playersNeeded / 2);
+  }, [hasMinPlayers, registeredPlayers.length]);
+
   const formatTimeLeft = (ms: number) => {
     const seconds = Math.floor(ms / 1000);
     return `${seconds}s`;
@@ -287,6 +295,11 @@ export default function BriefingRoom({
             Investigation starts when {GAME_CONSTANTS.MIN_PLAYERS}+ detectives
             join
           </p>
+          {estimatedWaitMinutes > 0 && (
+            <div className="mt-3 text-sm text-blue-400">
+              ⏱️ Estimated wait: ~{estimatedWaitMinutes} minute{estimatedWaitMinutes !== 1 ? 's' : ''}
+            </div>
+          )}
         </div>
       ) : countdownActive ? (
         <div className="bg-gradient-to-br from-green-900/30 to-blue-900/30 border-2 border-green-500/30 rounded-xl p-4 md:p-6 text-center backdrop-blur-sm animate-pulse">

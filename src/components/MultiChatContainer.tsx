@@ -7,6 +7,7 @@ import Leaderboard from "./Leaderboard";
 import LoadingOverlay from "./LoadingOverlay";
 import MobileSwipeableChat from "./MobileSwipeableChat";
 import OnboardingModal, { useOnboarding } from "./OnboardingModal";
+import EmptyState from "./EmptyState";
 import { useModal } from "@/hooks/useModal";
 import { useViewport } from "@/lib/viewport";
 import { fetcherWithGameNotLive, getApiUrl, requestJson } from "@/lib/fetcher";
@@ -491,6 +492,11 @@ export default function MultiChatContainer({ fid, onGameFinishAction }: Props) {
       const previousVote = votes[matchId] || "REAL";
       const newVote = previousVote === "REAL" ? "BOT" : "REAL";
 
+      // Haptic feedback on mobile
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+
       setVotes((prev): VoteState => ({ ...prev, [matchId]: newVote }));
 
       try {
@@ -839,14 +845,13 @@ export default function MultiChatContainer({ fid, onGameFinishAction }: Props) {
                   return (
                     <div
                       key={slotNumber}
-                      className="bg-slate-800/50 rounded-lg p-6 border-2 border-dashed border-slate-700"
+                      className="bg-slate-800/50 rounded-lg border-2 border-dashed border-slate-700"
                     >
-                      <div className="text-center text-gray-500">
-                        <p className="text-lg font-medium mb-2">
-                          Chat Slot {slotNumber}
-                        </p>
-                        <p className="text-sm">Waiting for opponent...</p>
-                      </div>
+                      <EmptyState
+                        variant="waiting-opponent"
+                        title={`Chat Slot ${slotNumber}`}
+                        message="Finding you a worthy opponent..."
+                      />
                     </div>
                   );
                 }

@@ -259,7 +259,12 @@ export default function NegotiationInterface({ match, onAction, isProcessing = f
           {(['books', 'hats', 'balls'] as const).map((resource) => (
             <div key={resource} className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="capitalize text-gray-300">{resource}</span>
+                <div className="flex items-center gap-2">
+                  <span className="capitalize text-gray-300">{resource}</span>
+                  <span className="text-xs text-purple-400">
+                    (worth {match.playerValuation[resource]} pts each)
+                  </span>
+                </div>
                 <div className="flex items-center gap-2">
                   <span className="text-purple-400 font-bold">{myShare[resource]}</span>
                   <span className="text-gray-500">/</span>
@@ -275,14 +280,49 @@ export default function NegotiationInterface({ match, onAction, isProcessing = f
                 disabled={isProcessing}
                 className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer slider"
               />
+              <div className="flex justify-between text-xs text-gray-500">
+                <span>0 pts</span>
+                <span>{match.resourcePool[resource] * match.playerValuation[resource]} pts</span>
+              </div>
             </div>
           ))}
           
-          {/* Score Preview */}
-          <div className="bg-purple-900/20 border border-purple-500/30 rounded-lg p-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-400">Your potential score:</span>
-              <span className="text-lg font-bold text-purple-400">{myScore}%</span>
+          {/* Score Preview with Fairness Indicator */}
+          <div className="space-y-2">
+            <div className="bg-purple-900/20 border border-purple-500/30 rounded-lg p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-400">Your potential score:</span>
+                <span className="text-lg font-bold text-purple-400">{myScore}%</span>
+              </div>
+            </div>
+            
+            {/* Fairness Meter */}
+            <div className="bg-white/5 border border-white/10 rounded-lg p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-gray-400">Proposal Balance:</span>
+                <span className={`text-xs font-semibold ${
+                  parseInt(myScore) > 70 ? 'text-green-400' :
+                  parseInt(myScore) > 40 ? 'text-yellow-400' :
+                  'text-red-400'
+                }`}>
+                  {parseInt(myScore) > 70 ? '🟢 Favorable' :
+                   parseInt(myScore) > 40 ? '🟡 Fair' :
+                   '🔴 Unfavorable'}
+                </span>
+              </div>
+              <div className="w-full bg-slate-700/50 h-2 rounded-full overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-300 ${
+                    parseInt(myScore) > 70 ? 'bg-green-500' :
+                    parseInt(myScore) > 40 ? 'bg-yellow-500' :
+                    'bg-red-500'
+                  }`}
+                  style={{ width: `${myScore}%` }}
+                />
+              </div>
+              <div className="text-xs text-gray-500 mt-1 text-center">
+                Tip: Aim for 50-70% for balanced deals
+              </div>
             </div>
           </div>
         </div>

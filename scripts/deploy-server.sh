@@ -16,23 +16,23 @@ echo "Copying standalone build..."
 sudo rm -rf /opt/detective-deploy
 sudo mkdir -p /opt/detective-deploy
 sudo cp -r .next/standalone/* /opt/detective-deploy/
-sudo cp -r .next/static /opt/detective-deploy/
+sudo cp -r .next/static /opt/detective-deploy/.next/static
 sudo cp -r public /opt/detective-deploy/
-sudo cp -r .env.local /opt/detective-deploy/
+sudo cp .env.local /opt/detective-deploy/
 
 # Create ecosystem config that loads env vars dynamically
-sudo bash -c 'cat > /opt/detective-deploy/ecosystem.config.cjs << '\''ECOFMT''
+sudo bash -c 'cat > /opt/detective-deploy/ecosystem.config.cjs << '\''ECOFMT'\''
 const fs = require("fs");
 const path = require("path");
 
 const envFile = path.join(__dirname, ".env.local");
-const envVars = fs.existsSync(envFile) 
+const envVars = fs.existsSync(envFile)
   ? fs.readFileSync(envFile, "utf8")
-    .split("\\n")
+    .split("\n")
     .filter(line => line.trim() && !line.startsWith("#"))
-    .reduce((acc, line => {
+    .reduce((acc, line) => {
       const [key, ...values] = line.split("=");
-      if (key && values.length) acc[key] = values.join("=").trim();
+      if (key && values.length) acc[key.trim()] = values.join("=").trim();
       return acc;
     }, {})
   : {};
@@ -53,10 +53,12 @@ module.exports = {
     }
   }]
 };
-ECOFMT''
+ECOFMT'
 
 echo "Restarting service..."
-sudo pm2 restart detective-api
+sudo pm2 delete detective-api 2>/dev/null || true
+sudo pm2 start /opt/detective-deploy/ecosystem.config.cjs
+sudo pm2 save
 
 echo "Cleaning up build artifacts from source..."
 sudo rm -rf node_modules .next

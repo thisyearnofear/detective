@@ -39,10 +39,10 @@ export default function Home() {
       setIntroComplete(true);
       return;
     }
-    // Auto-advance intro after 2 seconds for new users
+    // Auto-advance intro after 5 seconds for new users (increased from 2s)
     const timer = setTimeout(() => {
       setIntroComplete(true);
-    }, 2000);
+    }, 5000);
     return () => clearTimeout(timer);
   }, []);
 
@@ -295,8 +295,8 @@ export default function Home() {
 
               {/* Collapsible Sections */}
               <div className="w-full text-center space-y-0 pt-8">
-                {/* How to Play */}
-                <CollapsibleSection title="How To Play">
+                {/* How to Play - Expanded by default */}
+                <CollapsibleSection title="How To Play" defaultOpen={true}>
                   <div className="space-y-4">
                     {[
                       { icon: "1️⃣", text: "Register when a game opens" },

@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useTouchGestures, useHaptics } from "@/lib/mobile";
 import { useViewport } from "@/lib/viewport";
 import ChatWindow from "./ChatWindow";
+import EmptyState from "./EmptyState";
 import { UserProfile } from "@/lib/types";
 
 interface Match {
@@ -279,12 +280,12 @@ export default function MobileSwipeableChat({
 
 function EmptySlot({ slotNumber }: { slotNumber: number }) {
     return (
-        <div className="h-full flex items-center justify-center bg-slate-800/50">
-            <div className="text-center text-gray-500 p-8">
-                <div className="text-4xl mb-3">💬</div>
-                <p className="text-lg font-medium mb-1">Chat Slot {slotNumber}</p>
-                <p className="text-sm">Waiting for opponent...</p>
-            </div>
+        <div className="h-full flex items-center justify-center bg-slate-800/50 p-6">
+            <EmptyState
+                variant="waiting-opponent"
+                title={`Chat ${slotNumber}`}
+                message="Finding you a worthy opponent..."
+            />
         </div>
     );
 }

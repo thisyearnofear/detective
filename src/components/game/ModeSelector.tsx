@@ -15,6 +15,9 @@ type Props = {
  * 
  * CLEAN: Reusable component for mode selection
  * MODULAR: Uses gameMode utilities for display
+ * 
+ * Shows current mode with clear visual indicator
+ * Only allows selection when onModeSelect is provided
  */
 export default function ModeSelector({
   currentMode,
@@ -27,8 +30,16 @@ export default function ModeSelector({
 
   return (
     <div className="w-full space-y-3">
-      <div className="text-xs text-gray-400 uppercase tracking-widest">
-        Game Mode
+      <div className="flex items-center justify-between">
+        <div className="text-xs text-gray-400 uppercase tracking-widest">
+          Game Mode
+        </div>
+        {!onModeSelect && (
+          <div className="text-xs text-green-400 flex items-center gap-1">
+            <span>✓</span>
+            <span>Active</span>
+          </div>
+        )}
       </div>
       
       <div className="grid grid-cols-2 gap-3">
@@ -77,8 +88,8 @@ export default function ModeSelector({
       </div>
       
       {!onModeSelect && (
-        <div className="text-xs text-gray-500 text-center">
-          Current game mode: {getModeName(currentMode)}
+        <div className="text-xs text-gray-500 text-center bg-slate-800/30 rounded-lg p-2">
+          💡 Mode is set for this game cycle
         </div>
       )}
     </div>
