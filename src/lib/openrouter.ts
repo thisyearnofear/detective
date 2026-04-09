@@ -15,6 +15,10 @@ import { Bot } from "./types";
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
+// Netmind AI Configuration
+const NETMIND_API_KEY = process.env.NETMIND_API_KEY;
+const NETMIND_API_URL = "https://api.netmind.ai/inference-api/openai/v1/chat/completions";
+
 // ============================================================================
 // Available LLM Models with Characteristics
 // Using free models via OpenRouter
@@ -30,6 +34,23 @@ export interface LLMModel {
 }
 
 export const AVAILABLE_MODELS: LLMModel[] = [
+  // Netmind AI models (free tier)
+  {
+    id: "meta-llama/Meta-Llama-3.3-70B-Instruct",
+    name: "Llama 3.3 70B (Netmind)",
+    provider: "Netmind",
+    characteristics: ["powerful", "reasoning", "detailed", "versatile"],
+    temperature: 0.7,
+    description: "Powerful reasoning model",
+  },
+  {
+    id: "meta-llama/Meta-Llama-3.1-8B-Instruct",
+    name: "Llama 3.1 8B (Netmind)",
+    provider: "Netmind",
+    characteristics: ["fast", "efficient", "concise", "capable"],
+    temperature: 0.7,
+    description: "Fast and efficient",
+  },
   // Free tier models - verified working
   {
     id: "anthropic/claude-haiku-4.5",
@@ -152,6 +173,76 @@ export interface LLMResponse {
 }
 
 /**
+ * Call Netmind AI API with a specific model
+ */
+export async function callNetmind(
+  systemPrompt: string,
+  userMessage: string,
+  model: LLMModel,
+  maxTokens: number = 500,
+): Promise<LLMResponse> {
+  if (!NETMIND_API_KEY) {
+    return {
+      content: "",
+      modelId: model.id,
+      error: "NETMIND_API_KEY not configured",
+    };
+  }
+
+  try {
+    const response = await fetch(NETMIND_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${NETMIND_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: model.id,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage },
+        ],
+        temperature: model.temperature,
+        max_tokens: maxTokens,
+      }),
+      signal: AbortSignal.timeout(10000), // 10 second timeout
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return {
+        content: "",
+        modelId: model.id,
+        error: `Netmind error ${response.status}: ${errorText}`,
+      };
+    }
+
+    const data = await response.json();
+    const content = data.choices[0]?.message?.content?.trim();
+
+    if (!content) {
+      return {
+        content: "",
+        modelId: model.id,
+        error: "Empty response from Netmind",
+      };
+    }
+
+    return { content, modelId: model.id };
+  } catch (error: any) {
+    const errorMsg =
+      error.name === "TimeoutError" || error.name === "AbortError"
+        ? "Request timeout"
+        : error.message;
+    return {
+      content: "",
+      modelId: model.id,
+      error: errorMsg,
+    };
+  }
+}
+
+/**
  * Call OpenRouter API with a specific model
  */
 export async function callOpenRouter(
@@ -225,6 +316,7 @@ export async function callOpenRouter(
 
 /**
  * Generate response using assigned LLM from bot
+ * Routes to correct provider based on model
  */
 export async function generateWithAssignedLLM(
   bot: Bot,
@@ -233,6 +325,12 @@ export async function generateWithAssignedLLM(
   maxTokens: number = 500,
 ): Promise<LLMResponse> {
   const model = bot.llmModelId ? getLLMById(bot.llmModelId) || assignRandomLLM() : assignRandomLLM();
+  
+  // Route to correct provider based on model
+  if (model.provider === "Netmind") {
+    return callNetmind(systemPrompt, userMessage, model, maxTokens);
+  }
+  
   return callOpenRouter(systemPrompt, userMessage, model, maxTokens);
 }
 
@@ -240,7 +338,7 @@ export async function generateWithAssignedLLM(
 // Provider Abstraction (Venice fallback + OpenRouter)
 // ============================================================================
 
-export type LLMProvider = "venice" | "openrouter";
+export type LLMProvider = "venice" | "openrouter" | "netmind";
 
 export interface UnifiedLLMConfig {
   provider: LLMProvider;
@@ -258,6 +356,20 @@ export async function callUnifiedLLM(
   config: UnifiedLLMConfig,
   maxTokens: number = 500,
 ): Promise<{ content: string; provider: LLMProvider; error?: string }> {
+  if (config.provider === "netmind" && config.model) {
+    const result = await callNetmind(
+      systemPrompt,
+      userMessage,
+      config.model,
+      maxTokens,
+    );
+    return {
+      content: result.content,
+      provider: "netmind",
+      error: result.error,
+    };
+  }
+  
   if (config.provider === "openrouter" && config.model) {
     const result = await callOpenRouter(
       systemPrompt,

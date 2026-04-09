@@ -1,47 +1,52 @@
-// src/app/api/cron/tick/route.ts
-/**
- * Game State Tick - Called by Vercel Cron every 10 seconds
- * 
- * Handles all phase transitions:
- * - REGISTRATION → LIVE (when countdown expires)
- * - LIVE → FINISHED (when game timer expires)  
- * - FINISHED → REGISTRATION (auto-cycle after grace period)
- * 
- * This decouples state transitions from read operations,
- * making the system more predictable and debuggable.
- */
-
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 10;
+export const maxDuration = 10; // 10 seconds max
 
-export async function GET(request: Request) {
+/**
+ * GET /api/cron/tick
+ * 
+ * Explicit game state tick - handles all phase transitions.
+ * Call this from a cron job every 10-30 seconds.
+ * 
+ * Transitions:
+ * - REGISTRATION → LIVE (when countdown expires)
+ * - LIVE → FINISHED (when game timer expires)
+ * - FINISHED → REGISTRATION (auto-cycle after grace period)
+ * 
+ * Security: Should be called by Vercel Cron or authenticated service
+ */
+export async function GET(request: NextRequest) {
   try {
-    // Verify cron secret in production
+    // Optional: Verify cron secret for security
     const authHeader = request.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
     
     if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
     }
 
+    const startTime = Date.now();
     const result = await gameManager.tickGameState();
-    
-    if (result.transitioned) {
-      console.log(`[Cron/Tick] State transitioned: ${result.from} → ${result.to}`);
-    }
+    const duration = Date.now() - startTime;
 
     return NextResponse.json({
       success: true,
       ...result,
-      timestamp: Date.now(),
+      duration,
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("[Cron/Tick] Error:", error);
+    console.error('[api/cron/tick] Error:', error);
     return NextResponse.json(
-      { error: "Tick failed", message: String(error) },
+      { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      },
       { status: 500 }
     );
   }
