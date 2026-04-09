@@ -163,7 +163,7 @@ export default function AdminPage() {
   };
 
   // Poll admin data every 2 seconds for responsive updates
-  const { data: adminData, mutate, error: adminError } = useSWR<AdminStateResponse>(
+  const { data: adminData, mutate } = useSWR<AdminStateResponse>(
     getApiUrl("/api/admin/state"),
     async (url: string) => {
       const response = await fetch(url, { headers: getAuthHeaders() });
