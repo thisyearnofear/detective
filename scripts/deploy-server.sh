@@ -15,7 +15,7 @@ sudo npm run build
 echo "Copying standalone build..."
 sudo rm -rf /opt/detective-deploy
 sudo mkdir -p /opt/detective-deploy
-sudo cp -r .next/standalone/* /opt/detective-deploy/
+sudo cp -r .next/standalone/. /opt/detective-deploy/
 sudo cp -r .next/static /opt/detective-deploy/.next/static
 sudo cp -r public /opt/detective-deploy/
 sudo cp .env.local /opt/detective-deploy/
