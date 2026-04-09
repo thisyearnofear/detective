@@ -191,16 +191,177 @@ export function handleNegotiationTimeout(match: NegotiationMatch): NegotiationMa
 // ============================================================================
 
 /**
- * Generate bot negotiation action
+ * Generate bot negotiation action using LLM
  * MODULAR: Can be replaced with different strategies
  */
 export async function generateBotNegotiationAction(
   match: NegotiationMatch,
   _strategyPrompt?: string
 ): Promise<{ action: NegotiationAction; message: string; proposal?: { myShare: ResourcePool; theirShare: ResourcePool } }> {
-  // TODO: Integrate with LLM for strategic negotiation
-  // For now, use simple heuristic strategy
+  // Use LLM for strategic negotiation
+  try {
+    const { generateWithAssignedLLM } = await import("./openrouter");
+    
+    // Build context for LLM
+    const context = buildNegotiationContext(match);
+    const systemPrompt = buildNegotiationSystemPrompt(match);
+    
+    // Get LLM response
+    const result = await generateWithAssignedLLM(
+      match.opponent as any, // Bot
+      context,
+      systemPrompt,
+      300 // max tokens
+    );
+
+    if (result.error) {
+      console.warn("[generateBotNegotiationAction] LLM error, falling back to heuristic:", result.error);
+      return generateHeuristicAction(match);
+    }
+
+    // Parse LLM response
+    const parsed = parseNegotiationResponse(result.content, match);
+    if (parsed) {
+      return parsed;
+    }
+
+    // Fallback to heuristic if parsing fails
+    console.warn("[generateBotNegotiationAction] Failed to parse LLM response, using heuristic");
+    return generateHeuristicAction(match);
+    
+  } catch (error) {
+    console.error("[generateBotNegotiationAction] Error:", error);
+    return generateHeuristicAction(match);
+  }
+}
+
+/**
+ * Build context string for LLM
+ */
+function buildNegotiationContext(match: NegotiationMatch): string {
+  const { resourcePool, opponentValuation, rounds, currentProposal } = match;
   
+  let context = `You are negotiating a resource split. Here's the situation:\n\n`;
+  context += `Resources available:\n`;
+  context += `- Books: ${resourcePool.books} (you value each at ${opponentValuation.books} points)\n`;
+  context += `- Hats: ${resourcePool.hats} (you value each at ${opponentValuation.hats} points)\n`;
+  context += `- Balls: ${resourcePool.balls} (you value each at ${opponentValuation.balls} points)\n\n`;
+  
+  context += `Round ${rounds.length + 1} of 5. `;
+  
+  if (currentProposal) {
+    const isYourProposal = currentProposal.proposer === match.opponent.fid;
+    if (isYourProposal) {
+      context += `Your last proposal is on the table.\n`;
+    } else {
+      context += `Their proposal:\n`;
+      context += `- They get: ${currentProposal.myShare.books} books, ${currentProposal.myShare.hats} hats, ${currentProposal.myShare.balls} balls\n`;
+      context += `- You get: ${currentProposal.theirShare.books} books, ${currentProposal.theirShare.hats} hats, ${currentProposal.theirShare.balls} balls\n`;
+      context += `Message: "${currentProposal.message}"\n`;
+    }
+  }
+  
+  if (rounds.length > 0) {
+    context += `\nNegotiation history:\n`;
+    rounds.slice(-3).forEach((round) => {
+      const actor = round.actor === match.opponent.fid ? "You" : "They";
+      context += `- ${actor} ${round.action}: "${round.message}"\n`;
+    });
+  }
+  
+  return context;
+}
+
+/**
+ * Build system prompt for negotiation
+ */
+function buildNegotiationSystemPrompt(_match: NegotiationMatch): string {
+  return `You are a skilled negotiator. Your goal is to maximize your score by getting resources you value highly.
+
+Key strategies:
+- ANCHORING: Make the first offer to set expectations
+- FRAMING: Present offers as fair and beneficial
+- RECIPROCITY: Match concessions to build trust
+- LOSS AVERSION: Emphasize what they'd lose with no deal (-50% penalty)
+- URGENCY: Use time pressure (5 rounds only)
+
+Your valuations are HIDDEN from them. They have different valuations.
+
+Respond in this EXACT format:
+ACTION: [propose/accept/reject]
+MESSAGE: [your message to them]
+PROPOSAL: [only if proposing] books=X,hats=Y,balls=Z for you | books=A,hats=B,balls=C for them
+
+Example responses:
+ACTION: propose
+MESSAGE: I think this split is fair for both of us
+PROPOSAL: books=2,hats=1,balls=2 for you | books=1,hats=2,balls=1 for them
+
+ACTION: accept
+MESSAGE: That works for me, let's make a deal
+
+ACTION: reject
+MESSAGE: I need more books to make this worthwhile
+
+Be conversational and strategic. Keep messages under 100 characters.`;
+}
+
+/**
+ * Parse LLM response into action
+ */
+function parseNegotiationResponse(
+  text: string,
+  match: NegotiationMatch
+): { action: NegotiationAction; message: string; proposal?: { myShare: ResourcePool; theirShare: ResourcePool } } | null {
+  try {
+    // Extract action
+    const actionMatch = text.match(/ACTION:\s*(propose|accept|reject)/i);
+    if (!actionMatch) return null;
+    const action = actionMatch[1].toLowerCase() as NegotiationAction;
+
+    // Extract message
+    const messageMatch = text.match(/MESSAGE:\s*(.+?)(?:\n|$)/i);
+    if (!messageMatch) return null;
+    const message = messageMatch[1].trim();
+
+    // Extract proposal if proposing
+    if (action === 'propose') {
+      const proposalMatch = text.match(/PROPOSAL:\s*books=(\d+),hats=(\d+),balls=(\d+)\s+for you\s*\|\s*books=(\d+),hats=(\d+),balls=(\d+)\s+for them/i);
+      if (!proposalMatch) return null;
+
+      const myShare: ResourcePool = {
+        books: parseInt(proposalMatch[1]),
+        hats: parseInt(proposalMatch[2]),
+        balls: parseInt(proposalMatch[3]),
+      };
+
+      const theirShare: ResourcePool = {
+        books: parseInt(proposalMatch[4]),
+        hats: parseInt(proposalMatch[5]),
+        balls: parseInt(proposalMatch[6]),
+      };
+
+      // Validate proposal
+      const validation = validateProposal(myShare, theirShare, match.resourcePool);
+      if (!validation.valid) {
+        console.warn("[parseNegotiationResponse] Invalid proposal from LLM:", validation.error);
+        return null;
+      }
+
+      return { action, message, proposal: { myShare, theirShare } };
+    }
+
+    return { action, message };
+  } catch (error) {
+    console.error("[parseNegotiationResponse] Parse error:", error);
+    return null;
+  }
+}
+
+/**
+ * Fallback heuristic strategy (original simple logic)
+ */
+function generateHeuristicAction(match: NegotiationMatch): { action: NegotiationAction; message: string; proposal?: { myShare: ResourcePool; theirShare: ResourcePool } } {
   const roundNumber = match.rounds.length + 1;
   const hasProposal = !!match.currentProposal;
 
