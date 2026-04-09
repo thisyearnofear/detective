@@ -107,7 +107,7 @@ export function getClientIp(headers: Headers): string {
  */
 export const RATE_LIMITS = {
   // Public endpoints - stricter limits
-  "api:game:status": { limit: 30, window: 60 },     // 30 req/min - polling
+  "api:game:status": { limit: 60, window: 60 },     // 60 req/min - polling
   "api:leaderboard": { limit: 10, window: 60 },   // 10 req/min
   "api:profiles:random": { limit: 5, window: 60 }, // 5 req/min
   

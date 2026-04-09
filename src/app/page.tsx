@@ -60,8 +60,8 @@ export default function Home() {
       : getApiUrl("/api/game/status"),
     fetcher,
     {
-      refreshInterval: 1000,
-      dedupingInterval: 1000, // Prevent duplicate requests within 1s window
+      refreshInterval: 3000,
+      dedupingInterval: 3000, // Prevent duplicate requests within 3s window
       keepPreviousData: true,
       revalidateOnFocus: true,
     },
