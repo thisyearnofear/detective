@@ -37,7 +37,23 @@ yarn-error.log*
 *.swp
 *.swo
 
+# AI Assistants
+.qwen/
+.cursor/
+.windsurf/
+.bolt/
+.v0/
+.cascade/
+.orchids/
+.zencoder/
+.zenflow/
+.junie/
+.qoder/
+.blackboxcli/
+.aider/
+.continue/
+.cline/
+
 # Archived files
 /archived
 .env.local
-.blackboxcli/
