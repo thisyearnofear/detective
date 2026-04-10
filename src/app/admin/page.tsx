@@ -169,12 +169,15 @@ export default function AdminPage() {
 
   // Poll admin data every 2 seconds for responsive updates
   const { data: adminData, mutate } = useSWR<AdminStateResponse>(
-    getApiUrl("/api/admin/state"),
+    // Only fetch if we have a secret (don't try without auth)
+    adminSecret ? getApiUrl("/api/admin/state") : null,
     async (url: string) => {
       const response = await fetch(url, { headers: getAuthHeaders() });
       if (response.status === 401) {
         // Show secret prompt if unauthorized
         setAuthError("Invalid password. Please try again.");
+        setAdminSecret(""); // Clear invalid secret
+        sessionStorage.removeItem("admin_secret");
         setShowSecretPrompt(true);
         throw new Error("Unauthorized - admin access required");
       }
@@ -187,8 +190,9 @@ export default function AdminPage() {
     },
     {
       refreshInterval: adminSecret ? 1000 : 0, // Only poll if authenticated
-      revalidateOnFocus: true,
+      revalidateOnFocus: !!adminSecret,
       dedupingInterval: 500,
+      shouldRetryOnError: false, // Don't retry 401 errors
     },
   );
 
@@ -477,7 +481,27 @@ export default function AdminPage() {
               Game State
             </h2>
 
-            {adminData?.gameState && (
+            {!adminSecret ? (
+              <div className="bg-white/5 border border-white/10 rounded-xl p-8 text-center">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-900/30 border border-blue-500/30 flex items-center justify-center">
+                  <span className="text-3xl">🔐</span>
+                </div>
+                <p className="text-white/60 mb-4">
+                  Please enter the admin password to access system controls
+                </p>
+                <button
+                  onClick={() => setShowSecretPrompt(true)}
+                  className="px-6 py-3 bg-blue-600/30 border border-blue-500/50 rounded-lg text-sm font-medium text-blue-200 hover:bg-blue-600/50 transition-all"
+                >
+                  Enter Password
+                </button>
+              </div>
+            ) : !adminData?.gameState ? (
+              <div className="bg-white/5 border border-white/10 rounded-xl p-8 text-center">
+                <div className="animate-spin w-8 h-8 mx-auto mb-4 border-2 border-white/20 border-t-white/80 rounded-full"></div>
+                <p className="text-white/60">Loading admin data...</p>
+              </div>
+            ) : adminData?.gameState && (
               <div className="space-y-6">
                 <div className="bg-white/5 border border-white/10 rounded-xl p-3 sm:p-6">
                   <div className="grid grid-cols-2 gap-3 sm:gap-6 text-xs sm:text-sm">
