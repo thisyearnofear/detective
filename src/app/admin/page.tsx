@@ -135,12 +135,17 @@ export default function AdminPage() {
   // Admin secret for Bearer token auth (optional, stored in sessionStorage)
   const [adminSecret, setAdminSecret] = useState<string>("");
   const [showSecretPrompt, setShowSecretPrompt] = useState(false);
+  const [tempSecret, setTempSecret] = useState<string>("");
+  const [authError, setAuthError] = useState<string>("");
 
   // Load admin secret from sessionStorage on mount
   useEffect(() => {
     const stored = sessionStorage.getItem("admin_secret");
     if (stored) {
       setAdminSecret(stored);
+    } else {
+      // Show prompt on first load if no secret stored
+      setShowSecretPrompt(true);
     }
   }, []);
 
@@ -169,18 +174,21 @@ export default function AdminPage() {
       const response = await fetch(url, { headers: getAuthHeaders() });
       if (response.status === 401) {
         // Show secret prompt if unauthorized
+        setAuthError("Invalid password. Please try again.");
         setShowSecretPrompt(true);
         throw new Error("Unauthorized - admin access required");
       }
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
+      // Clear auth error on success
+      setAuthError("");
       return response.json();
     },
     {
-      refreshInterval: 1000,
+      refreshInterval: adminSecret ? 1000 : 0, // Only poll if authenticated
       revalidateOnFocus: true,
-      dedupingInterval: 500, // Allow rapid revalidation
+      dedupingInterval: 500,
     },
   );
 
@@ -333,7 +341,7 @@ export default function AdminPage() {
   return (
     <main className="min-h-screen flex items-center justify-center relative overflow-hidden">
       {/* Admin Secret Prompt Modal */}
-      {showSecretPrompt && !adminSecret && (
+      {showSecretPrompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div className="relative bg-gray-900/95 border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl backdrop-blur-md">
@@ -343,28 +351,40 @@ export default function AdminPage() {
               </div>
             </div>
             <h3 className="text-xl font-light text-white/90 text-center mb-2">
-              Admin Authentication
+              Admin Authentication Required
             </h3>
             <p className="text-sm text-white/60 text-center mb-6">
-              Enter admin secret or log in with your Farcaster account (FID {5254})
+              Enter the admin password to access system controls
             </p>
+            {authError && (
+              <div className="mb-4 p-3 bg-red-900/30 border border-red-500/50 rounded-lg">
+                <p className="text-sm text-red-200 text-center">{authError}</p>
+              </div>
+            )}
             <input
               type="password"
-              placeholder="Admin secret (optional)"
-              value={adminSecret}
-              onChange={(e) => setAdminSecret(e.target.value)}
+              placeholder="Enter admin password"
+              value={tempSecret}
+              onChange={(e) => {
+                setTempSecret(e.target.value);
+                setAuthError(""); // Clear error when typing
+              }}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && adminSecret) {
+                if (e.key === "Enter" && tempSecret) {
+                  setAdminSecret(tempSecret);
                   setShowSecretPrompt(false);
+                  setTempSecret("");
                   forceRefresh();
                 }
               }}
+              autoFocus
               className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-white/30 mb-4"
             />
             <div className="flex gap-3">
               <button
                 onClick={() => {
                   setShowSecretPrompt(false);
+                  setTempSecret("");
                   router.push("/");
                 }}
                 className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition-all"
@@ -373,17 +393,21 @@ export default function AdminPage() {
               </button>
               <button
                 onClick={() => {
-                  setShowSecretPrompt(false);
-                  forceRefresh();
+                  if (tempSecret) {
+                    setAdminSecret(tempSecret);
+                    setShowSecretPrompt(false);
+                    setTempSecret("");
+                    forceRefresh();
+                  }
                 }}
-                disabled={!adminSecret}
+                disabled={!tempSecret}
                 className="flex-1 px-4 py-3 bg-blue-600/30 border border-blue-500/50 rounded-lg text-sm font-medium text-blue-200 hover:bg-blue-600/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Continue
+                Unlock
               </button>
             </div>
             <p className="text-xs text-white/40 text-center mt-4">
-              Secret is stored in sessionStorage only
+              Password is stored in your browser session only
             </p>
           </div>
         </div>
@@ -408,12 +432,26 @@ export default function AdminPage() {
           <p className="text-sm text-white/60 mb-4 sm:mb-6">
             Game testing and administrative functions
           </p>
-          <button
-            onClick={() => router.push("/")}
-            className="inline-flex items-center px-4 py-2 text-xs bg-white/5 border border-white/10 text-white/70 rounded-lg hover:bg-white/10 hover:text-white transition-all"
-          >
-            ← Return to Game
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => router.push("/")}
+              className="inline-flex items-center px-4 py-2 text-xs bg-white/5 border border-white/10 text-white/70 rounded-lg hover:bg-white/10 hover:text-white transition-all"
+            >
+              ← Return to Game
+            </button>
+            {adminSecret && (
+              <button
+                onClick={() => {
+                  setAdminSecret("");
+                  sessionStorage.removeItem("admin_secret");
+                  setShowSecretPrompt(true);
+                }}
+                className="inline-flex items-center px-4 py-2 text-xs bg-white/5 border border-white/10 text-white/70 rounded-lg hover:bg-white/10 hover:text-white transition-all"
+              >
+                🔐 Change Password
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Message - Clean styling */}
