@@ -189,7 +189,7 @@ export default function AdminPage() {
       return response.json();
     },
     {
-      refreshInterval: adminSecret ? 1000 : 0, // Only poll if authenticated
+      refreshInterval: adminSecret ? 5000 : 0, // Poll every 5 seconds when authenticated
       revalidateOnFocus: !!adminSecret,
       dedupingInterval: 500,
       shouldRetryOnError: false, // Don't retry 401 errors

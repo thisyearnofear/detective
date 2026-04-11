@@ -4,6 +4,7 @@ import { gameManager } from "@/lib/gameState";
 import { getFarcasterUserData } from "@/lib/neynar";
 import { verifyArbitrumTx, getArbitrumConfig } from "@/lib/arbitrumVerification";
 import { db } from "@/lib/database";
+import { invalidateGameState } from "@/lib/performanceCache";
 
 /**
  * API route to register a user for the current game cycle.
@@ -192,6 +193,9 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
+
+    // Invalidate game state cache after successful registration
+    invalidateGameState();
 
     return NextResponse.json({
       success: true,

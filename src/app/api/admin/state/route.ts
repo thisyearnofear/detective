@@ -8,6 +8,12 @@ import {
   isStorageTrackingEnabled,
 } from "@/lib/storageTracking";
 import { isAdminRequest } from "@/lib/adminAuth";
+import {
+  getAdminCache,
+  setAdminCache,
+  invalidateAdminCache,
+  isCacheFresh,
+} from "@/lib/adminCache";
 import type {
   AdminStateRequestBody,
   AdminStateResponse,
@@ -17,6 +23,7 @@ import type {
 /**
  * GET /api/admin/state
  * Returns current game state, players, bots, and configuration
+ * Uses server-side cache to reduce Redis REST API calls
  */
 export async function GET(request: NextRequest) {
   if (!(await isAdminRequest(request))) {
@@ -24,6 +31,22 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const now = Date.now();
+    
+    // Return cached data if fresh
+    const cache = getAdminCache();
+    if (cache && isCacheFresh()) {
+      return NextResponse.json({
+        ...cache.data,
+        system: {
+          ...cache.data.system,
+          timestamp: now,
+          cached: true,
+        },
+      });
+    }
+
+    // Fetch fresh data
     const { gameManager } = await import("@/lib/gameState");
     const [gameState, players, bots, matches] = await Promise.all([
       gameManager.getGameState(),
@@ -51,9 +74,13 @@ export async function GET(request: NextRequest) {
       storage: storageStats,
       system: {
         storachaEnabled: isStorageTrackingEnabled(),
-        timestamp: Date.now(),
+        timestamp: now,
+        cached: false,
       },
     };
+
+    // Update cache
+    setAdminCache(response);
 
     return NextResponse.json(response);
   } catch (error) {
@@ -68,6 +95,7 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/admin/state
  * Actions: transition, reset, update-config
+ * Invalidates cache on mutations
  */
 export async function POST(request: NextRequest) {
   if (!(await isAdminRequest(request))) {
@@ -90,6 +118,9 @@ export async function POST(request: NextRequest) {
         }
 
         await gameManager.forceStateTransition(newState);
+        
+        // Invalidate cache
+        invalidateAdminCache();
 
         return NextResponse.json({
           success: true,
@@ -99,6 +130,10 @@ export async function POST(request: NextRequest) {
 
       case "reset": {
         await gameManager.resetGame();
+        
+        // Invalidate cache
+        invalidateAdminCache();
+        
         return NextResponse.json({
           success: true,
           message: "Game state reset",
@@ -114,6 +149,9 @@ export async function POST(request: NextRequest) {
         }
 
         await gameManager.updateConfig(config as Partial<GameConfig>);
+        
+        // Invalidate cache
+        invalidateAdminCache();
 
         return NextResponse.json({
           success: true,

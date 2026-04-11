@@ -4,12 +4,15 @@
  * 
  * Applies rate limiting for unauthenticated requests to prevent abuse.
  * Authenticated users bypass rate limits.
+ * 
+ * PERFORMANCE: Server-side caching reduces Redis calls
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
 import { checkRateLimit, getClientIp, getRateLimitConfig } from "@/lib/rateLimit";
 import { withRetry, RETRY_PRESETS } from "@/lib/retry";
+import { getCached, CACHE_TTL } from "@/lib/performanceCache";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +25,7 @@ interface GameStatusResponse {
   minPlayers: number;
   maxPlayers: number;
   mode: string; // Current game mode
+  isRegistered?: boolean;
 }
 
 /**
@@ -57,21 +61,42 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Poll with retry for upstream dependencies
+  // Extract FID from query params for registration check
+  const { searchParams } = new URL(request.url);
+  const fidParam = searchParams.get("fid");
+  const fid = fidParam ? parseInt(fidParam, 10) : null;
+
+  // Poll with retry for upstream dependencies + caching
   try {
-    const gameState = await withRetry(() => gameManager.getGameState(), RETRY_PRESETS.fast);
-    const config = await gameManager.getConfig();
+    // Use cache key that includes FID if present (for isRegistered check)
+    const cacheKey = fid ? `game:status:${fid}` : "game:status";
     
-    const response: GameStatusResponse = {
-      state: gameState?.state || "REGISTRATION",
-      cycleId: gameState?.cycleId || "unknown",
-      playerCount: gameState?.playerCount || 0,
-      registrationEnds: gameState?.registrationEnds,
-      gameEnds: gameState?.gameEnds,
-      minPlayers: 1,
-      maxPlayers: 100,
-      mode: config?.mode || 'conversation',
-    };
+    const response = await getCached<GameStatusResponse>(
+      cacheKey,
+      async () => {
+        const gameState = await withRetry(() => gameManager.getGameState(), RETRY_PRESETS.fast);
+        const config = await gameManager.getConfig();
+        
+        // Check registration status if FID provided
+        let isRegistered = false;
+        if (fid && !isNaN(fid)) {
+          isRegistered = await gameManager.isPlayerRegistered(fid);
+        }
+        
+        return {
+          state: gameState?.state || "REGISTRATION",
+          cycleId: gameState?.cycleId || "unknown",
+          playerCount: gameState?.playerCount || 0,
+          registrationEnds: gameState?.registrationEnds,
+          gameEnds: gameState?.gameEnds,
+          minPlayers: 1,
+          maxPlayers: 100,
+          mode: config?.mode || 'conversation',
+          isRegistered: fid ? isRegistered : undefined,
+        };
+      },
+      CACHE_TTL.GAME_STATE
+    );
 
     return NextResponse.json(response);
   } catch (error) {

@@ -45,8 +45,8 @@ export default function MultiNegotiationContainer({ fid, onGameFinishAction }: P
     getApiUrl(`/api/match/active?fid=${fid}`),
     fetcherWithGameNotLive,
     {
-      refreshInterval: 1000,
-      dedupingInterval: 1000,
+      refreshInterval: 2000, // Reduced from 1s to 2s - still responsive
+      dedupingInterval: 2000, // Match refresh interval
       refreshWhenHidden: true,
       revalidateOnFocus: true,
       keepPreviousData: true,

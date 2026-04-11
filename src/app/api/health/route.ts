@@ -5,6 +5,7 @@
  * Checks:
  * - Redis connectivity
  * - Database connectivity
+ * - Cache performance
  * - Application state
  * 
  * Returns:
@@ -14,6 +15,7 @@
 
 import { NextResponse } from "next/server";
 import { redis } from "@/lib/redis";
+import { perfCache } from "@/lib/performanceCache";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +27,10 @@ interface HealthStatus {
       status: "ok" | "error";
       latencyMs?: number;
       error?: string;
+    };
+    cache: {
+      status: "ok";
+      size: number;
     };
   };
   application: {
@@ -41,6 +47,7 @@ export async function GET() {
     timestamp: new Date().toISOString(),
     services: {
       redis: { status: "ok" },
+      cache: { status: "ok", size: 0 },
     },
     application: {
       uptime: process.uptime?.() || 0,
@@ -58,6 +65,10 @@ export async function GET() {
     health.services.redis.error = error instanceof Error ? error.message : "Unknown error";
     health.status = "unhealthy";
   }
+
+  // Check Cache
+  const cacheStats = perfCache.getStats();
+  health.services.cache.size = cacheStats.size;
 
   const totalLatency = Date.now() - startTime;
   

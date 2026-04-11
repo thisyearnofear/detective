@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
 import { NextRequest } from "next/server";
+import { invalidateMatchData } from "@/lib/performanceCache";
 
 /**
  * API route to update the vote for a specific match.
@@ -64,12 +65,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Invalidate match cache
+    invalidateMatchData(matchId);
+
     // Check if we should auto-lock (time is up)
     const now = Date.now();
     let isCorrect = null;
 
     if (now >= updatedMatch.endTime && !updatedMatch.voteLocked) {
       isCorrect = await gameManager.lockMatchVote(matchId);
+      // Invalidate again after locking
+      invalidateMatchData(matchId);
     }
 
     return NextResponse.json({
@@ -164,6 +170,9 @@ export async function PUT(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Invalidate match cache after locking
+    invalidateMatchData(matchId);
 
     return NextResponse.json({
       success: true,

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
 import { getFarcasterUserDataByUsername } from "@/lib/neynar";
 import { isAdminRequest } from "@/lib/adminAuth";
+import { invalidateAdminCache } from "@/lib/adminCache";
 import type {
   AdminBulkRegisterResponse,
   AdminBulkRegisterResult,
@@ -120,6 +121,11 @@ export async function POST(request: NextRequest) {
 
     const registered = results.filter((r) => r.success).length;
     const failed = results.length - registered;
+
+    // Invalidate admin cache if any users were registered
+    if (registered > 0) {
+      invalidateAdminCache();
+    }
 
     const response: AdminBulkRegisterResponse = {
       success: true,
