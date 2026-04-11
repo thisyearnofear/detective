@@ -47,15 +47,61 @@ export function getArbitrumConfig(): ArbitrumConfig {
 
 let arbitrumClient: ReturnType<typeof createPublicClient> | null = null;
 
+// Multiple RPC endpoints for fallback
+const RPC_ENDPOINTS = [
+  'https://arb1.arbitrum.io/rpc',
+  'https://arbitrum.llamarpc.com',
+  'https://arbitrum-one.publicnode.com',
+];
+
 function getArbitrumClient() {
   if (!arbitrumClient) {
     const config = getArbitrumConfig();
+    
+    // Use configured RPC or fallback to first endpoint
+    const rpcUrl = config.rpcUrl || RPC_ENDPOINTS[0];
+    
     arbitrumClient = createPublicClient({
       chain: arbitrum,
-      transport: http(config.rpcUrl),
+      transport: http(rpcUrl, {
+        timeout: 10000, // 10 second timeout
+        retryCount: 3,
+        retryDelay: 1000,
+      }),
     });
   }
   return arbitrumClient;
+}
+
+/**
+ * Get client with fallback RPC support
+ * Tries multiple RPC endpoints if the primary fails
+ */
+async function getClientWithFallback() {
+  const config = getArbitrumConfig();
+  const endpoints = [config.rpcUrl, ...RPC_ENDPOINTS].filter(Boolean);
+  
+  for (const rpcUrl of endpoints) {
+    try {
+      const client = createPublicClient({
+        chain: arbitrum,
+        transport: http(rpcUrl, {
+          timeout: 5000,
+          retryCount: 1,
+        }),
+      });
+      
+      // Test the connection
+      await client.getBlockNumber();
+      return client;
+    } catch (error) {
+      console.warn(`[ArbitrumVerification] RPC ${rpcUrl} failed, trying next...`);
+      continue;
+    }
+  }
+  
+  // If all fail, return default client
+  return getArbitrumClient();
 }
 
 /**
@@ -72,7 +118,7 @@ export async function isWalletRegisteredOnChain(walletAddress: string): Promise<
   }
 
   try {
-    const client = getArbitrumClient();
+    const client = await getClientWithFallback();
     
     // isWalletRegistered(address) selector: 0x7f247e49
     const selector = '0x7f247e49';
@@ -90,6 +136,7 @@ export async function isWalletRegisteredOnChain(walletAddress: string): Promise<
     return isRegistered;
   } catch (error) {
     console.error('[ArbitrumVerification] Failed to check wallet registration:', error);
+    // Return false on error to allow registration to proceed
     return false;
   }
 }
@@ -223,7 +270,7 @@ export async function verifyArbitrumTx(
     }
     console.log('[ArbitrumVerification] ✓ FID valid');
     
-    const client = getArbitrumClient();
+    const client = await getClientWithFallback();
     console.log('[ArbitrumVerification] Fetching TX from chain...');
     
     // Fetch TX from Arbitrum RPC
