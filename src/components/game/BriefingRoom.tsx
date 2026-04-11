@@ -47,7 +47,8 @@ export default function BriefingRoom({
   const flow = useRegistrationFlow();
 
   // Use provided gameState - no duplicate fetching
-  const registeredPlayers = (gameState?.players || []) as Player[];
+  // Use playerCount from gameState (from /api/game/status) since players array may not be available
+  const playerCount = gameState?.playerCount || 0;
   const maxPlayers = GAME_CONSTANTS.MAX_PLAYERS;
 
   // Sync with server state — only allow server to SET registered, never unset a local true
@@ -216,18 +217,18 @@ export default function BriefingRoom({
   };
 
   // Calculate helper variables
-  const spotsLeft = maxPlayers - registeredPlayers.length;
+  const spotsLeft = maxPlayers - playerCount;
   const isFull = spotsLeft === 0;
-  const hasMinPlayers = registeredPlayers.length >= GAME_CONSTANTS.MIN_PLAYERS;
+  const hasMinPlayers = playerCount >= GAME_CONSTANTS.MIN_PLAYERS;
   const countdownActive = hasMinPlayers && timeLeft < 999999999; // Countdown started
 
   // Estimate wait time based on registration rate
   const estimatedWaitMinutes = useMemo(() => {
     if (hasMinPlayers) return 0; // Game starting soon
-    const playersNeeded = GAME_CONSTANTS.MIN_PLAYERS - registeredPlayers.length;
+    const playersNeeded = GAME_CONSTANTS.MIN_PLAYERS - playerCount;
     // Assume ~2 players join per minute (conservative estimate)
     return Math.ceil(playersNeeded / 2);
-  }, [hasMinPlayers, registeredPlayers.length]);
+  }, [hasMinPlayers, playerCount]);
 
   const formatTimeLeft = (ms: number) => {
     const seconds = Math.floor(ms / 1000);
@@ -269,14 +270,14 @@ export default function BriefingRoom({
             Detectives Registered
           </span>
           <span className="text-xs md:text-sm font-bold text-blue-400">
-            {registeredPlayers.length}/{maxPlayers}
+            {playerCount}/{maxPlayers}
           </span>
         </div>
         <div className="w-full bg-slate-700/50 h-2 md:h-3 rounded-full overflow-hidden">
           <div
             className="h-full bg-gradient-to-r from-blue-500 to-purple-600 transition-all duration-500 ease-out"
             style={{
-              width: `${(registeredPlayers.length / maxPlayers) * 100}%`,
+              width: `${(playerCount / maxPlayers) * 100}%`,
             }}
           />
         </div>
@@ -289,7 +290,7 @@ export default function BriefingRoom({
             Waiting for Detectives
           </span>
           <div className="text-2xl md:text-3xl font-bold text-white mt-2">
-            {GAME_CONSTANTS.MIN_PLAYERS - registeredPlayers.length} more needed
+            {GAME_CONSTANTS.MIN_PLAYERS - playerCount} more needed
           </div>
           <p className="text-xs text-gray-500 mt-2">
             Investigation starts when {GAME_CONSTANTS.MIN_PLAYERS}+ detectives
@@ -317,7 +318,7 @@ export default function BriefingRoom({
             Ready to Start
           </span>
           <div className="text-2xl md:text-3xl font-bold text-green-400 mt-2">
-            ✓ {registeredPlayers.length} Detectives
+            ✓ {playerCount} Detectives
           </div>
           <p className="text-xs text-gray-500 mt-2">
             Waiting for all detectives to ready up
@@ -325,14 +326,14 @@ export default function BriefingRoom({
         </div>
       )}
 
-      {/* Registered Players List */}
-      {registeredPlayers.length > 0 && (
+      {/* Registered Players List - Only show if players array is available */}
+      {gameState?.players && gameState.players.length > 0 && (
         <div className="bg-slate-900/50 border border-white/10 rounded-xl p-4 md:p-6 backdrop-blur-sm">
           <h3 className="font-bold text-white mb-4 text-sm md:text-base">
             Registered Detectives
           </h3>
           <div className="space-y-2">
-            {registeredPlayers.map((detective: Player) => (
+            {gameState.players.map((detective: Player) => (
               <div
                 key={detective.fid}
                 className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700/50 hover:border-slate-600/50 transition-colors"
@@ -395,7 +396,7 @@ export default function BriefingRoom({
             ✅ You're registered!
           </div>
 
-          {registeredPlayers.length >= 4 && gameState?.players && (
+          {playerCount >= 4 && gameState?.players && (
             <div className="animate-fade-in">
               {gameState.players.find(
                 (p: Player) => p.fid === currentPlayer.fid,
