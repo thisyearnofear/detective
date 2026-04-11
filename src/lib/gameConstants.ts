@@ -51,6 +51,25 @@ export const GAME_CONSTANTS = {
       paymentAddress: process.env.X402_PAYMENT_ADDRESS as `0x${string}` | undefined,
       network: "eip155:42161", // CAIP-2 identifier for Arbitrum One
     },
+
+    // Multi-chain payment providers for agent API access
+    PAYMENT_PROVIDERS: {
+      TEMPO_MPP: {
+        enabled: process.env.MPP_ENABLED === 'true',
+        chain: 'tempo' as const,
+        currency: 'pathUSD' as const,
+        walletAddress: process.env.MPP_WALLET_ADDRESS || '',
+        rpcUrl: process.env.TEMPO_RPC_URL || 'https://rpc.tempo.xyz',
+      },
+      STELLAR_MPP: {
+        enabled: process.env.STELLAR_MPP_ENABLED === 'true',
+        chain: 'stellar' as const,
+        currency: 'USDC' as const,
+        walletAddress: process.env.STELLAR_WALLET_ADDRESS || '',
+        horizonUrl: process.env.STELLAR_HORIZON_URL || 'https://horizon.stellar.org',
+        network: (process.env.STELLAR_NETWORK || 'PUBLIC') as 'PUBLIC' | 'TESTNET',
+      },
+    },
   },
 } as const;
 

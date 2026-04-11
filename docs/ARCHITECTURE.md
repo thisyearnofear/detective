@@ -238,17 +238,25 @@ WORLD_RP_SIGNING_KEY=0x...
 
 ### Phase 7: Machine Payments Protocol (MPP)
 
-Agent-to-agent micropayments via Tempo blockchain (pathUSD/USDC). Built on HTTP 402 standard.
+Agent-to-agent micropayments via Tempo or Stellar blockchains. Built on HTTP 402 standard.
 
-**Flow**: Agent requests resource → `402 Payment Required` + `WWW-Authenticate` header → mppx CLI signs payment credential → retries with `Authorization: Payment` → server verifies on Tempo → returns resource with `Payment-Receipt` header.
+**Supported Payment Providers**:
+- **Tempo**: pathUSD/USDC, sub-millidollar fees, optimized for machine payments
+- **Stellar**: USDC, fast settlement (~5s), ultra-low fees (~$0.00001), native stablecoin support
 
-**Implementation**: `src/lib/mpp.ts` (middleware `requireMPPPayment()`, `verifyTempoPayment()` via Tempo RPC). MPP-enabled endpoints: `POST /api/agent/negotiate`.
+**Flow**: Agent requests resource → `402 Payment Required` with provider options → Agent pays via Tempo (mppx) or Stellar (stellar-sdk) → Retries with payment credential → Server verifies on blockchain → Returns resource with receipt.
+
+**Implementation**: `src/lib/mpp.ts` (unified interface), `src/lib/stellar.ts` (Stellar verifier), middleware `requireMPPPayment()`. MPP-enabled endpoints: `POST /api/agent/negotiate`.
 
 **Pricing**: Negotiation $0.10, Conversation $0.05, Data export $0.50, Match history $0.25.
 
-**Config**: `MPP_ENABLED=true`, `MPP_WALLET_ADDRESS=0x...`, `TEMPO_RPC_URL=https://rpc.tempo.xyz`. Dev mode (`NODE_ENV=development`) skips blockchain verification.
+**Config**: 
+- Tempo: `MPP_ENABLED=true`, `MPP_WALLET_ADDRESS=0x...`, `TEMPO_RPC_URL=https://rpc.tempo.xyz`
+- Stellar: `STELLAR_MPP_ENABLED=true`, `STELLAR_WALLET_ADDRESS=G...`, `STELLAR_HORIZON_URL=https://horizon-testnet.stellar.org`, `STELLAR_NETWORK=TESTNET`
 
-**Testing**: `./scripts/test-mpp.sh` or `npx mppx <url> --method POST -J '{"data":"..."}'`. Hackathon participants get $20 Tempo credit.
+Dev mode (`NODE_ENV=development`) skips blockchain verification for both providers.
+
+**Testing**: `./scripts/test-mpp.sh` (Tempo) or `./scripts/test-stellar-mpp.sh` (Stellar). Hackathon participants: Optimization Arena has $20 Tempo credit, Stellar Hackathon uses testnet USDC.
 
 ## Key Design Decisions
 

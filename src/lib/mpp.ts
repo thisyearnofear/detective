@@ -11,13 +11,17 @@
  * 2. Pay-per-request agent API access
  * 3. Micropayments for research data exports
  * 
- * Uses Tempo blockchain (pathUSD/USDC) with sub-millidollar fees
+ * Supports multiple payment providers:
+ * - Tempo blockchain (pathUSD/USDC) with sub-millidollar fees
+ * - Stellar blockchain (USDC) with fast settlement and low costs
  * 
  * MPP Flow:
  * 1. Client requests resource → Server returns 402 with payment challenge
- * 2. Client fulfills payment (via mppx CLI) → Retries with payment credential
+ * 2. Client fulfills payment (via mppx CLI or Stellar SDK) → Retries with payment credential
  * 3. Server verifies payment → Returns resource with receipt
  */
+
+import { verifyStellarPayment, isStellarEnabled, createStellarChallenge } from './stellar';
 
 // MPP Configuration
 export const MPP_CONFIG = {
@@ -54,13 +58,15 @@ export interface PaymentCredential {
   timestamp: number;
   signature?: string;
   from?: string;
+  provider?: 'tempo' | 'stellar'; // Payment provider hint
 }
 
 /**
  * Check if MPP is enabled and configured
+ * Returns true if ANY payment provider is enabled
  */
 export function isMPPEnabled(): boolean {
-  return MPP_CONFIG.enabled && !!MPP_CONFIG.walletAddress;
+  return (MPP_CONFIG.enabled && !!MPP_CONFIG.walletAddress) || isStellarEnabled();
 }
 
 /**
@@ -68,6 +74,8 @@ export function isMPPEnabled(): boolean {
  * 
  * Returns a 402 Payment Required response with WWW-Authenticate header
  * following the MPP protocol specification
+ * 
+ * Supports multiple payment providers (Tempo and Stellar)
  */
 export function createPaymentChallenge(
   request: Request,
@@ -75,34 +83,68 @@ export function createPaymentChallenge(
 ): Response {
   const amount = MPP_PRICING[service];
   
+  // Collect available payment providers
+  const providers = [];
+  
+  if (MPP_CONFIG.enabled && MPP_CONFIG.walletAddress) {
+    providers.push({
+      chain: MPP_CONFIG.chain,
+      currency: MPP_CONFIG.currency,
+      recipient: MPP_CONFIG.walletAddress,
+      rpcUrl: MPP_CONFIG.rpcUrl,
+    });
+  }
+  
+  if (isStellarEnabled()) {
+    providers.push(createStellarChallenge(amount, service));
+  }
+
+  // If no providers enabled, return error
+  if (providers.length === 0) {
+    return new Response(
+      JSON.stringify({
+        error: 'Payment system not configured',
+        message: 'No payment providers are currently enabled',
+      }),
+      {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  }
+
   // MPP challenge format
   const challenge = {
     amount,
-    currency: MPP_CONFIG.currency,
-    recipient: MPP_CONFIG.walletAddress,
-    chain: MPP_CONFIG.chain,
     service,
     timestamp: Date.now(),
+    providers,
   };
 
   // WWW-Authenticate header format per MPP spec
+  const providerChains = providers.map(p => p.chain).join(',');
   const authenticateHeader = [
     `Payment`,
     `amount="${amount}"`,
-    `currency="${MPP_CONFIG.currency}"`,
-    `recipient="${MPP_CONFIG.walletAddress}"`,
-    `chain="${MPP_CONFIG.chain}"`,
+    `providers="${providerChains}"`,
   ].join(' ');
 
   return new Response(
     JSON.stringify({
       error: 'Payment required',
-      message: `This endpoint requires payment of ${amount} ${MPP_CONFIG.currency} via MPP`,
+      message: `This endpoint requires payment of ${amount} USD via MPP`,
       challenge,
       instructions: {
-        cli: `npx mppx ${request.url} --method ${request.method}`,
-        setup: 'npx mppx account create',
-        tempo_credit: 'Optimization Arena participants have $20 Tempo credit',
+        tempo: providers.find(p => p.chain === 'tempo') ? {
+          cli: `npx mppx ${request.url} --method ${request.method}`,
+          setup: 'npx mppx account create',
+          credit: 'Optimization Arena participants have $20 Tempo credit',
+        } : undefined,
+        stellar: providers.find(p => p.chain === 'stellar') ? {
+          setup: 'Create Stellar wallet and fund with USDC',
+          sdk: 'Use stellar-mpp-sdk or Freighter wallet',
+          docs: 'https://developers.stellar.org/docs',
+        } : undefined,
         docs: 'https://mpp.dev/overview',
       },
     }),
@@ -174,8 +216,22 @@ export async function requireMPPPayment(
     const credential = parsePaymentCredential(authHeader);
     const amount = MPP_PRICING[service];
     
-    // Verify payment on Tempo blockchain
-    const verification = await verifyTempoPayment(credential, amount);
+    // Detect payment provider and route to appropriate verifier
+    let verification;
+    
+    if (credential.provider === 'stellar' || (isStellarEnabled() && !credential.provider)) {
+      // Try Stellar verification first if enabled
+      verification = await verifyStellarPayment(credential, amount);
+      
+      // If Stellar fails and Tempo is also enabled, try Tempo as fallback
+      if (!verification.valid && MPP_CONFIG.enabled && MPP_CONFIG.walletAddress) {
+        console.log('[MPP] Stellar verification failed, trying Tempo fallback');
+        verification = await verifyTempoPayment(credential, amount);
+      }
+    } else {
+      // Default to Tempo verification
+      verification = await verifyTempoPayment(credential, amount);
+    }
     
     if (!verification.valid) {
       return {
@@ -198,11 +254,14 @@ export async function requireMPPPayment(
     const receipt = {
       paymentId: verification.paymentId!,
       amount,
-      currency: MPP_CONFIG.currency,
+      currency: credential.provider === 'stellar' ? 'USDC' : MPP_CONFIG.currency,
+      provider: credential.provider || 'tempo',
       service,
       timestamp: Date.now(),
       txHash: credential.txHash,
-      recipient: MPP_CONFIG.walletAddress,
+      recipient: credential.provider === 'stellar' 
+        ? (isStellarEnabled() ? createStellarChallenge(0, '').recipient : '')
+        : MPP_CONFIG.walletAddress,
     };
 
     return {
@@ -235,7 +294,7 @@ export async function requireMPPPayment(
 /**
  * Parse payment credential from Authorization header
  * 
- * Format: "Payment txHash=0x... amount=0.10 timestamp=1234567890 signature=0x..."
+ * Format: "Payment txHash=0x... amount=0.10 timestamp=1234567890 signature=0x... provider=stellar"
  */
 function parsePaymentCredential(authHeader: string): PaymentCredential {
   const parts = authHeader.replace('Payment ', '').split(' ');
@@ -256,6 +315,7 @@ function parsePaymentCredential(authHeader: string): PaymentCredential {
     timestamp: parseInt(credential.timestamp),
     signature: credential.signature,
     from: credential.from,
+    provider: credential.provider as 'tempo' | 'stellar' | undefined,
   };
 }
 
@@ -416,21 +476,47 @@ async function verifyTempoTransaction(
  * Get pricing information for all MPP-enabled services
  */
 export function getMPPPricing() {
+  const providers = [];
+  
+  if (MPP_CONFIG.enabled && MPP_CONFIG.walletAddress) {
+    providers.push({
+      name: 'Tempo MPP',
+      chain: MPP_CONFIG.chain,
+      currency: MPP_CONFIG.currency,
+      walletAddress: MPP_CONFIG.walletAddress,
+      devMode: MPP_CONFIG.devMode,
+    });
+  }
+  
+  if (isStellarEnabled()) {
+    providers.push({
+      name: 'Stellar MPP',
+      chain: 'stellar',
+      currency: 'USDC',
+      walletAddress: createStellarChallenge(0, '').recipient,
+      network: createStellarChallenge(0, '').network,
+    });
+  }
+
   return {
     enabled: isMPPEnabled(),
-    currency: MPP_CONFIG.currency,
-    chain: MPP_CONFIG.chain,
-    walletAddress: MPP_CONFIG.walletAddress,
-    devMode: MPP_CONFIG.devMode,
+    providers,
     services: Object.entries(MPP_PRICING).map(([service, amount]) => ({
       service,
       amount,
       description: service.replace(/_/g, ' ').toLowerCase(),
     })),
     instructions: {
-      setup: 'npx mppx account create',
-      usage: 'npx mppx <endpoint-url> --method POST -J \'{"data":"..."}\'',
-      tempo_credit: 'Optimization Arena participants have $20 Tempo credit',
+      tempo: {
+        setup: 'npx mppx account create',
+        usage: 'npx mppx <endpoint-url> --method POST -J \'{"data":"..."}\'',
+        credit: 'Optimization Arena participants have $20 Tempo credit',
+      },
+      stellar: {
+        setup: 'Create Stellar wallet and fund with USDC',
+        usage: 'Use stellar-mpp-sdk or Freighter wallet to send payment',
+        docs: 'https://developers.stellar.org/docs',
+      },
       docs: 'https://mpp.dev/overview',
     },
   };

@@ -80,15 +80,24 @@ Detective uses a **dual-blockchain payment strategy** optimized for different au
 - On-chain voting and reputation
 - Why: Low fees, established ecosystem, human-friendly UX
 
-**Tempo/MPP** - AI Agents & Researchers
+**Tempo/MPP** - AI Agents & Researchers (Original)
 - Pay-per-request API access
 - Research data exports
 - Premium features
 - Why: Sub-millidollar fees, machine-optimized micropayments
 
+**Stellar/MPP** - AI Agents & Researchers (NEW)
+- Same pricing as Tempo
+- USDC stablecoin payments
+- Fast settlement (~5 seconds)
+- Ultra-low fees (~$0.00001)
+- Why: Native USDC support, strong stablecoin infrastructure, ideal for agent micropayments
+
 This separation provides clear audience segmentation (consumer vs B2B) and optimized UX for each use case.
 
 ### Quick Start for Agents
+
+**Option 1: Tempo (Original)**
 
 ```bash
 # 1. Create Tempo wallet
@@ -103,12 +112,25 @@ npx mppx https://your-instance.com/api/agent/negotiate \
   -J '{"agentId":"your-agent","action":"start"}'
 ```
 
+**Option 2: Stellar (NEW - for Stellar Hackathon)**
+
+```bash
+# 1. Create Stellar wallet (use Freighter or stellar-sdk)
+# 2. Fund wallet with USDC on Stellar testnet/mainnet
+# 3. Send payment transaction to Detective's Stellar wallet
+# 4. Include transaction hash in Authorization header
+
+# Example with stellar-mpp-sdk (experimental):
+# See: https://github.com/stellar/stellar-mpp-sdk
+```
+
 ### How It Works
 
-1. **Agent requests resource** → Server returns `402 Payment Required` with challenge
-2. **mppx CLI handles payment** → Signs credential, retries with payment
-3. **Server verifies on Tempo** → Returns match details with receipt
-4. **Agent plays match** → Submit proposals, accept/reject, negotiate
+1. **Agent requests resource** → Server returns `402 Payment Required` with challenge (Tempo and/or Stellar options)
+2. **Agent chooses provider** → Pays via Tempo (mppx CLI) or Stellar (stellar-sdk/Freighter)
+3. **Agent includes payment proof** → Retries request with payment credential in Authorization header
+4. **Server verifies payment** → Checks transaction on Tempo or Stellar blockchain
+5. **Server returns resource** → Match details with receipt
 
 ### Pricing
 
@@ -125,9 +147,17 @@ npx mppx https://your-instance.com/api/agent/negotiate \
 
 ```bash
 # .env.local
+
+# Tempo MPP (Original)
 MPP_ENABLED=true
 MPP_WALLET_ADDRESS=0xYourTempoWalletAddress
 TEMPO_RPC_URL=https://rpc.tempo.xyz
+
+# Stellar MPP (NEW)
+STELLAR_MPP_ENABLED=true
+STELLAR_WALLET_ADDRESS=GYourStellarWalletAddress
+STELLAR_HORIZON_URL=https://horizon-testnet.stellar.org
+STELLAR_NETWORK=TESTNET
 ```
 
 ### Testing
@@ -143,7 +173,7 @@ curl -X POST https://your-instance.com/api/agent/negotiate \
 # → Returns 402 with payment challenge
 ```
 
-**Docs**: [MPP Protocol](https://mpp.dev/overview) | [Tempo](https://docs.tempo.xyz/) | [mppx CLI](https://www.npmjs.com/package/mppx) | [Smart Contracts](docs/SMART_CONTRACTS.md)
+**Docs**: [MPP Protocol](https://mpp.dev/overview) | [Tempo](https://docs.tempo.xyz/) | [Stellar](https://developers.stellar.org/docs) | [stellar-mpp-sdk](https://github.com/stellar/stellar-mpp-sdk) | [mppx CLI](https://www.npmjs.com/package/mppx) | [Smart Contracts](docs/SMART_CONTRACTS.md)
 
 ## Project Status
 
