@@ -33,8 +33,8 @@ RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$ENDPOINT" \
   -H "Content-Type: application/json" \
   -d "{\"agentId\":\"$AGENT_ID\",\"action\":\"start\"}")
 
-HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n-1)
+HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 
 echo "HTTP Status: $HTTP_CODE"
 echo "Response Body:"
@@ -81,8 +81,8 @@ RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$ENDPOINT" \
   -H "Authorization: $AUTH_HEADER" \
   -d "{\"agentId\":\"$AGENT_ID\",\"action\":\"start\"}")
 
-HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n-1)
+HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 
 echo "HTTP Status: $HTTP_CODE"
 echo "Response Body:"

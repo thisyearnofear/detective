@@ -176,7 +176,7 @@ async function verifyStellarTransaction(
     }
 
     // Fetch operations to verify payment details
-    const opsUrl = tx._links.operations.href;
+    const opsUrl = tx._links.operations.href.replace('{?cursor,limit,order}', '');
     const opsResponse = await fetch(opsUrl, {
       headers: { 'Accept': 'application/json' },
     });
