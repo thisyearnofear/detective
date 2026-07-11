@@ -11,20 +11,25 @@ import {
 } from "./caseRepository";
 import { dbQuery } from "./database";
 import {
+  artefactKindForEvent,
   claimDueOfflineEvents,
+  maybeScheduleOfflineEcho,
 } from "./offlineEvents";
 import type { ChatMessage } from "./types";
 
 /**
- * Deliver due offline follow-ups: generate persona-grounded reply from artefact history.
+ * Deliver due offline events: generate persona-grounded reply from artefact history.
+ * After a follow_up lands, schedules one echo at a longer cadence.
  */
 export async function deliverDueOfflineEvents(): Promise<{
   claimed: number;
   delivered: number;
   errors: number;
+  echoesScheduled: number;
 }> {
   let delivered = 0;
   let errors = 0;
+  let echoesScheduled = 0;
 
   const events = await claimDueOfflineEvents(20);
   const claimed = events.length;
@@ -60,14 +65,17 @@ export async function deliverDueOfflineEvents(): Promise<{
         continue;
       }
 
-      const replyText = await generateBotResponse(bot, messages, event.caseId);
+      const replyText = await generateBotResponse(bot, messages, event.caseId, {
+        offlineKind: event.kind,
+      });
+      const artefactKind = artefactKindForEvent(event.kind);
       const artefactId = `art-offline-${event.id}`;
 
       await dbQuery(
         `INSERT INTO artefacts (id, case_id, kind, author, body, created_at)
-         VALUES ($1, $2, 'offline_follow_up', 'person', $3, NOW())
+         VALUES ($1, $2, $3, 'person', $4, NOW())
          ON CONFLICT (id) DO NOTHING`,
-        [artefactId, event.caseId, replyText],
+        [artefactId, event.caseId, artefactKind, replyText],
       );
 
       await dbQuery(
@@ -86,18 +94,20 @@ export async function deliverDueOfflineEvents(): Promise<{
         [event.id, artefactId],
       );
       if (marked.rowCount === 0) {
-        // Another worker won — leave artefact (harmless duplicate content edge case)
         continue;
       }
       delivered++;
       console.log(
-        `[worldClock] Delivered offline follow-up ${artefactId} for case ${event.caseId}`,
+        `[worldClock] Delivered ${event.kind} ${artefactId} for case ${event.caseId}`,
       );
+
+      const echo = await maybeScheduleOfflineEcho(event.caseId, event.kind);
+      if (echo) echoesScheduled++;
     } catch (err) {
       console.error(`[worldClock] Failed to deliver ${event.id}:`, err);
       errors++;
     }
   }
 
-  return { claimed, delivered, errors };
+  return { claimed, delivered, errors, echoesScheduled };
 }

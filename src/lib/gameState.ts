@@ -1337,7 +1337,12 @@ class GameManager {
     transitioned: boolean;
     from?: string;
     to?: string;
-    offline?: { claimed: number; delivered: number; errors: number };
+    offline?: {
+      claimed: number;
+      delivered: number;
+      errors: number;
+      echoesScheduled?: number;
+    };
   }> {
     await this.ensureInitialized();
     

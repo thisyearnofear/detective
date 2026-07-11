@@ -8,6 +8,7 @@ type InboxItem = {
   eventId: string;
   caseId: string;
   artefactId: string;
+  kind?: "follow_up" | "echo";
   body: string;
   personFid: number;
   personUsername: string;
@@ -22,7 +23,7 @@ type Props = {
 
 /**
  * Return card — "While you were away, @name sent something."
- * Surfaces unseen offline_follow_up artefacts.
+ * Surfaces unseen offline_follow_up / offline_echo artefacts.
  */
 export default function ReturnCard({ fid }: Props) {
   const [revealed, setRevealed] = useState<InboxItem | null>(null);
@@ -62,11 +63,12 @@ export default function ReturnCard({ fid }: Props) {
   if (!top) return null;
 
   const isOpen = !!revealed;
+  const isEcho = top.kind === "echo";
 
   return (
     <div className="w-full rounded-xl border border-amber-500/30 bg-gradient-to-br from-slate-900/90 to-amber-950/40 p-4 backdrop-blur-sm shadow-lg">
       <p className="text-xs uppercase tracking-wide text-amber-400/80 mb-2">
-        While you were away
+        {isEcho ? "Something else came in" : "While you were away"}
       </p>
       <div className="flex items-start gap-3">
         {top.personPfpUrl ? (
@@ -83,7 +85,9 @@ export default function ReturnCard({ fid }: Props) {
         )}
         <div className="flex-1 min-w-0">
           <h3 className="text-white font-semibold text-sm">
-            @{top.personUsername} sent something
+            {isEcho
+              ? `@${top.personUsername} thought of something else`
+              : `@${top.personUsername} sent something`}
           </h3>
           {!isOpen ? (
             <>

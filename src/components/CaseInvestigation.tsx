@@ -136,7 +136,9 @@ export default function CaseInvestigation({ fid, caseId, onBack }: Props) {
         )}
         {artefacts.map((a) => {
           const isInvestigator = a.author === "investigator";
-          const isOffline = a.kind === "offline_follow_up";
+          const isOffline =
+            a.kind === "offline_follow_up" || a.kind === "offline_echo";
+          const isEcho = a.kind === "offline_echo";
           return (
             <div
               key={a.id}
@@ -153,7 +155,7 @@ export default function CaseInvestigation({ fid, caseId, onBack }: Props) {
               >
                 {isOffline && (
                   <p className="text-[10px] uppercase tracking-wide text-amber-400/80 mb-1">
-                    While you were away
+                    {isEcho ? "Later thought" : "While you were away"}
                   </p>
                 )}
                 <p className="whitespace-pre-wrap">{a.body}</p>

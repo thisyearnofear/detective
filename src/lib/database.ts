@@ -307,6 +307,7 @@ class PostgresDatabase {
       CREATE TABLE IF NOT EXISTS offline_events (
         id VARCHAR(255) PRIMARY KEY,
         case_id VARCHAR(255) NOT NULL REFERENCES cases(id),
+        kind VARCHAR(32) NOT NULL DEFAULT 'follow_up',
         scheduled_for TIMESTAMP NOT NULL,
         status VARCHAR(20) DEFAULT 'pending',
         payload_artefact_id VARCHAR(255) REFERENCES artefacts(id),
@@ -350,7 +351,15 @@ class PostgresDatabase {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'matches' AND column_name = 'stake_tx_hash') THEN
           ALTER TABLE matches ADD COLUMN stake_tx_hash VARCHAR(255);
         END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'offline_events' AND column_name = 'kind') THEN
+          ALTER TABLE offline_events ADD COLUMN kind VARCHAR(32) NOT NULL DEFAULT 'follow_up';
+        END IF;
       END $$;
+    `);
+
+        await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_offline_events_one_kind
+        ON offline_events(case_id, kind);
     `);
 
         this.initialized = true;

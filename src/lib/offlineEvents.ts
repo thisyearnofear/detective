@@ -1,26 +1,62 @@
 /**
  * Offline Event Repository — delayed follow-ups that fire while the player is away
  *
- * PRINCIPLE: Exactly one pending event per case (unique partial index)
+ * PRINCIPLE: At most one pending event per case (unique partial index)
+ * PRINCIPLE: At most one event per kind per case (follow_up → echo chain)
  * PRINCIPLE: Metric = delivered_at → first seen_at on payload artefact
  */
 
 import { dbQuery } from "./database";
-import type { OfflineEvent, OfflineEventStatus } from "./types";
+import type { OfflineEvent, OfflineEventKind, OfflineEventStatus } from "./types";
 
-/** Default delay window: 6–12 hours. Override with OFFLINE_EVENT_MIN_MS / MAX_MS for testing. */
+const MAX_EVENTS_PER_CASE = 2;
+
+/** First leave follow-up: 6–12h. Override with OFFLINE_EVENT_MIN_MS / MAX_MS. */
 export function offlineDelayMs(): number {
-  const min = parseInt(process.env.OFFLINE_EVENT_MIN_MS || "", 10) || 6 * 60 * 60 * 1000;
-  const max = parseInt(process.env.OFFLINE_EVENT_MAX_MS || "", 10) || 12 * 60 * 60 * 1000;
+  return randomDelayMs(
+    process.env.OFFLINE_EVENT_MIN_MS,
+    process.env.OFFLINE_EVENT_MAX_MS,
+    6 * 60 * 60 * 1000,
+    12 * 60 * 60 * 1000,
+  );
+}
+
+/** Second echo: 18–36h after first delivery. Override with OFFLINE_ECHO_MIN_MS / MAX_MS. */
+export function offlineEchoDelayMs(): number {
+  return randomDelayMs(
+    process.env.OFFLINE_ECHO_MIN_MS,
+    process.env.OFFLINE_ECHO_MAX_MS,
+    18 * 60 * 60 * 1000,
+    36 * 60 * 60 * 1000,
+  );
+}
+
+function randomDelayMs(
+  minEnv: string | undefined,
+  maxEnv: string | undefined,
+  defaultMin: number,
+  defaultMax: number,
+): number {
+  const min = parseInt(minEnv || "", 10) || defaultMin;
+  const max = parseInt(maxEnv || "", 10) || defaultMax;
   const lo = Math.min(min, max);
   const hi = Math.max(min, max);
   return lo + Math.floor(Math.random() * (hi - lo + 1));
+}
+
+function delayForKind(kind: OfflineEventKind): number {
+  return kind === "echo" ? offlineEchoDelayMs() : offlineDelayMs();
+}
+
+export function artefactKindForEvent(kind: OfflineEventKind): "offline_follow_up" | "offline_echo" {
+  return kind === "echo" ? "offline_echo" : "offline_follow_up";
 }
 
 function rowToEvent(row: any): OfflineEvent {
   return {
     id: row.id,
     caseId: row.case_id,
+    kind: (row.kind as OfflineEventKind) || "follow_up",
     scheduledFor: new Date(row.scheduled_for).getTime(),
     status: row.status as OfflineEventStatus,
     payloadArtefactId: row.payload_artefact_id || null,
@@ -30,32 +66,48 @@ function rowToEvent(row: any): OfflineEvent {
 }
 
 /**
- * Schedule exactly one pending offline follow-up for a case.
- * No-ops if a pending event already exists, or if any event was already delivered.
+ * Schedule a pending offline event of the given kind.
+ * No-ops if pending exists, kind already exists, or case is at the event cap.
  */
-export async function scheduleOfflineFollowUp(caseId: string): Promise<OfflineEvent | null> {
-  const existing = await dbQuery(
-    `SELECT id FROM offline_events
-     WHERE case_id = $1 AND status IN ('pending', 'delivered', 'consumed')
-     LIMIT 1`,
+export async function scheduleOfflineEvent(
+  caseId: string,
+  kind: OfflineEventKind = "follow_up",
+): Promise<OfflineEvent | null> {
+  const pending = await dbQuery(
+    `SELECT id FROM offline_events WHERE case_id = $1 AND status = 'pending' LIMIT 1`,
     [caseId],
   );
-  if (existing.rows.length > 0) {
+  if (pending.rows.length > 0) return null;
+
+  const sameKind = await dbQuery(
+    `SELECT id FROM offline_events WHERE case_id = $1 AND kind = $2 LIMIT 1`,
+    [caseId, kind],
+  );
+  if (sameKind.rows.length > 0) return null;
+
+  const total = await dbQuery(
+    `SELECT COUNT(*)::text AS n FROM offline_events WHERE case_id = $1`,
+    [caseId],
+  );
+  if (parseInt(total.rows[0]?.n || "0", 10) >= MAX_EVENTS_PER_CASE) {
     return null;
   }
 
-  const id = `oe-${caseId}-${Date.now()}`;
-  const scheduledFor = new Date(Date.now() + offlineDelayMs());
+  const id = `oe-${kind}-${caseId}-${Date.now()}`;
+  const scheduledFor = new Date(Date.now() + delayForKind(kind));
 
   try {
     await dbQuery(
-      `INSERT INTO offline_events (id, case_id, scheduled_for, status)
-       VALUES ($1, $2, $3, 'pending')`,
-      [id, caseId, scheduledFor],
+      `INSERT INTO offline_events (id, case_id, kind, scheduled_for, status)
+       VALUES ($1, $2, $3, $4, 'pending')`,
+      [id, caseId, kind, scheduledFor],
     );
   } catch (err: any) {
-    // Unique pending index race
-    if (err?.message?.includes("idx_offline_events_one_pending") || err?.code === "23505") {
+    if (
+      err?.message?.includes("idx_offline_events_one_pending") ||
+      err?.message?.includes("idx_offline_events_one_kind") ||
+      err?.code === "23505"
+    ) {
       return null;
     }
     throw err;
@@ -63,9 +115,25 @@ export async function scheduleOfflineFollowUp(caseId: string): Promise<OfflineEv
 
   const result = await dbQuery(`SELECT * FROM offline_events WHERE id = $1`, [id]);
   console.log(
-    `[offlineEvents] Scheduled ${id} for case ${caseId} at ${scheduledFor.toISOString()}`,
+    `[offlineEvents] Scheduled ${kind} ${id} for case ${caseId} at ${scheduledFor.toISOString()}`,
   );
   return result.rows[0] ? rowToEvent(result.rows[0]) : null;
+}
+
+/** Leave-path: first follow-up only. */
+export async function scheduleOfflineFollowUp(caseId: string): Promise<OfflineEvent | null> {
+  return scheduleOfflineEvent(caseId, "follow_up");
+}
+
+/**
+ * After a follow_up is delivered, deepen the loop with one echo (variable longer cadence).
+ */
+export async function maybeScheduleOfflineEcho(
+  caseId: string,
+  deliveredKind: OfflineEventKind,
+): Promise<OfflineEvent | null> {
+  if (deliveredKind !== "follow_up") return null;
+  return scheduleOfflineEvent(caseId, "echo");
 }
 
 /**
@@ -119,6 +187,7 @@ export interface UnseenFollowUp {
   eventId: string;
   caseId: string;
   artefactId: string;
+  kind: OfflineEventKind;
   body: string;
   personFid: number;
   personUsername: string;
@@ -129,7 +198,7 @@ export interface UnseenFollowUp {
 }
 
 /**
- * Unseen offline follow-ups for an investigator (return-card source).
+ * Unseen offline artefacts for an investigator (return-card source).
  */
 export async function listUnseenFollowUps(
   investigatorFid: number,
@@ -138,6 +207,7 @@ export async function listUnseenFollowUps(
     `SELECT
        e.id AS event_id,
        e.case_id,
+       e.kind AS event_kind,
        e.delivered_at,
        a.id AS artefact_id,
        a.body,
@@ -153,7 +223,7 @@ export async function listUnseenFollowUps(
      WHERE c.investigator_fid = $1
        AND e.status = 'delivered'
        AND a.seen_at IS NULL
-       AND a.kind = 'offline_follow_up'
+       AND a.kind IN ('offline_follow_up', 'offline_echo')
      ORDER BY e.delivered_at DESC`,
     [investigatorFid],
   );
@@ -162,6 +232,7 @@ export async function listUnseenFollowUps(
     eventId: row.event_id,
     caseId: row.case_id,
     artefactId: row.artefact_id,
+    kind: (row.event_kind as OfflineEventKind) || "follow_up",
     body: row.body,
     personFid: row.person_fid,
     personUsername: row.person_username,

@@ -206,7 +206,7 @@ export interface Case {
   lastActivityAt: number;
 }
 
-export type ArtefactKind = "message" | "offline_follow_up";
+export type ArtefactKind = "message" | "offline_follow_up" | "offline_echo";
 export type ArtefactAuthor = "investigator" | "person" | "system";
 
 /** Append-only evidence / message stream */
@@ -232,11 +232,13 @@ export interface Commitment {
 }
 
 export type OfflineEventStatus = "pending" | "delivered" | "consumed";
+export type OfflineEventKind = "follow_up" | "echo";
 
-/** Delayed world event that produces an offline_follow_up artefact */
+/** Delayed world event that produces an offline artefact */
 export interface OfflineEvent {
   id: string;
   caseId: string;
+  kind: OfflineEventKind;
   scheduledFor: number;
   status: OfflineEventStatus;
   payloadArtefactId: string | null;

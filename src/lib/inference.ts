@@ -791,12 +791,21 @@ export async function generateBotResponse(
   bot: Bot,
   messageHistory: ChatMessage[],
   matchId?: string,
+  options?: { offlineKind?: "follow_up" | "echo" },
 ): Promise<string> {
   const userMessages = messageHistory
     .filter((msg) => msg.sender.fid !== bot.fid)
     .map((msg) => msg.text);
 
-  const lastUserMessage = userMessages[userMessages.length - 1] || "hello";
+  let lastUserMessage = userMessages[userMessages.length - 1] || "hello";
+  if (options?.offlineKind === "echo") {
+    lastUserMessage =
+      "(they've been quiet — you reach out first with one short afterthought)";
+  } else if (options?.offlineKind === "follow_up") {
+    lastUserMessage =
+      userMessages[userMessages.length - 1] ||
+      "(they stepped away — you send one short message while they're gone)";
+  }
   
   // Load both legacy context and temporal memory
   let conversationContextString = "";
@@ -827,8 +836,9 @@ export async function generateBotResponse(
   // Combine both sources of context
   const fullContextString = conversationContextString + temporalMemoryString;
 
-  // Only use adaptive follow-up if contextually appropriate
+  // Only use adaptive follow-up if contextually appropriate (not for offline world events)
   if (
+    !options?.offlineKind &&
     bot.personality &&
     messageHistory.length > 0
   ) {
@@ -883,7 +893,14 @@ export async function generateBotResponse(
     fullContextString,
   );
 
-  const { prompt: systemPrompt, metadata, baseStyle } = promptData;
+  const { prompt: systemPromptBase, metadata, baseStyle } = promptData;
+
+  let systemPrompt = systemPromptBase;
+  if (options?.offlineKind === "echo") {
+    systemPrompt += `\n\nOFFLINE ECHO: Hours passed. Message them unprompted with ONE short fragmentary thought that continues something from earlier — like something you remembered later. Incomplete. No greeting. No summary. No multi-question list.`;
+  } else if (options?.offlineKind === "follow_up") {
+    systemPrompt += `\n\nOFFLINE FOLLOW-UP: They stepped away. Send ONE short message that feels like you continued thinking about the chat. Stay in character. No greeting dump.`;
+  }
 
   // Use assigned LLM if available, otherwise fall back to Venice
   let apiResult: { content: string; error?: string } | undefined;
