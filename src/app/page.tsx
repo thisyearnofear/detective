@@ -10,6 +10,7 @@ import GameStateView from "@/components/game/GameStateView";
 import CaseStatusCard from "@/components/game/CaseStatusCard";
 import Leaderboard from "@/components/Leaderboard";
 import CollapsibleSection from "@/components/CollapsibleSection";
+import ReturnCard from "@/components/ReturnCard";
 import { fetcher, getApiUrl, requestJson } from "@/lib/fetcher";
 
 // Main component for the application's home page
@@ -414,6 +415,9 @@ export default function Home() {
                   </div>
                 </div>
               </div>
+
+              {/* Curiosity return loop — unseen offline follow-ups */}
+              <ReturnCard fid={sdkUser.fid} />
 
               {/* Live Game Status */}
               {gameState && (

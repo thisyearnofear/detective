@@ -303,6 +303,20 @@ class PostgresDatabase {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (investigator_fid, person_fid)
       );
+
+      CREATE TABLE IF NOT EXISTS offline_events (
+        id VARCHAR(255) PRIMARY KEY,
+        case_id VARCHAR(255) NOT NULL REFERENCES cases(id),
+        scheduled_for TIMESTAMP NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        payload_artefact_id VARCHAR(255) REFERENCES artefacts(id),
+        delivered_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_offline_events_due
+        ON offline_events(status, scheduled_for);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_offline_events_one_pending
+        ON offline_events(case_id) WHERE status = 'pending';
     `);
 
         // Add columns if they don't exist (for existing databases)

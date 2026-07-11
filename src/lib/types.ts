@@ -231,6 +231,19 @@ export interface Commitment {
   createdAt: number;
 }
 
+export type OfflineEventStatus = "pending" | "delivered" | "consumed";
+
+/** Delayed world event that produces an offline_follow_up artefact */
+export interface OfflineEvent {
+  id: string;
+  caseId: string;
+  scheduledFor: number;
+  status: OfflineEventStatus;
+  payloadArtefactId: string | null;
+  deliveredAt: number | null;
+  createdAt: number;
+}
+
 // ============================================================
 // User Data Consent (for GDPR and data monetization)
 // ============================================================

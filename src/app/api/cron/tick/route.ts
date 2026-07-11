@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 10; // 10 seconds max
+export const maxDuration = 60; // Offline LLM delivery may need headroom
 
 /**
  * GET /api/cron/tick

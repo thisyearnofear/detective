@@ -47,6 +47,8 @@ import { assignNextLLM } from "./openrouter";
 import { uploadGameSnapshot, uploadBotTrainingData, isStorachaEnabled } from "./storacha";
 import * as personRepository from "./personRepository";
 import * as caseRepository from "./caseRepository";
+import { scheduleOfflineFollowUp } from "./offlineEvents";
+import { deliverDueOfflineEvents } from "./worldClock";
 
 // Destructure from single source of truth
 const MATCH_DURATION = GAME_CONSTANTS.MATCH_DURATION;
@@ -710,6 +712,13 @@ class GameManager {
         console.warn(`[lockMatchVote] Failed to write commitment for ${durableCaseId}:`, err),
       );
 
+    // Schedule one offline follow-up if there was a real exchange with a person (bot)
+    if (match.opponent.type === "BOT" && match.messages.length >= 1) {
+      scheduleOfflineFollowUp(durableCaseId).catch((err) =>
+        console.warn(`[lockMatchVote] Failed to schedule offline event:`, err),
+      );
+    }
+
     // PHASE 2: Save conversation context for future rounds (async, non-blocking)
     // Only if opponent is a bot (we track context between player and bot)
     if (match.opponent.type === "BOT") {
@@ -1325,7 +1334,12 @@ class GameManager {
    * Explicit world tick - call from cron. Handles all phase transitions.
    * Renamed from tickGameState (Phase 1 durable domain).
    */
-  async tickWorld(): Promise<{ transitioned: boolean; from?: string; to?: string }> {
+  async tickWorld(): Promise<{
+    transitioned: boolean;
+    from?: string;
+    to?: string;
+    offline?: { claimed: number; delivered: number; errors: number };
+  }> {
     await this.ensureInitialized();
     
     const stateMeta = await persistence.loadGameStateMeta();
@@ -1343,11 +1357,15 @@ class GameManager {
     const now = Date.now();
     const currentState = this.state!.state;
 
+    let transitioned = false;
+    let to: string | undefined;
+
     // REGISTRATION -> LIVE (two-phase: countdown start, then transition)
     if (this.state!.state === "REGISTRATION") {
       await this.handleRegistrationPhase(now);
       if (this.state!.state !== currentState) {
-        return { transitioned: true, from: currentState, to: this.state!.state };
+        transitioned = true;
+        to = this.state!.state;
       }
     }
 
@@ -1355,7 +1373,8 @@ class GameManager {
     if (this.state!.state === "FINISHED") {
       await this.handleFinishedPhase(now);
       if (this.state!.state !== currentState) {
-        return { transitioned: true, from: currentState, to: this.state!.state };
+        transitioned = true;
+        to = this.state!.state;
       }
     }
 
@@ -1363,11 +1382,25 @@ class GameManager {
     if (this.state!.state === "LIVE" && now > this.state!.gameEnds) {
       await this.handleLiveToFinished(now);
       if (this.state!.state !== currentState) {
-        return { transitioned: true, from: currentState, to: this.state!.state };
+        transitioned = true;
+        to = this.state!.state;
       }
     }
+
+    // Deliver due offline follow-ups (curiosity loop)
+    let offline = { claimed: 0, delivered: 0, errors: 0 };
+    try {
+      offline = await deliverDueOfflineEvents();
+    } catch (err) {
+      console.warn("[tickWorld] Offline delivery failed:", err);
+    }
     
-    return { transitioned: false };
+    return {
+      transitioned,
+      from: transitioned ? currentState : undefined,
+      to,
+      offline,
+    };
   }
 
   /** @deprecated Use tickWorld */
