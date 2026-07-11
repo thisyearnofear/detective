@@ -10,8 +10,8 @@
  * Single source of truth for all storage-related data
  */
 
-import { redis } from './redis';
-import type { StorageUploadRecord, StorageStats, StorageUploadType } from './types';
+import { redis } from '@/lib/redis';
+import type { StorageUploadRecord, StorageStats, StorageUploadType } from '@/lib/types';
 
 const STORAGE_KEYS = {
   UPLOADS_LIST: 'storage:uploads',
@@ -65,7 +65,7 @@ export async function getUploads(options?: {
 
   const records = await redis.lrange(key, offset, offset + limit - 1);
   
-  let uploads = records.map(r => {
+  let uploads = records.map((r: string) => {
     try {
       return JSON.parse(r) as StorageUploadRecord;
     } catch {

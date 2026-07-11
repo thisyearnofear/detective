@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
-import { guardAgentEndpoint, unauthorizedResponse } from "@/lib/agentAuth";
+import { isResearchPlatformEnabled } from "@/platform";
+import { guardAgentEndpoint, unauthorizedResponse } from "@/platform/agentAuth";
 
 export const dynamic = 'force-dynamic';
 
@@ -13,6 +14,10 @@ export const dynamic = 'force-dynamic';
  * x402: Requires USDC payment when NEXT_PUBLIC_X402_ENABLED=true
  */
 export async function POST(request: NextRequest) {
+  if (!isResearchPlatformEnabled()) {
+    return NextResponse.json({ error: "Research platform disabled" }, { status: 404 });
+  }
+
   const body = await request.json();
   const { matchId, botFid, text } = body;
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { redis } from "@/lib/redis";
 import { verifyMessage } from "viem";
-import { requireAgentPayment } from "@/lib/payments";
+import { requireAgentPayment } from "./payments";
 import { type AgentEndpoint } from "@/lib/gameConstants";
 
 /**

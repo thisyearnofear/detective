@@ -4,9 +4,14 @@
 // Requires authentication (admin or internal use)
 
 import { NextRequest, NextResponse } from "next/server";
-import { uploadBotTrainingData, isStorachaEnabled } from "@/lib/storacha";
+import { isResearchPlatformEnabled } from "@/platform";
+import { uploadBotTrainingData, isStorachaEnabled } from "@/platform/storacha";
 
 export async function POST(request: NextRequest) {
+  if (!isResearchPlatformEnabled()) {
+    return NextResponse.json({ error: "Research platform disabled" }, { status: 404 });
+  }
+
   if (!isStorachaEnabled()) {
     return NextResponse.json(
       { error: "Storacha integration disabled" },

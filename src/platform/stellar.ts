@@ -20,7 +20,7 @@
  * - stellar-mpp-sdk: https://github.com/stellar/stellar-mpp-sdk (experimental)
  */
 
-import { GAME_CONSTANTS } from './gameConstants';
+import { GAME_CONSTANTS } from '@/lib/gameConstants';
 
 const STELLAR_CONFIG = GAME_CONSTANTS.ECONOMY.PAYMENT_PROVIDERS.STELLAR_MPP;
 

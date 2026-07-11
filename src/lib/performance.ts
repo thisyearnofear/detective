@@ -233,13 +233,6 @@ export function useFrameRateOptimization() {
   return scheduleUpdate;
 }
 
-// BUNDLE SIZE OPTIMIZATION - Dynamic imports
-export const dynamicImports = {
-  EmojiPicker: () => import('../components/EmojiPicker'),
-  Leaderboard: () => import('../components/Leaderboard'),
-  BriefingRoom: () => import('../components/game/BriefingRoom'),
-};
-
 // MEMORY MANAGEMENT
 export function useMemoryOptimization() {
   const mounted = useRef(true);

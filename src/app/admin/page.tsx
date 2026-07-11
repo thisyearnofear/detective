@@ -196,6 +196,25 @@ export default function AdminPage() {
     },
   );
 
+  const { data: returnRate } = useSWR<{
+    eligible: number;
+    returned: number;
+    rate: number;
+    ratePercent: number;
+  }>(
+    adminSecret ? getApiUrl("/api/metrics/return-rate") : null,
+    async (url: string) => {
+      const response = await fetch(url, { headers: getAuthHeaders() });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    },
+    {
+      refreshInterval: adminSecret ? 15000 : 0,
+      revalidateOnFocus: !!adminSecret,
+      shouldRetryOnError: false,
+    },
+  );
+
   // Force immediate revalidation helper
   const forceRefresh = useCallback(() => {
     mutate(undefined, { revalidate: true });
@@ -434,14 +453,14 @@ export default function AdminPage() {
             System Control
           </h1>
           <p className="text-sm text-white/60 mb-4 sm:mb-6">
-            Game testing and administrative functions
+            Cases, offline loop, and system controls
           </p>
           <div className="flex gap-3">
             <button
               onClick={() => router.push("/")}
               className="inline-flex items-center px-4 py-2 text-xs bg-white/5 border border-white/10 text-white/70 rounded-lg hover:bg-white/10 hover:text-white transition-all"
             >
-              ← Return to Game
+              ← Return to app
             </button>
             {adminSecret && (
               <button
@@ -470,6 +489,39 @@ export default function AdminPage() {
             >
               {message.text}
             </div>
+          </div>
+        )}
+
+        {/* North-star: return to open unseen offline artefact */}
+        {returnRate && (
+          <div className="w-full mb-6 sm:mb-8 bg-amber-500/5 border border-amber-500/20 rounded-2xl backdrop-blur-sm p-4 sm:p-6">
+            <h2 className="text-sm uppercase tracking-wider text-amber-200/80 mb-3 text-center">
+              Return rate (48h)
+            </h2>
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div>
+                <p className="text-2xl font-light text-white">
+                  {returnRate.ratePercent}%
+                </p>
+                <p className="text-xs text-white/50 mt-1">opened unseen</p>
+              </div>
+              <div>
+                <p className="text-2xl font-light text-white">
+                  {returnRate.returned}
+                </p>
+                <p className="text-xs text-white/50 mt-1">returned</p>
+              </div>
+              <div>
+                <p className="text-2xl font-light text-white">
+                  {returnRate.eligible}
+                </p>
+                <p className="text-xs text-white/50 mt-1">eligible</p>
+              </div>
+            </div>
+            <p className="text-xs text-white/40 text-center mt-4">
+              Eligible = offline follow-up delivered · Returned = artefact seen
+              within 48h
+            </p>
           </div>
         )}
 

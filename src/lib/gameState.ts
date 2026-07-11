@@ -44,7 +44,6 @@ import { saveConversationContext, saveConversationMemory, clearAllConversationCo
 import { extractCoherenceScoresFromMatch, clearConversationState } from "./inference";
 import { GAME_CONSTANTS, GAME_DURATION } from "./gameConstants";
 import { assignNextLLM } from "./openrouter";
-import { uploadGameSnapshot, uploadBotTrainingData, isStorachaEnabled } from "./storacha";
 import * as personRepository from "./personRepository";
 import * as caseRepository from "./caseRepository";
 import { scheduleOfflineFollowUp } from "./offlineEvents";
@@ -1489,6 +1488,14 @@ class GameManager {
    * Non-blocking - failures are logged but don't affect game flow.
    */
   private async uploadGameToStoracha(): Promise<void> {
+    const { isResearchPlatformEnabled } = await import("@/platform");
+    if (!isResearchPlatformEnabled()) return;
+
+    const {
+      uploadGameSnapshot,
+      uploadBotTrainingData,
+      isStorachaEnabled,
+    } = await import("@/platform/storacha");
     if (!isStorachaEnabled()) return;
 
     try {

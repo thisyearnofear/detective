@@ -3,10 +3,7 @@
 // POST /api/admin/state - Transition state, reset, or update config
 
 import { NextRequest, NextResponse } from "next/server";
-import {
-  getStorageStats,
-  isStorageTrackingEnabled,
-} from "@/lib/storageTracking";
+import { isResearchPlatformEnabled } from "@/platform";
 import { isAdminRequest } from "@/lib/adminAuth";
 import {
   getAdminCache,
@@ -55,10 +52,15 @@ export async function GET(request: NextRequest) {
       gameManager.getAllMatches(),
     ]);
 
-    // Get storage stats if enabled
-    const storageStats = isStorageTrackingEnabled()
-      ? await getStorageStats()
-      : null;
+    let storageStats = null;
+    let storachaEnabled = false;
+    if (isResearchPlatformEnabled()) {
+      const { getStorageStats, isStorageTrackingEnabled } = await import(
+        "@/platform/storageTracking"
+      );
+      storachaEnabled = isStorageTrackingEnabled();
+      storageStats = storachaEnabled ? await getStorageStats() : null;
+    }
 
     const response: AdminStateResponse = {
       gameState: {
@@ -73,7 +75,7 @@ export async function GET(request: NextRequest) {
       bots,
       storage: storageStats,
       system: {
-        storachaEnabled: isStorageTrackingEnabled(),
+        storachaEnabled,
         timestamp: now,
         cached: false,
       },
