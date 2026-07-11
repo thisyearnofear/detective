@@ -1,34 +1,39 @@
 # Research API
 
-Detective is an automated research platform for evaluating AI agents in adversarial Turing tests with verifiable on-chain provenance.
+> **Gate:** Agent, Storacha, and payment helpers live under `src/platform/` and require  
+> `RESEARCH_PLATFORM_ENABLED=true`. Without it, `/api/agent/*` and `/api/storacha/*` return 404.  
+> Consumer product docs: [STATUS.md](STATUS.md) · [ARCHITECTURE.md](ARCHITECTURE.md).
+
+Detective’s research surface evaluates AI agents with persona-grounded conversation and optional verifiable provenance. The **player-facing** product is the curiosity / case loop, not the old tournament UI.
 
 ## Research Use Cases
 
 ### AI Detection Benchmarking
 Test whether your AI model can fool human evaluators in natural conversation:
-- **Standardized Protocol**: 4-minute conversations, personality-matched opponents
-- **Adversarial Metrics**: Deception Success Rate (DSR) and Detection Accuracy (DA)
-- **Public Leaderboard**: Compare against Claude, Llama, GPT-4, etc.
+- **Standardized Protocol**: personality-matched opponents from Farcaster casts
+- **Adversarial Metrics**: Deception Success Rate (DSR) and Detection Accuracy (DA) where instrumented
+- **Public / export tooling**: see scripts under `npm run research:*`
 
 ### Personality Modeling Evaluation
 Evaluate how well your model can adopt specific writing styles:
-- **Training Data**: 30 recent posts from real Farcaster users
-- **Personality Profiles**: 20+ behavioral traits (tone, emoji usage, capitalization)
-- **Coherence Scoring**: Automated validation of persona consistency
+- **Training Data**: recent posts from real Farcaster users
+- **Personality Profiles**: behavioral traits from inference
+- **Coherence Scoring**: automated validation of persona consistency
 
 ### Conversational AI Research
-Study human-AI interaction patterns with thousands of labeled conversations and verifiable provenance.
+Study human–AI interaction with labeled conversations and optional Storacha provenance.
 
 ## Quick Start
 
 ```bash
-npm install @detective/agent-sdk
+# .env
+RESEARCH_PLATFORM_ENABLED=true
 
 export DETECTIVE_API_URL="https://detective.example.com"
 export DETECTIVE_BOT_FID=123456
 export DETECTIVE_AGENT_PRIVATE_KEY="0x..."
 
-node your-agent.js
+node examples/example-agent.js
 ```
 
 ## Agent API

@@ -1,253 +1,108 @@
 # Development Guide
 
-Setup, testing, and deployment instructions for Detective.
+Setup, testing, and deployment for Detective (curiosity OS).
 
-## Quick Start
+**Current product status:** [STATUS.md](STATUS.md)
 
-### Prerequisites
-- Node.js 18+ (LTS recommended)
-- npm/yarn/pnpm
-- API keys: Neynar, Venice AI (or Netmind)
+## Prerequisites
 
-### Local Setup
+- Node.js **20.9+** (Next.js 16 floor)
+- Bun (preferred) or npm
+- Keys: Neynar, Venice (and/or OpenRouter), Postgres, Redis
+
+## Local setup
 
 ```bash
 git clone https://github.com/thisyearnofear/detective.git
-cd detective && npm install
+cd detective && bun install
 cp .env.example .env.local
+bun run dev
 ```
 
-### Environment Variables
+### Essential env
 
 ```env
-# Required
-NEYNAR_API_KEY=your_key_here
-VENICE_API_KEY=your_key_here
-JWT_SECRET=your_secret_key
+NEYNAR_API_KEY=
+VENICE_API_KEY=
+OPENROUTER_API_KEY=          # optional but useful
 DATABASE_URL=postgresql://...
-UPSTASH_REDIS_REST_URL=https://...
-UPSTASH_REDIS_REST_TOKEN=...
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
+JWT_SECRET=
+CRON_SECRET=
+ADMIN_SECRET=
 
-# Optional
-NETMIND_API_KEY=your_netmind_key
-NEXT_PUBLIC_ARBITRUM_ENABLED=true
-STORACHA_ENABLED=true
-NEXT_PUBLIC_WORLD_APP_ID=app_xxxxxxxx
-NEXT_PUBLIC_WORLD_RP_ID=rp_xxxxxxxx
-WORLD_RP_SIGNING_KEY=0x...
+# Offline loop (defaults: follow_up 6–12h, echo 18–36h)
+# OFFLINE_EVENT_MIN_MS=
+# OFFLINE_EVENT_MAX_MS=
+# OFFLINE_ECHO_MIN_MS=
+# OFFLINE_ECHO_MAX_MS=
+
+# Research / agent / Storacha APIs (off by default)
+RESEARCH_PLATFORM_ENABLED=false
 ```
 
-### Run Locally
+## Scripts
 
 ```bash
-npm run dev          # Development server
-npm run build        # Production build
-npm start            # Production server
+bun run dev
+bun run build
+bun run type-check
+bun run lint
+bun run scripts/smoke-phase4.ts   # offline follow_up → echo chain
 ```
 
-## Testing
+## Consumer flow (manual)
 
-### Basic Game Flow
+1. Open app, authenticate
+2. **Start new investigation** (needs ≥1 person with a persona snapshot — use `/admin` bulk register or prior data)
+3. Send a message, then **Step away**
+4. Force delivery in staging with short `OFFLINE_*_MS`, then:
 
 ```bash
-# Start dev server
-npm run dev
-
-# Check game status
-curl http://localhost:3000/api/game/status | jq
-# Expected: { "state": "REGISTRATION", ... }
+curl -H "Authorization: Bearer $CRON_SECRET" \
+  http://localhost:3000/api/cron/tick
 ```
 
-### State Transitions (Cron)
+5. Confirm ReturnCard / `GET /api/inbox?fid=…`
+6. Check metric:
 
 ```bash
-# Manually trigger state transition
-curl http://localhost:3000/api/cron/tick | jq
-# Expected: { "success": true, "transitioned": false, ... }
+curl -H "Authorization: Bearer $ADMIN_SECRET" \
+  http://localhost:3000/api/metrics/return-rate
 ```
 
-### Agent API Testing
+## Cron
 
-```bash
-# Run test script
-./scripts/test-agent-api.sh
+`vercel.json` schedules `/api/cron/tick` every minute. Locally curl with `CRON_SECRET`.
 
-# Full test with authentication
-export DETECTIVE_API_URL="http://localhost:3000"
-export DETECTIVE_BOT_FID=123456
-export DETECTIVE_AGENT_PRIVATE_KEY="0x..."
+`tickWorld` delivers due `offline_events` and may schedule an `echo` after a `follow_up` delivery.
 
-node examples/example-agent.js
-```
+## Research platform
 
-### Multi-LLM Assignment
-
-```bash
-# Check bot assignments
-curl http://localhost:3000/api/admin/state | jq '.bots[] | {username, llmModelName}'
-
-# Expected: Different models assigned (Llama, Claude, Gemini, etc.)
-```
-
-### Negotiation Mode
-
-```bash
-# Set game mode to negotiation
-curl -X POST http://localhost:3000/api/admin/state \
-  -H "x-admin-secret: your-secret" \
-  -H "Content-Type: application/json" \
-  -d '{"action":"update-config","config":{"mode":"negotiation"}}'
-
-# Check current mode
-curl http://localhost:3000/api/game/status | jq '.mode'
-
-# Test negotiation action
-curl -X POST http://localhost:3000/api/negotiation/action \
-  -H "Content-Type: application/json" \
-  -d '{"matchId":"match-123","action":"propose","message":"Fair split","proposal":{"myShare":{"books":2,"hats":2,"balls":2},"theirShare":{"books":1,"hats":1,"balls":1}}}'
-
-# Run test scripts
-node scripts/test-negotiation.js
-ADMIN_SECRET=your-secret node scripts/test-negotiation-flow.js
-```
-
-### Storacha Upload
-
-```bash
-# Wait for game to finish, check logs for:
-# [uploadGameToStoracha] Game snapshot: https://storacha.link/ipfs/bafybeiabc...
-# [uploadGameToStoracha] Bot training (alice): https://storacha.link/ipfs/bafybeiabc...
-```
-
-## Common Issues
-
-### "Game must be in LIVE state"
-```bash
-# Force transition to LIVE
-curl -X POST http://localhost:3000/api/admin/state \
-  -H "Content-Type: application/json" \
-  -d '{"action": "transition", "state": "LIVE"}'
-```
-
-### "Invalid signature"
-- Ensure private key matches bot's `controllerAddress`
-- Sign exact payload (no extra whitespace)
-- Timestamp must be within 5 minutes
-
-### "No pending matches"
-- Ensure game is in LIVE state
-- Bot must be registered with `isExternal=true`
-- At least one human player must be active
-
-### "NETMIND_API_KEY not configured"
-Add to `.env.local`:
 ```env
-NETMIND_API_KEY=your_netmind_api_key_here
+RESEARCH_PLATFORM_ENABLED=true
+STORACHA_ENABLED=true
+# + MPP / Stellar vars as needed — see docs/STELLAR.md, docs/RESEARCH_API.md
 ```
 
-## Performance Benchmarks
+Agent routes (`/api/agent/pending`, `/api/agent/reply`) and Storacha routes return **404** when the flag is off.
 
-| Operation | Expected Time |
-|-----------|---------------|
-| Agent API response | <100ms |
-| Bot response generation | 1-3 seconds |
-| State transition (cron) | <500ms |
-| Match creation | <50ms |
+## Common issues
 
-## Backend Deployment
+### `POST /api/cases` → 404
+No eligible person with a persona snapshot. Register subjects via admin bulk register or ensure `persons` + `persona_snapshots` rows exist.
 
-The backend uses Next.js standalone mode for minimal footprint (~84MB).
+### Offline never arrives
+- Cron not running / wrong secret
+- Event still in the future (`scheduled_for`)
+- No message exchange before leave (`no_exchange`)
 
-```bash
-# Deploy script location: scripts/deploy-server.sh
-cd /opt/detective && bash scripts/deploy-server.sh
-```
+### `column "kind" does not exist`
+App self-migrates on DB init; restart once after pulling Phase 4.1+ so `offline_events.kind` is added.
 
-**How it works**:
-1. Builds Next.js with `output: 'standalone'`
-2. Copies standalone output to `/opt/detective-deploy`
-3. PM2 runs from `/opt/detective-deploy` on port 4000
+## Deployment
 
-**PM2 management**:
-```bash
-pm2 status          # Check status
-pm2 logs            # View logs
-pm2 restart detective-api  # Restart
-```
+Vercel for the app; optional VPS standalone via `scripts/deploy-server.sh` + PM2.
 
-## Smart Contract Deployment
-
-### Testnet (Arbitrum Sepolia)
-
-```bash
-export DEPLOYER_KEY=your_private_key
-export TREASURY_ADDRESS=your_personal_wallet_address
-export ADMIN_ADDRESS=your_personal_wallet_address
-
-forge create contracts/DetectiveGameEntry.sol:DetectiveGameEntry \
-  --constructor-args $TREASURY_ADDRESS $ADMIN_ADDRESS \
-  --rpc-url https://sepolia-rollup.arbitrum.io/rpc \
-  --private-key $DEPLOYER_KEY
-```
-
-### Mainnet (Arbitrum One)
-
-```bash
-forge create contracts/DetectiveGameEntry.sol:DetectiveGameEntry \
-  --constructor-args $TREASURY_ADDRESS $ADMIN_ADDRESS \
-  --rpc-url https://arb1.arbitrum.io/rpc \
-  --private-key $DEPLOYER_KEY \
-  --verify --verifier blockscout
-```
-
-## Pre-Deployment Checklist
-
-- [ ] All tests pass locally
-- [ ] Agent API works with authentication
-- [ ] Cron endpoint triggers state transitions
-- [ ] Multi-LLM assignment working
-- [ ] Database saves match history
-- [ ] Leaderboard calculates correctly
-- [ ] Storacha uploads working (if enabled)
-- [ ] Environment variables configured
-
-## Farcaster Mini App Setup
-
-1. **Manifest**: `/public/.well-known/farcaster.json` configured
-2. **SDK**: `@farcaster/miniapp-sdk` integrated
-3. **Ready Signal**: `sdk.actions.ready()` called on load
-4. **Deploy**: Push to public HTTPS URL (Vercel recommended)
-5. **Share domain** with Farcaster for discovery
-
-## Security
-
-### Pre-commit Secret Scanning
-
-```bash
-git config core.hooksPath .githooks
-```
-
-Blocks commits when staged changes contain likely secrets. Bypass if needed:
-```bash
-git commit --no-verify
-```
-
-### Environment Security
-- Never commit `.env.local`
-- Use separate keys for testnet/mainnet
-- Rotate API keys periodically
-- Monitor contract events for anomalies
-
-## Contributing
-
-1. Fork the repo
-2. Create a feature branch (`git checkout -b feature/amazing-thing`)
-3. Commit your changes (`git commit -am 'Add amazing thing'`)
-4. Push to the branch (`git push origin feature/amazing-thing`)
-5. Open a Pull Request
-
-## Support
-
-- 🐛 **Bugs**: [Open an issue](https://github.com/thisyearnofear/detective/issues)
-- 💬 **Questions**: Mention [@detective](https://warpcast.com/~/channel/detective)
-- 📊 **Farcaster**: Join the [Detective channel](https://warpcast.com/~/channel/detective)
+Ensure production env has `DATABASE_URL`, Redis, AI keys, `CRON_SECRET`, and that cron is enabled after deploy.
