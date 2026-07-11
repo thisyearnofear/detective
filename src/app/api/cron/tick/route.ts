@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     }
 
     const startTime = Date.now();
-    const result = await gameManager.tickGameState();
+    const result = await gameManager.tickWorld();
     const duration = Date.now() - startTime;
 
     return NextResponse.json({

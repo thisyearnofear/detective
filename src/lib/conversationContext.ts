@@ -1,53 +1,47 @@
 /**
- * Conversation Context Management (Phase 2: Lite Memory)
- * 
- * Stores minimal cross-round context to help bots flow naturally and avoid repetition.
- * Redis-backed with graceful fallback if unavailable.
- * Non-blocking: fires-and-forgets on save operations.
- * 
+ * Investigator Memory (durable curiosity-engine memory)
+ *
+ * Stores cross-session context so persons remember investigators.
+ * Redis hot path + Postgres mirror (survives Redis TTL wipe).
+ *
  * IMPORTANT: Context is INFORMATIONAL ONLY - not deterministic.
- * Bots use it as reference/suggestion in Venice prompt, but can ignore.
  * Zero impact on game state or round synchronization.
  */
 
 import { redis, getJSON, setJSON } from "./redis";
 import { ChatMessage } from "./types";
+import { saveInvestigatorMemory as persistMemoryToPg, loadInvestigatorMemory as loadMemoryFromPg } from "./caseRepository";
 
-// TTL: 24 hours (covers entire game cycle + some)
+// Redis TTL: 30 days (Postgres is the durable SoT)
+const MEMORY_TTL = 30 * 24 * 60 * 60;
 const CONTEXT_TTL = 24 * 60 * 60;
 
 /**
- * Temporal conversation memory that tracks patterns across multiple rounds
- * Includes topic affinities and coherence patterns
+ * Temporal investigator↔person memory
  */
-export interface ConversationMemory {
-  playerFid: number;
-  botFid: number;
-  
-  // Topic threads: what user keeps coming back to
+export interface InvestigatorMemory {
+  investigatorFid: number;
+  personFid: number;
+
   topicThreads: Array<{
     topic: string;
     mentions: number;
     firstRound: number;
     lastRound: number;
   }>;
-  
-  // Topic affinities: how likely a topic leads to coherent responses
-  topicAffinities: Record<string, number>; // 'crypto': 0.9
-  
-  // Coherence patterns: what types of responses work
-  coherencePatterns: Record<string, number>; // 'question_answering': 0.85
-  
-  // Communication style of player (accumulated across rounds)
+
+  topicAffinities: Record<string, number>;
+  coherencePatterns: Record<string, number>;
+
   playerCommunicationStyle: "terse" | "conversational" | "verbose";
   playerEmotionalTone: "positive" | "neutral" | "critical" | "sarcastic";
-  
-  // Key phrases (accumulated)
   playerKeyPhrases: string[];
-  
-  // Timestamp
+
   lastUpdatedAt: number;
 }
+
+/** @deprecated Use InvestigatorMemory */
+export type ConversationMemory = InvestigatorMemory;
 
 /**
  * Legacy ConversationContextData kept for backward compatibility
@@ -58,7 +52,7 @@ export interface ConversationContextData {
   botFid: number;
   roundNumber: number;
   cycleId: string;
-  
+
   topicsDiscussed: string[];
   playerCommunicationStyle: "terse" | "conversational" | "verbose";
   playerEmotionalTone: "positive" | "neutral" | "critical" | "sarcastic";
@@ -73,8 +67,8 @@ function getContextKey(playerFid: number, botFid: number): string {
   return `conversation:${playerFid}:${botFid}`;
 }
 
-function getMemoryKey(playerFid: number, botFid: number): string {
-  return `memory:${playerFid}:${botFid}`;
+function getMemoryKey(investigatorFid: number, personFid: number): string {
+  return `memory:${investigatorFid}:${personFid}`;
 }
 
 /**
@@ -167,19 +161,34 @@ function extractPlayerPhrases(messages: ChatMessage[], playerFid: number): strin
 }
 
 /**
- * Load temporal memory for a player-bot pair
- * Builds understanding of topic affinities and what works across rounds
+ * Load temporal memory for an investigator↔person pair.
+ * Redis first; Postgres fallback when Redis is cold.
  */
 export async function loadConversationMemory(
-  playerFid: number,
-  botFid: number,
-): Promise<ConversationMemory | null> {
+  investigatorFid: number,
+  personFid: number,
+): Promise<InvestigatorMemory | null> {
   try {
-    const key = getMemoryKey(playerFid, botFid);
-    const memory = await getJSON<ConversationMemory>(key);
-    return memory || null;
+    const key = getMemoryKey(investigatorFid, personFid);
+    const memory = await getJSON<InvestigatorMemory>(key);
+    if (memory) {
+      // Normalize legacy field names if present
+      if ((memory as any).playerFid != null && memory.investigatorFid == null) {
+        memory.investigatorFid = (memory as any).playerFid;
+        memory.personFid = (memory as any).botFid;
+      }
+      return memory;
+    }
+
+    const fromPg = await loadMemoryFromPg(investigatorFid, personFid);
+    if (fromPg && typeof fromPg === "object") {
+      const restored = fromPg as unknown as InvestigatorMemory;
+      await setJSON(key, restored, MEMORY_TTL);
+      return restored;
+    }
+    return null;
   } catch (error) {
-    console.warn(`[conversationContext] Failed to load memory for ${playerFid}/${botFid}:`, error);
+    console.warn(`[conversationContext] Failed to load memory for ${investigatorFid}/${personFid}:`, error);
     return null;
   }
 }
@@ -187,13 +196,12 @@ export async function loadConversationMemory(
 /**
  * Enrich prompt with temporal memory insights
  */
-export function enrichPromptWithMemory(memory: ConversationMemory | null): string {
+export function enrichPromptWithMemory(memory: InvestigatorMemory | null): string {
   if (!memory) return "";
 
   const lines: string[] = [];
 
-  // Top topics by affinity
-  const topTopics = Object.entries(memory.topicAffinities)
+  const topTopics = Object.entries(memory.topicAffinities || {})
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3)
     .map(([topic, score]) => `${topic} (${Math.round(score * 100)}% coherent)`)
@@ -203,8 +211,7 @@ export function enrichPromptWithMemory(memory: ConversationMemory | null): strin
     lines.push(`\nUSER INTERESTS: ${topTopics}`);
   }
 
-  // Coherence patterns
-  const topPatterns = Object.entries(memory.coherencePatterns)
+  const topPatterns = Object.entries(memory.coherencePatterns || {})
     .sort((a, b) => b[1] - a[1])
     .slice(0, 2);
 
@@ -312,83 +319,84 @@ export function formatContextForPrompt(context: ConversationContextData | null):
 }
 
 /**
- * Build and save temporal memory from a round of conversation
- * Accumulates topic affinities and coherence patterns across rounds
+ * Build and save investigator memory from a round of conversation.
+ * Dual-writes Redis (hot) + Postgres (durable).
  */
 export async function saveConversationMemory(
-  playerFid: number,
-  botFid: number,
+  investigatorFid: number,
+  personFid: number,
   messages: ChatMessage[],
-  coherenceScores?: Array<{ type: string; score: number }>, // Optional: coherence feedback per response
+  coherenceScores?: Array<{ type: string; score: number }>,
 ): Promise<void> {
   try {
-    // Load existing memory
-    const key = getMemoryKey(playerFid, botFid);
-    const existingMemory = await getJSON<ConversationMemory>(key);
+    const key = getMemoryKey(investigatorFid, personFid);
+    let existingMemory = await getJSON<InvestigatorMemory>(key);
+    if (!existingMemory) {
+      const fromPg = await loadMemoryFromPg(investigatorFid, personFid);
+      if (fromPg) existingMemory = fromPg as unknown as InvestigatorMemory;
+    }
 
-    // Extract topics from this round
     const topicsThisRound = messages
-      .flatMap(m => extractTopics(m.text))
+      .flatMap((m) => extractTopics(m.text))
       .filter((topic, index, arr) => arr.indexOf(topic) === index);
 
-    // Build topic threads (track across rounds)
-    const topicThreads: ConversationMemory['topicThreads'] = existingMemory?.topicThreads || [];
-    topicsThisRound.forEach(topic => {
-      const existing = topicThreads.find(t => t.topic === topic);
+    const topicThreads: InvestigatorMemory["topicThreads"] =
+      existingMemory?.topicThreads || [];
+    topicsThisRound.forEach((topic) => {
+      const existing = topicThreads.find((t) => t.topic === topic);
       if (existing) {
         existing.mentions++;
-        existing.lastRound = new Date().getTime();
+        existing.lastRound = Date.now();
       } else {
         topicThreads.push({
           topic,
           mentions: 1,
-          firstRound: new Date().getTime(),
-          lastRound: new Date().getTime(),
+          firstRound: Date.now(),
+          lastRound: Date.now(),
         });
       }
     });
 
-    // Build topic affinities: if topic was discussed and coherence was high, boost affinity
     const topicAffinities = existingMemory?.topicAffinities || {};
-    topicsThisRound.forEach(topic => {
-      if (!topicAffinities[topic]) topicAffinities[topic] = 0.5; // Neutral start
-      
-      // If we have coherence scores, use them; otherwise assume success
-      const avgCoherence = coherenceScores && coherenceScores.length > 0
-        ? coherenceScores.reduce((sum, s) => sum + s.score, 0) / coherenceScores.length
-        : 0.85; // Default: assume good if no data
-      
-      // Update affinity as weighted average: 70% existing + 30% new data
+    topicsThisRound.forEach((topic) => {
+      if (!topicAffinities[topic]) topicAffinities[topic] = 0.5;
+      const avgCoherence =
+        coherenceScores && coherenceScores.length > 0
+          ? coherenceScores.reduce((sum, s) => sum + s.score, 0) /
+            coherenceScores.length
+          : 0.85;
       topicAffinities[topic] = topicAffinities[topic] * 0.7 + avgCoherence * 0.3;
     });
 
-    // Build coherence patterns: track what response types work
     const coherencePatterns = existingMemory?.coherencePatterns || {};
     if (coherenceScores && coherenceScores.length > 0) {
       coherenceScores.forEach(({ type, score }) => {
         if (!coherencePatterns[type]) coherencePatterns[type] = 0.5;
-        // Update as weighted average: 60% existing + 40% new data
         coherencePatterns[type] = coherencePatterns[type] * 0.6 + score * 0.4;
       });
     }
 
-    // Build updated memory
-    const memory: ConversationMemory = {
-      playerFid,
-      botFid,
-      topicThreads: topicThreads.slice(-10), // Keep last 10 topics
+    const memory: InvestigatorMemory = {
+      investigatorFid,
+      personFid,
+      topicThreads: topicThreads.slice(-10),
       topicAffinities,
       coherencePatterns,
-      playerCommunicationStyle: inferPlayerStyle(messages, playerFid),
-      playerEmotionalTone: inferPlayerTone(messages, playerFid),
-      playerKeyPhrases: extractPlayerPhrases(messages, playerFid),
+      playerCommunicationStyle: inferPlayerStyle(messages, investigatorFid),
+      playerEmotionalTone: inferPlayerTone(messages, investigatorFid),
+      playerKeyPhrases: extractPlayerPhrases(messages, investigatorFid),
       lastUpdatedAt: Date.now(),
     };
 
-    await setJSON(key, memory, CONTEXT_TTL);
-    console.log(`[conversationMemory] Saved for ${playerFid}/${botFid}, topics: ${Object.keys(topicAffinities).slice(0, 3).join(", ")}`);
+    await setJSON(key, memory, MEMORY_TTL);
+    persistMemoryToPg(investigatorFid, personFid, memory as unknown as Record<string, unknown>).catch(
+      (err) => console.warn(`[investigatorMemory] Postgres mirror failed:`, err),
+    );
+    console.log(
+      `[investigatorMemory] Saved for ${investigatorFid}/${personFid}, topics: ${Object.keys(topicAffinities).slice(0, 3).join(", ")}`,
+    );
   } catch (error) {
-    console.warn(`[conversationMemory] Failed to save:`, error);
+    console.warn(`[investigatorMemory] Failed to save:`, error);
   }
 }
 

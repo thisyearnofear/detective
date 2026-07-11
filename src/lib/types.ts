@@ -170,6 +170,68 @@ export interface GameConfig {
 }
 
 // ============================================================
+// Durable domain (Phase 1) — Postgres SoT; Bot/Match remain live-cycle runtime
+// ============================================================
+
+/** Cast-derived subject persisted across Redis wipes */
+export interface Person {
+  fid: number;
+  username: string;
+  displayName: string;
+  pfpUrl: string;
+  source: "farcaster";
+  createdAt: number;
+}
+
+/** Append-only personality capture for a Person */
+export interface PersonaSnapshot {
+  id: string;
+  personFid: number;
+  style: string;
+  personality: Record<string, unknown> | null;
+  casts: Array<{ text: string; castHash?: string; timestamp?: number }>;
+  castsHash: string;
+  capturedAt: number;
+}
+
+export type CaseState = "open" | "committed" | "archived";
+
+/** Thin investigator × subject bookmark */
+export interface Case {
+  id: string;
+  investigatorFid: number;
+  personFid: number;
+  state: CaseState;
+  openedAt: number;
+  lastActivityAt: number;
+}
+
+export type ArtefactKind = "message" | "offline_follow_up";
+export type ArtefactAuthor = "investigator" | "person" | "system";
+
+/** Append-only evidence / message stream */
+export interface Artefact {
+  id: string;
+  caseId: string;
+  kind: ArtefactKind;
+  author: ArtefactAuthor;
+  body: string;
+  createdAt: number;
+  seenAt: number | null;
+}
+
+export type CommitmentKind = "REAL" | "BOT" | "trust" | "distrust" | "reply";
+
+/** Locked conclusion on a case (maps from vote lock today) */
+export interface Commitment {
+  id: string;
+  caseId: string;
+  investigatorFid: number;
+  kind: CommitmentKind;
+  createdAt: number;
+}
+
+// ============================================================
 // User Data Consent (for GDPR and data monetization)
 // ============================================================
 

@@ -242,6 +242,67 @@ class PostgresDatabase {
       CREATE UNIQUE INDEX IF NOT EXISTS idx_registrations_tx_hash ON game_registrations(cycle_id, arbitrum_tx_hash);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_registrations_fid_cycle ON game_registrations(cycle_id, fid);
       CREATE INDEX IF NOT EXISTS idx_game_results_rank ON game_results(rank);
+
+      -- Durable domain (Phase 1 curiosity-engine foundation)
+      CREATE TABLE IF NOT EXISTS persons (
+        fid INTEGER PRIMARY KEY,
+        username VARCHAR(255) NOT NULL,
+        display_name VARCHAR(255),
+        pfp_url TEXT,
+        source VARCHAR(20) DEFAULT 'farcaster',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS persona_snapshots (
+        id VARCHAR(255) PRIMARY KEY,
+        person_fid INTEGER NOT NULL REFERENCES persons(fid),
+        style TEXT,
+        personality JSONB,
+        casts JSONB DEFAULT '[]',
+        casts_hash VARCHAR(64),
+        captured_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_persona_snapshots_person ON persona_snapshots(person_fid, captured_at DESC);
+
+      CREATE TABLE IF NOT EXISTS cases (
+        id VARCHAR(255) PRIMARY KEY,
+        investigator_fid INTEGER NOT NULL,
+        person_fid INTEGER NOT NULL REFERENCES persons(fid),
+        state VARCHAR(20) DEFAULT 'open',
+        opened_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_activity_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (investigator_fid, person_fid)
+      );
+      CREATE INDEX IF NOT EXISTS idx_cases_investigator ON cases(investigator_fid, last_activity_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_cases_open ON cases(state) WHERE state = 'open';
+
+      CREATE TABLE IF NOT EXISTS artefacts (
+        id VARCHAR(255) PRIMARY KEY,
+        case_id VARCHAR(255) NOT NULL REFERENCES cases(id),
+        kind VARCHAR(30) NOT NULL,
+        author VARCHAR(20) NOT NULL,
+        body TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        seen_at TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_artefacts_case ON artefacts(case_id, created_at);
+
+      CREATE TABLE IF NOT EXISTS commitments (
+        id VARCHAR(255) PRIMARY KEY,
+        case_id VARCHAR(255) NOT NULL REFERENCES cases(id),
+        investigator_fid INTEGER NOT NULL,
+        kind VARCHAR(20) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_commitments_case ON commitments(case_id);
+
+      CREATE TABLE IF NOT EXISTS investigator_memory (
+        investigator_fid INTEGER NOT NULL,
+        person_fid INTEGER NOT NULL,
+        memory JSONB NOT NULL DEFAULT '{}',
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (investigator_fid, person_fid)
+      );
     `);
 
         // Add columns if they don't exist (for existing databases)
@@ -280,6 +341,15 @@ class PostgresDatabase {
 
         this.initialized = true;
         console.log("[Database] Tables initialized");
+    }
+
+    /**
+     * Raw SQL helper for domain repositories (person/case).
+     */
+    async query<T = any>(sql: string, params: any[] = []): Promise<{ rows: T[]; rowCount: number }> {
+        const pool = await this.getPool();
+        const result = await pool.query(sql, params);
+        return { rows: result.rows as T[], rowCount: result.rowCount ?? 0 };
     }
 
     async saveGameCycle(cycle: Omit<DbGameCycle, "created_at">): Promise<void> {
@@ -763,6 +833,17 @@ async function getDbInstance(): Promise<PostgresDatabase> {
         await initializationPromise;
     }
     return dbInstance;
+}
+
+/**
+ * Raw SQL for domain repositories. Ensures DB is initialized.
+ */
+export async function dbQuery<T = any>(
+    sql: string,
+    params: any[] = [],
+): Promise<{ rows: T[]; rowCount: number }> {
+    const instance = await getDbInstance();
+    return instance.query<T>(sql, params);
 }
 
 // Create proxy to ensure lazy initialization

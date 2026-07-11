@@ -45,6 +45,8 @@ import { extractCoherenceScoresFromMatch, clearConversationState } from "./infer
 import { GAME_CONSTANTS, GAME_DURATION } from "./gameConstants";
 import { assignNextLLM } from "./openrouter";
 import { uploadGameSnapshot, uploadBotTrainingData, isStorachaEnabled } from "./storacha";
+import * as personRepository from "./personRepository";
+import * as caseRepository from "./caseRepository";
 
 // Destructure from single source of truth
 const MATCH_DURATION = GAME_CONSTANTS.MATCH_DURATION;
@@ -123,7 +125,23 @@ class GameManager {
           },
         };
         console.log(`[GameManager] Loaded cycle ${stateMeta.cycleId} from Redis`);
-        
+
+        // If Redis collections are cold, hydrate persons (bots) from Postgres
+        if (bots.size === 0) {
+          try {
+            const hydrated = await personRepository.loadAllPersonsAsBots();
+            if (hydrated.size > 0) {
+              this.state.bots = hydrated;
+              for (const bot of hydrated.values()) {
+                await persistence.saveBot(bot);
+              }
+              console.log(`[GameManager] Hydrated ${hydrated.size} persons→bots from Postgres`);
+            }
+          } catch (hydrateErr) {
+            console.warn(`[GameManager] Person hydration failed:`, hydrateErr);
+          }
+        }
+
         // Ensure cycle exists in database (for foreign key constraints)
         try {
           await database.saveGameCycle({
@@ -149,6 +167,21 @@ class GameManager {
       } else {
         // Create new cycle
         this.state = this.createNewGameState();
+
+        // Hydrate durable persons into bots even on new cycle (identities survive)
+        try {
+          const hydrated = await personRepository.loadAllPersonsAsBots();
+          if (hydrated.size > 0) {
+            this.state.bots = hydrated;
+            for (const bot of hydrated.values()) {
+              await persistence.saveBot(bot);
+            }
+            console.log(`[GameManager] Hydrated ${hydrated.size} persons→bots into new cycle`);
+          }
+        } catch (hydrateErr) {
+          console.warn(`[GameManager] Person hydration on new cycle failed:`, hydrateErr);
+        }
+
         await persistence.saveGameStateMeta({
           cycleId: this.state.cycleId,
           state: this.state.state,
@@ -318,9 +351,14 @@ class GameManager {
 
     console.log(`[createBotAndPlayer] Bot @${bot.username} assigned LLM: ${llmModel.name} (${llmModel.id})`);
 
-    // Persist
+    // Persist to Redis (hot cache)
     await persistence.savePlayer(player);
     await persistence.saveBot(bot);
+
+    // Persist Person + PersonaSnapshot to Postgres (durable SoT)
+    personRepository.upsertPersonFromBot(bot).catch((err) =>
+      console.warn(`[GameManager] Failed to upsert durable person ${bot.fid}:`, err),
+    );
 
     // Invalidate player and bot caches so other methods see the new player
     getRepository().invalidateCache('players');
@@ -513,7 +551,7 @@ class GameManager {
     if (!match || !sender) return null;
 
     const message: ChatMessage = {
-      id: `msg-${Date.now()}`,
+      id: `msg-${Date.now()}-${senderFid}`,
       sender: { fid: sender.fid, username: sender.username },
       text,
       timestamp: Date.now(),
@@ -521,6 +559,19 @@ class GameManager {
 
     match.messages.push(message);
     await persistence.saveMatch(match);
+
+    // Append durable artefact (non-blocking)
+    const caseId = caseRepository.caseIdFor(match.player.fid, match.opponent.fid);
+    caseRepository
+      .appendMessageArtefact({
+        caseId,
+        message,
+        investigatorFid: match.player.fid,
+        personFid: match.opponent.fid,
+      })
+      .catch((err) =>
+        console.warn(`[GameManager] Failed to append artefact for ${caseId}:`, err),
+      );
 
     return message;
   }
@@ -646,6 +697,18 @@ class GameManager {
 
     await persistence.saveMatch(match);
     await persistence.savePlayer(player);
+
+    // Durable commitment (non-blocking)
+    const durableCaseId = caseRepository.caseIdFor(player.fid, match.opponent.fid);
+    caseRepository
+      .writeCommitment({
+        caseId: durableCaseId,
+        investigatorFid: player.fid,
+        kind: guess,
+      })
+      .catch((err) =>
+        console.warn(`[lockMatchVote] Failed to write commitment for ${durableCaseId}:`, err),
+      );
 
     // PHASE 2: Save conversation context for future rounds (async, non-blocking)
     // Only if opponent is a bot (we track context between player and bot)
@@ -965,14 +1028,26 @@ class GameManager {
     this.state!.matches.set(match.id, match);
     persistence.saveMatch(match).catch(console.error);
 
-    // Bot proactive opening
-    if (opponent.type === "BOT" && opponent.personality) {
-      const { generateProactiveOpening } = require("./botProactive");
-      const openingMessage = generateProactiveOpening(opponent.personality);
-      if (openingMessage) {
-        this.addMessageToMatch(match.id, openingMessage, opponent.fid).catch(console.error);
+    // Ensure opponent exists in persons + upsert durable case, then optional bot opening
+    const openDurableCase = async () => {
+      if (opponent.type === "BOT") {
+        await personRepository.upsertPersonFromBot(opponent as Bot);
+      } else {
+        await personRepository.upsertPersonFromProfile(opponent);
       }
-    }
+      await caseRepository.upsertCaseFromMatch(match);
+
+      if (opponent.type === "BOT" && opponent.personality) {
+        const { generateProactiveOpening } = require("./botProactive");
+        const openingMessage = generateProactiveOpening(opponent.personality);
+        if (openingMessage) {
+          await this.addMessageToMatch(match.id, openingMessage, opponent.fid);
+        }
+      }
+    };
+    openDurableCase().catch((err) =>
+      console.warn(`[GameManager] Failed durable case setup for ${match.id}:`, err),
+    );
 
     const facedCount = session.facedOpponents.get(opponent.fid) || 0;
     session.facedOpponents.set(opponent.fid, facedCount + 1);
@@ -1243,14 +1318,14 @@ class GameManager {
      this.state!.finishedAt = stateMeta.finishedAt;
    }
    // NOTE: Auto-transitions disabled - use explicit API calls or cron job
-   // See tickGameState() for explicit transition logic
+   // See tickWorld() for explicit transition logic
   }
 
   /**
-   * Explicit game state tick - call this from a cron job or dedicated endpoint
-   * Handles all phase transitions in one place
+   * Explicit world tick - call from cron. Handles all phase transitions.
+   * Renamed from tickGameState (Phase 1 durable domain).
    */
-  async tickGameState(): Promise<{ transitioned: boolean; from?: string; to?: string }> {
+  async tickWorld(): Promise<{ transitioned: boolean; from?: string; to?: string }> {
     await this.ensureInitialized();
     
     const stateMeta = await persistence.loadGameStateMeta();
@@ -1293,6 +1368,11 @@ class GameManager {
     }
     
     return { transitioned: false };
+  }
+
+  /** @deprecated Use tickWorld */
+  async tickGameState(): Promise<{ transitioned: boolean; from?: string; to?: string }> {
+    return this.tickWorld();
   }
 
   private async cleanupOldMatches(): Promise<void> {
