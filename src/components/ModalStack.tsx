@@ -1,7 +1,7 @@
 // src/components/ModalStack.tsx
 'use client';
 
-import React, { createContext, useState, useCallback, ReactNode } from 'react';
+import { createContext, useState, useCallback, ReactNode } from 'react';
 import RoundTransition from './RoundTransition';
 import ErrorCard from './ErrorCard';
 

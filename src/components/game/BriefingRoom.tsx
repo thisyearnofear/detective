@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { Player, UserProfile } from "@/lib/types";
 import { useCountdown } from "@/hooks/useCountdown";
 import { useRegistrationFlow } from "@/hooks/useRegistrationFlow";
@@ -221,13 +221,10 @@ export default function BriefingRoom({
   const hasMinPlayers = playerCount >= GAME_CONSTANTS.MIN_PLAYERS;
   const countdownActive = hasMinPlayers && timeLeft < 999999999; // Countdown started
 
-  // Estimate wait time based on registration rate
-  const estimatedWaitMinutes = useMemo(() => {
-    if (hasMinPlayers) return 0; // Game starting soon
-    const playersNeeded = GAME_CONSTANTS.MIN_PLAYERS - playerCount;
-    // Assume ~2 players join per minute (conservative estimate)
-    return Math.ceil(playersNeeded / 2);
-  }, [hasMinPlayers, playerCount]);
+  // Estimate wait time based on registration rate (~2 joins/min)
+  const estimatedWaitMinutes = hasMinPlayers
+    ? 0
+    : Math.ceil((GAME_CONSTANTS.MIN_PLAYERS - playerCount) / 2);
 
   const formatTimeLeft = (ms: number) => {
     const seconds = Math.floor(ms / 1000);

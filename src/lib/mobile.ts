@@ -27,7 +27,7 @@ export function useTouchGestures(
   const { swipeThreshold = 50, longPressDelay = 500, tapTimeout = 200 } = options;
   
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
-  const longPressTimerRef = useRef<NodeJS.Timeout>();
+  const longPressTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   const handleTouchStart = useCallback((e: TouchEvent) => {
     const touch = e.touches[0];
@@ -132,7 +132,7 @@ export function useHaptics() {
 // VIRTUAL KEYBOARD DETECTION
 export function useVirtualKeyboard(onToggle?: (isOpen: boolean) => void) {
   const [isOpen, setIsOpen] = useState(false);
-  const initialViewportHeight = useRef<number>();
+  const initialViewportHeight = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

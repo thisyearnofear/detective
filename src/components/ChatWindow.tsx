@@ -86,7 +86,7 @@ export default function ChatWindow({
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
 
   // PERFORMANCE OPTIMIZATIONS
-  const scrollTimeoutRef = useRef<NodeJS.Timeout>();
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   // PULL-TO-REFRESH for message updates (calls parent's refresh callback)
   const {

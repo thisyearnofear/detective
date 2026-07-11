@@ -10,7 +10,7 @@ export function useDebounce<T extends (...args: any[]) => any>(
   callback: T,
   delay: number
 ): T {
-  const timeoutRef = useRef<NodeJS.Timeout>();
+  const timeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
   
   return useCallback((...args: any[]) => {
     if (timeoutRef.current) {
@@ -94,7 +94,7 @@ export function useAdaptivePolling(
   pollFn: () => void,
   baseInterval: number = 2000
 ) {
-  const intervalRef = useRef<NodeJS.Timeout>();
+  const intervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const isVisible = useRef(true);
 
   useEffect(() => {
@@ -195,7 +195,7 @@ export function useOptimizedScroll(
   options: { 
     throttle?: number;
     passive?: boolean;
-    element?: React.RefObject<Element>;
+    element?: React.RefObject<Element | null>;
   } = {}
 ) {
   const { throttle = 16, passive = true, element } = options; // 60fps throttling
@@ -212,7 +212,7 @@ export function useOptimizedScroll(
 
 // FRAME-RATE AWARE ANIMATIONS
 export function useFrameRateOptimization() {
-  const rafId = useRef<number>();
+  const rafId = useRef<number | undefined>(undefined);
   
   const scheduleUpdate = useCallback((callback: () => void) => {
     if (rafId.current) {
