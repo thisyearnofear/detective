@@ -4,16 +4,18 @@ import '@farcaster/auth-kit/styles.css';
 import { RootProviders } from '@/components/Providers';
 import ErrorBoundary from '@/components/ErrorBoundary';
 
+const APP_DOMAIN = process.env.NEXT_PUBLIC_APP_URL || 'https://detective.thisyearnofear.com';
+
 const miniAppEmbed = {
   version: '1',
-  imageUrl: 'https://detectiveproof.vercel.app/og-image.png',
+  imageUrl: `${APP_DOMAIN}/og-image.png`,
   button: {
     title: '🔍 Join Investigation',
     action: {
       type: 'launch_miniapp',
-      url: 'https://detectiveproof.vercel.app',
+      url: APP_DOMAIN,
       name: 'Detective',
-      splashImageUrl: 'https://detectiveproof.vercel.app/detective.png',
+      splashImageUrl: `${APP_DOMAIN}/detective.png`,
       splashBackgroundColor: '#0f172a',
     },
   },
@@ -34,7 +36,7 @@ export const metadata: Metadata = {
     title: 'Detective - Is That You?',
     description: 'Can you tell if you are chatting with a real person or an AI bot?',
     type: 'website',
-    url: 'https://detectiveproof.vercel.app',
+    url: APP_DOMAIN,
     images: [
       {
         url: '/og-image.png', // 1200x630px recommended

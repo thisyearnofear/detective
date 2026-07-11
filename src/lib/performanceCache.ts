@@ -12,12 +12,11 @@ type CacheEntry<T> = {
 
 class PerformanceCache {
   private cache = new Map<string, CacheEntry<any>>();
-  private cleanupInterval: NodeJS.Timeout | null = null;
 
   constructor() {
     // Cleanup expired entries every 30 seconds
     if (typeof window === "undefined") {
-      this.cleanupInterval = setInterval(() => this.cleanup(), 30000);
+      setInterval(() => this.cleanup(), 30000);
     }
   }
 

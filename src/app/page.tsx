@@ -8,7 +8,6 @@ import AnimatedGridBackdrop from "@/components/AnimatedGridBackdrop";
 import StarfieldBackground from "@/components/StarfieldBackground";
 import GameStateView from "@/components/game/GameStateView";
 import CaseStatusCard from "@/components/game/CaseStatusCard";
-import ModeSelector from "@/components/game/ModeSelector";
 import Leaderboard from "@/components/Leaderboard";
 import CollapsibleSection from "@/components/CollapsibleSection";
 import { fetcher, getApiUrl, requestJson } from "@/lib/fetcher";
@@ -269,16 +268,6 @@ export default function Home() {
                       gameEnds: gameState.gameEnds,
                     }}
                   />
-                  
-                  {/* Mode Display */}
-                  {gameState.mode && (
-                    <div className="w-full">
-                      <ModeSelector 
-                        currentMode={gameState.mode as any}
-                        disabled={true}
-                      />
-                    </div>
-                  )}
                 </>
               ) : (
                 <div className="w-full bg-white/5 border border-white/10 rounded-xl p-6 animate-pulse">

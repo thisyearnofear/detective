@@ -1,5 +1,5 @@
 // src/lib/gamification.ts
-// Single source of truth for achievements, badges, and gamification logic
+// Lightweight end-of-game feedback helpers (accuracy / streak / share)
 
 export interface GameResult {
   accuracy: number;
@@ -7,7 +7,7 @@ export interface GameResult {
   totalPlayers: number;
   correctCount: number;
   totalCount: number;
-  earnings: number; // in ARB
+  earnings: number;
   streak: number;
   roundResults: Array<{
     opponentType: "REAL" | "BOT";
@@ -48,53 +48,11 @@ export const ACHIEVEMENTS: Achievement[] = [
     condition: (r) => r.rank <= 3,
   },
   {
-    id: "top_10_percent",
-    name: "Elite",
-    description: "Finish in top 10%",
-    icon: "⭐",
-    condition: (r) => r.totalPlayers > 0 && r.rank <= Math.ceil(r.totalPlayers * 0.1),
-  },
-  {
     id: "hot_streak",
     name: "Hot Streak",
     description: "Win 3+ matches in a row",
     icon: "🔥",
     condition: (r) => r.streak >= 3,
-  },
-  {
-    id: "profit",
-    name: "Profitable",
-    description: "Earn any ARB from stakes",
-    icon: "💰",
-    condition: (r) => r.earnings > 0,
-  },
-  {
-    id: "big_profit",
-    name: "Big Earner",
-    description: "Earn 0.01+ ARB",
-    icon: "🤑",
-    condition: (r) => r.earnings >= 0.01,
-  },
-  {
-    id: "bot_hunter",
-    name: "Bot Hunter",
-    description: "Detect 5+ bots correctly",
-    icon: "🤖",
-    condition: (r) => r.roundResults.filter((m) => m.opponentType === "BOT" && m.correct).length >= 5,
-  },
-  {
-    id: "human_connection",
-    name: "Human Connection",
-    description: "Correctly identify 5 real players",
-    icon: "👥",
-    condition: (r) => r.roundResults.filter((m) => m.opponentType === "REAL" && m.correct).length >= 5,
-  },
-  {
-    id: "veteran",
-    name: "Veteran",
-    description: "Play 20+ matches in one game",
-    icon: "🎖️",
-    condition: (r) => r.totalCount >= 20,
   },
 ];
 
@@ -140,21 +98,16 @@ export function calculateEarnings(roundResults: GameResult["roundResults"]): num
 
 export function generateShareText(result: GameResult, achievements: Achievement[]): string {
   const lines = [
-    `🎮 Detective Case Closed!`,
+    `Detective Case Closed!`,
     ``,
-    `📊 Accuracy: ${result.accuracy.toFixed(0)}%`,
-    `🏆 Rank: #${result.rank} of ${result.totalPlayers}`,
-    `🔥 Streak: ${result.streak}`,
+    `Accuracy: ${result.accuracy.toFixed(0)}%`,
+    `Rank: #${result.rank} of ${result.totalPlayers}`,
+    `Streak: ${result.streak}`,
     ``,
   ];
 
-  if (result.earnings > 0) {
-    lines.push(`💰 Earned: ${formatEarnings(result.earnings)}`);
-    lines.push(``);
-  }
-
   if (achievements.length > 0) {
-    lines.push(`🏅 Achievements:`);
+    lines.push(`Achievements:`);
     lines.push(achievements.map((a) => `${a.icon} ${a.name}`).join(", "));
   }
 

@@ -26,7 +26,7 @@ import { invalidateGameState } from "@/lib/performanceCache";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { fid, arbitrumTxHash, arbitrumWalletAddress, hasPermission, permissionExpiry, mode } = body;
+    const { fid, arbitrumTxHash, arbitrumWalletAddress, hasPermission, permissionExpiry } = body;
 
     // ========== STEP 1: VALIDATE REQUEST ==========
     if (!fid || typeof fid !== "number" || fid <= 0) {
@@ -42,14 +42,6 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "Registration is currently closed." },
         { status: 403 }
-      );
-    }
-
-    // Validate mode if provided (optional, defaults to current game mode)
-    if (mode && mode !== 'conversation' && mode !== 'negotiation') {
-      return NextResponse.json(
-        { error: "Invalid game mode. Must be 'conversation' or 'negotiation'." },
-        { status: 400 }
       );
     }
 

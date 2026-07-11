@@ -24,7 +24,6 @@ interface GameStatusResponse {
   gameEnds?: number;
   minPlayers: number;
   maxPlayers: number;
-  mode: string; // Current game mode
   isRegistered?: boolean;
 }
 
@@ -75,7 +74,6 @@ export async function GET(request: NextRequest) {
       cacheKey,
       async () => {
         const gameState = await withRetry(() => gameManager.getGameState(), RETRY_PRESETS.fast);
-        const config = await gameManager.getConfig();
         
         // Check registration status if FID provided
         let isRegistered = false;
@@ -91,7 +89,6 @@ export async function GET(request: NextRequest) {
           gameEnds: gameState?.gameEnds,
           minPlayers: 1,
           maxPlayers: 100,
-          mode: config?.mode || 'conversation',
           isRegistered: fid ? isRegistered : undefined,
         };
       },
