@@ -176,3 +176,21 @@ export async function loadAllPersonsAsBots(): Promise<Map<number, Bot>> {
   }
   return bots;
 }
+
+/**
+ * Pick a random person (with persona snapshot) for a new investigation.
+ */
+export async function pickRandomPerson(excludeFid?: number): Promise<Person | null> {
+  const result = await dbQuery(
+    excludeFid
+      ? `SELECT p.* FROM persons p
+         INNER JOIN persona_snapshots s ON s.person_fid = p.fid
+         WHERE p.fid <> $1
+         ORDER BY RANDOM() LIMIT 1`
+      : `SELECT p.* FROM persons p
+         INNER JOIN persona_snapshots s ON s.person_fid = p.fid
+         ORDER BY RANDOM() LIMIT 1`,
+    excludeFid ? [excludeFid] : [],
+  );
+  return result.rows[0] ? rowToPerson(result.rows[0]) : null;
+}

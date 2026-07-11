@@ -113,6 +113,75 @@ export async function listCasesForInvestigator(
   return result.rows.map(rowToCase);
 }
 
+export interface CaseListItem extends Case {
+  personUsername: string;
+  personDisplayName: string;
+  personPfpUrl: string;
+  lastArtefactPreview: string | null;
+  unseenFollowUp: boolean;
+}
+
+export async function listCasesWithDetails(
+  investigatorFid: number,
+  limit = 50,
+): Promise<CaseListItem[]> {
+  const result = await dbQuery(
+    `SELECT
+       c.*,
+       p.username AS person_username,
+       p.display_name AS person_display_name,
+       p.pfp_url AS person_pfp_url,
+       (
+         SELECT a.body FROM artefacts a
+         WHERE a.case_id = c.id
+         ORDER BY a.created_at DESC LIMIT 1
+       ) AS last_artefact_preview,
+       EXISTS (
+         SELECT 1 FROM offline_events e
+         JOIN artefacts a2 ON a2.id = e.payload_artefact_id
+         WHERE e.case_id = c.id
+           AND e.status = 'delivered'
+           AND a2.seen_at IS NULL
+       ) AS unseen_follow_up
+     FROM cases c
+     JOIN persons p ON p.fid = c.person_fid
+     WHERE c.investigator_fid = $1
+     ORDER BY c.last_activity_at DESC
+     LIMIT $2`,
+    [investigatorFid, limit],
+  );
+
+  return result.rows.map((row: any) => ({
+    ...rowToCase(row),
+    personUsername: row.person_username,
+    personDisplayName: row.person_display_name || row.person_username,
+    personPfpUrl: row.person_pfp_url || "",
+    lastArtefactPreview: row.last_artefact_preview || null,
+    unseenFollowUp: !!row.unseen_follow_up,
+  }));
+}
+
+/**
+ * Open or reopen a case for investigator × person.
+ */
+export async function upsertCase(
+  investigatorFid: number,
+  personFid: number,
+): Promise<Case> {
+  const id = caseIdFor(investigatorFid, personFid);
+  const now = new Date();
+  await dbQuery(
+    `INSERT INTO cases (id, investigator_fid, person_fid, state, opened_at, last_activity_at)
+     VALUES ($1, $2, $3, 'open', $4, $4)
+     ON CONFLICT (investigator_fid, person_fid) DO UPDATE SET
+       last_activity_at = EXCLUDED.last_activity_at,
+       state = 'open'`,
+    [id, investigatorFid, personFid, now],
+  );
+  const result = await dbQuery(`SELECT * FROM cases WHERE id = $1`, [id]);
+  return rowToCase(result.rows[0]);
+}
+
 /**
  * Append a message artefact. Author inferred from senderFid vs case parties.
  */
