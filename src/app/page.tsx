@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import AuthComponent from "@/components/AuthComponent";
 import SpinningDetective from "@/components/SpinningDetective";
+import { AUTH_EXPIRED_EVENT } from "@/lib/fetcher";
 import AnimatedGridBackdrop from "@/components/AnimatedGridBackdrop";
 import StarfieldBackground from "@/components/StarfieldBackground";
 import InvestigationHome from "@/components/InvestigationHome";
@@ -76,6 +77,19 @@ export default function Home() {
     localStorage.removeItem("auth-token");
     localStorage.removeItem("cached-user");
   };
+
+  // When any API call returns 401, fetcher.ts clears localStorage AND
+  // dispatches "auth:expired". Here we react by dropping the cached sdkUser
+  // state so the AuthComponent re-mounts and re-prompts.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = () => {
+      setSdkUser(null);
+      setIsSdkLoading(false);
+    };
+    window.addEventListener(AUTH_EXPIRED_EVENT, handler);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handler);
+  }, []);
 
   if (isSdkLoading) {
     return (

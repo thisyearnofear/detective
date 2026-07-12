@@ -19,11 +19,14 @@ export const maxDuration = 60; // Offline LLM delivery may need headroom
  */
 export async function GET(request: NextRequest) {
   try {
-    // Optional: Verify cron secret for security
+    // Fail closed: a missing CRON_SECRET MUST NOT leave the endpoint public.
+    // The old `cronSecret && ...` form silently allowed the endpoint to be hit
+    // by anyone if the env var was unset, which would let a stranger spam
+    // tickWorld and burn the offline event queue.
     const authHeader = request.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
-    
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+
+    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }

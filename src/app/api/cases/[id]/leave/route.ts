@@ -1,25 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCaseById, listArtefacts } from "@/lib/caseRepository";
 import { scheduleOfflineFollowUp } from "@/lib/offlineEvents";
+import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 /**
- * POST /api/cases/[id]/leave
- * Body: { fid } — investigator steps away; schedule offline follow-up if exchange exists
+ * POST /api/cases/[id]/leave — investigator steps away; schedule offline
+ * follow-up if an exchange exists.
+ *
+ * Auth: requireAuth(request). The per-case `investigatorFid` is verified as
+ * defense-in-depth.
  */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { id: caseId } = await params;
-    const body = await request.json();
-    const fid = typeof body.fid === "number" ? body.fid : parseInt(body.fid, 10);
-    if (isNaN(fid)) {
-      return NextResponse.json({ error: "fid is required." }, { status: 400 });
-    }
+    const auth = requireAuth(request);
+    if (!auth.ok) return auth.response;
+    const fid = auth.token.fid;
 
+    const { id: caseId } = await params;
     const c = await getCaseById(caseId);
     if (!c) {
       return NextResponse.json({ error: "Case not found." }, { status: 404 });

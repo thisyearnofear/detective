@@ -3,27 +3,26 @@ import {
   getCaseWithArtefacts,
 } from "@/lib/caseRepository";
 import { getPersonByFid } from "@/lib/personRepository";
+import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 /**
- * GET /api/cases/[id]?fid= — case + artefacts + person
+ * GET /api/cases/[id] — case + artefacts + person.
+ *
+ * Auth: requireAuth(request). The per-case `investigatorFid` is verified
+ * against the verified fid as defense-in-depth.
  */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { id } = await params;
-    const fidParam = request.nextUrl.searchParams.get("fid");
-    if (!fidParam) {
-      return NextResponse.json({ error: "fid is required." }, { status: 400 });
-    }
-    const fid = parseInt(fidParam, 10);
-    if (isNaN(fid)) {
-      return NextResponse.json({ error: "Invalid fid." }, { status: 400 });
-    }
+    const auth = requireAuth(request);
+    if (!auth.ok) return auth.response;
+    const fid = auth.token.fid;
 
+    const { id } = await params;
     const packed = await getCaseWithArtefacts(id);
     if (!packed) {
       return NextResponse.json({ error: "Case not found." }, { status: 404 });

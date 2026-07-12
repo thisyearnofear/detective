@@ -1,14 +1,15 @@
 "use client";
 
 /**
- * Unified Authentication Component (December 2025)
+ * Unified Authentication Component
  *
- * Smart routing based on context:
- * - MiniApp: Auto-connects via Quick Auth SDK
- * - Web: Shows SignInButton with QR code flow
+ * Two paths, one server endpoint:
+ * - MiniApp: sdk.quickAuth.getToken() -> verify JWT via /api/auth/quick-auth/verify
+ * - Web:     @farcaster/auth-kit SignInButton (signature+message+fid)
+ *            -> verify via EIP-191 + Neynar on the same endpoint
  *
- * Both paths converge at single server verification endpoint.
- * Reference: https://miniapps.farcaster.xyz/docs/sdk/quick-auth
+ * Both produce an internal session JWT which the rest of the server uses for
+ * requireAuth(). Reference: https://miniapps.farcaster.xyz/docs/sdk/quick-auth
  */
 
 import { useEffect, useState } from "react";
@@ -30,12 +31,14 @@ type Props = {
   onExploreWithoutAuthAction?: () => void;
 };
 
-type VerifyResponse = {
-  fid: number;
-  username?: string;
-  displayName?: string;
-  pfpUrl?: string;
+type SessionResponse = {
+  token: string;
+  user: AuthUser;
 };
+
+type VerifyPayload =
+  | { kind: "quick-auth"; token: string }
+  | { kind: "siwf"; signature: string; message: string; fid: number };
 
 type AuthStep = "detecting" | "authenticating" | "webauth" | "error";
 
@@ -48,55 +51,41 @@ export default function AuthComponent({
   const [error, setError] = useState<string | null>(null);
 
   /**
-   * Unified server verification for both MiniApp and Web flows
-   * DRY: Single source of truth for token validation
+   * Send a verification payload to the single session endpoint, receive the
+   * internal session JWT and the canonical user profile.
    */
-  const verifyTokenOnServer = async (
-    token: string,
-  ): Promise<VerifyResponse> => {
-    return requestJson<VerifyResponse>("/api/auth/quick-auth/verify", {
+  const exchangeForSession = async (
+    payload: VerifyPayload,
+  ): Promise<SessionResponse> => {
+    return requestJson<SessionResponse>("/api/auth/quick-auth/verify", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ token }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     });
   };
 
   /**
-   * Handle successful authentication from either MiniApp or Web source
-   * DRY: Single path for all auth success cases
+   * Handle successful authentication from either MiniApp or Web source.
+   * The `input` is a payload; the server returns the session JWT; we store
+   * the session JWT (NOT the inbound token) as our `auth-token`.
    */
-  const handleAuthSuccess = async (token: string) => {
+  const handleAuthSuccess = async (input: VerifyPayload) => {
     try {
       setStep("authenticating");
+      const session = await exchangeForSession(input);
 
-      // Verify token on server
-      const userData = await verifyTokenOnServer(token);
-
-      // Store token and user data for session persistence
-      localStorage.setItem("auth-token", token);
+      localStorage.setItem("auth-token", session.token);
       localStorage.setItem(
         "cached-user",
         JSON.stringify({
-          fid: userData.fid,
-          username: userData.username,
-          displayName: userData.displayName,
-          pfpUrl: userData.pfpUrl,
+          fid: session.user.fid,
+          username: session.user.username,
+          displayName: session.user.displayName,
+          pfpUrl: session.user.pfpUrl,
         }),
       );
 
-      // Notify parent component
-      onAuthSuccessAction(
-        {
-          fid: userData.fid,
-          username: userData.username,
-          displayName: userData.displayName,
-          pfpUrl: userData.pfpUrl,
-        },
-        token,
-      );
+      onAuthSuccessAction(session.user, session.token);
 
       // Signal ready to Farcaster (if in MiniApp context)
       try {
@@ -162,7 +151,7 @@ export default function AuthComponent({
 
         // If in MiniApp and got token, authenticate
         if (inMiniApp && token) {
-          await handleAuthSuccess(token);
+          await handleAuthSuccess({ kind: "quick-auth", token });
           return;
         }
 
@@ -236,6 +225,9 @@ export default function AuthComponent({
             - Polling for signature completion
         */}
         <div className="flex justify-center relative z-10">
+          {/* @farcaster/auth-kit handles QR, deep-link, and polling on the
+              client. We forward the resulting (signature, message, fid) to
+              the server for EIP-191 verification + Neynar binding. */}
           <SignInButton
             timeout={300_000}
             interval={1500}
@@ -247,21 +239,15 @@ export default function AuthComponent({
                   );
                 }
 
-                // Create a temporary token from the signature and profile data
-                // auth-kit has already verified the signature on client side
-                const tempToken = btoa(
-                  JSON.stringify({
-                    fid: res.fid,
-                    username: res.username,
-                    displayName: res.displayName,
-                    pfpUrl: res.pfpUrl,
-                    message: res.message,
-                    signature: res.signature,
-                  }),
-                );
-
-                // Call unified auth handler
-                await handleAuthSuccess(tempToken);
+                // Hand the SIWF (signature, message, fid) to the server, which
+                // recovers the signer address with viem and binds it to the
+                // FID via Neynar verified_addresses.
+                await handleAuthSuccess({
+                  kind: "siwf",
+                  signature: res.signature,
+                  message: res.message,
+                  fid: res.fid,
+                });
               } catch (err) {
                 const errorMsg =
                   err instanceof Error ? err.message : "Sign-in failed";

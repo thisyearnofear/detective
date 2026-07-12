@@ -4,22 +4,22 @@ import {
   upsertCase,
 } from "@/lib/caseRepository";
 import { pickRandomPerson, getPersonByFid } from "@/lib/personRepository";
+import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 /**
- * GET /api/cases?fid= — list investigator's cases with person details
+ * GET /api/cases — list investigator's cases with person details.
+ *
+ * Auth: requireAuth(request). The fid comes from the verified session JWT,
+ * never from the request. Per-case `investigatorFid` is verified as
+ * defense-in-depth against future repo bugs.
  */
 export async function GET(request: NextRequest) {
   try {
-    const fidParam = request.nextUrl.searchParams.get("fid");
-    if (!fidParam) {
-      return NextResponse.json({ error: "fid is required." }, { status: 400 });
-    }
-    const fid = parseInt(fidParam, 10);
-    if (isNaN(fid)) {
-      return NextResponse.json({ error: "Invalid fid." }, { status: 400 });
-    }
+    const auth = requireAuth(request);
+    if (!auth.ok) return auth.response;
+    const fid = auth.token.fid;
 
     const cases = await listCasesWithDetails(fid);
     return NextResponse.json({ cases });
@@ -34,24 +34,26 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/cases
- * Body: { fid, personFid? } — open case on personFid, or pick a random subject
+ * Body: { personFid? } — open case on personFid, or pick a random subject.
+ *
+ * Auth: caller identity comes from the session JWT.
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const fid = typeof body.fid === "number" ? body.fid : parseInt(body.fid, 10);
-    if (isNaN(fid)) {
-      return NextResponse.json({ error: "fid is required." }, { status: 400 });
-    }
+    const auth = requireAuth(request);
+    if (!auth.ok) return auth.response;
+    const fid = auth.token.fid;
 
-    let personFid =
+    const body = await request.json().catch(() => ({}));
+    const personFid =
       body.personFid != null
         ? typeof body.personFid === "number"
           ? body.personFid
           : parseInt(body.personFid, 10)
         : null;
 
-    if (personFid == null || isNaN(personFid)) {
+    let resolvedPersonFid = personFid;
+    if (resolvedPersonFid == null || isNaN(resolvedPersonFid)) {
       const person = await pickRandomPerson(fid);
       if (!person) {
         return NextResponse.json(
@@ -62,22 +64,22 @@ export async function POST(request: NextRequest) {
           { status: 404 },
         );
       }
-      personFid = person.fid;
+      resolvedPersonFid = person.fid;
     }
 
-    if (personFid === fid) {
+    if (resolvedPersonFid === fid) {
       return NextResponse.json(
         { error: "Cannot investigate yourself." },
         { status: 400 },
       );
     }
 
-    const person = await getPersonByFid(personFid);
+    const person = await getPersonByFid(resolvedPersonFid);
     if (!person) {
       return NextResponse.json({ error: "Person not found." }, { status: 404 });
     }
 
-    const c = await upsertCase(fid, personFid);
+    const c = await upsertCase(fid, resolvedPersonFid);
     return NextResponse.json({
       case: c,
       person: {

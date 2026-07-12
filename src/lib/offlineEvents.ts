@@ -171,7 +171,35 @@ export async function markOfflineEventConsumed(eventId: string): Promise<void> {
   );
 }
 
-export async function markArtefactSeen(artefactId: string): Promise<void> {
+/**
+ * Mark an artefact as seen. Returns the outcome so the caller can surface a
+ * 404 / 403 instead of silently no-op'ing.
+ *
+ * Security: the function takes the caller's `investigatorFid` (from a verified
+ * JWT) and refuses to mark artefacts that don't belong to one of their cases.
+ * Without this, any caller could poison the return-rate metric by marking
+ * other users' artefacts as seen.
+ */
+export type MarkArtefactSeenResult =
+  | { seen: true }
+  | { seen: false; reason: "not_found" | "forbidden" };
+
+export async function markArtefactSeen(
+  artefactId: string,
+  investigatorFid: number,
+): Promise<MarkArtefactSeenResult> {
+  const owner = await dbQuery<{ investigator_fid: number }>(
+    `SELECT c.investigator_fid
+       FROM artefacts a
+       JOIN cases c ON c.id = a.case_id
+       WHERE a.id = $1`,
+    [artefactId],
+  );
+  if (owner.rows.length === 0) return { seen: false, reason: "not_found" };
+  if (owner.rows[0].investigator_fid !== investigatorFid) {
+    return { seen: false, reason: "forbidden" };
+  }
+
   await dbQuery(
     `UPDATE artefacts SET seen_at = NOW() WHERE id = $1 AND seen_at IS NULL`,
     [artefactId],
@@ -181,6 +209,7 @@ export async function markArtefactSeen(artefactId: string): Promise<void> {
      WHERE payload_artefact_id = $1 AND status = 'delivered'`,
     [artefactId],
   );
+  return { seen: true };
 }
 
 export interface UnseenFollowUp {

@@ -1,22 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listUnseenFollowUps, markArtefactSeen } from "@/lib/offlineEvents";
+import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 /**
- * GET /api/inbox?fid=
- * Unseen offline follow-ups for the return card.
+ * GET /api/inbox — unseen offline follow-ups for the return card.
+ *
+ * Auth: requireAuth(request).
  */
 export async function GET(request: NextRequest) {
   try {
-    const fidParam = request.nextUrl.searchParams.get("fid");
-    if (!fidParam) {
-      return NextResponse.json({ error: "fid is required." }, { status: 400 });
-    }
-    const fid = parseInt(fidParam, 10);
-    if (isNaN(fid)) {
-      return NextResponse.json({ error: "Invalid fid." }, { status: 400 });
-    }
+    const auth = requireAuth(request);
+    if (!auth.ok) return auth.response;
+    const fid = auth.token.fid;
 
     const items = await listUnseenFollowUps(fid);
     return NextResponse.json({ items, count: items.length });
@@ -32,11 +29,18 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/inbox
  * Body: { artefactId } — mark offline follow-up as seen (opens the clue).
+ *
+ * Auth: requireAuth(request). `markArtefactSeen` does its own ownership
+ * check (defense in depth) and returns { seen, reason? }.
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { artefactId } = body;
+    const auth = requireAuth(request);
+    if (!auth.ok) return auth.response;
+    const fid = auth.token.fid;
+
+    const body = await request.json().catch(() => ({}));
+    const artefactId = body.artefactId;
     if (!artefactId || typeof artefactId !== "string") {
       return NextResponse.json(
         { error: "artefactId is required." },
@@ -44,7 +48,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await markArtefactSeen(artefactId);
+    const result = await markArtefactSeen(artefactId, fid);
+    if (!result.seen) {
+      if (result.reason === "not_found") {
+        return NextResponse.json({ error: "Artefact not found." }, { status: 404 });
+      }
+      return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+    }
     return NextResponse.json({ success: true, artefactId });
   } catch (error) {
     console.error("[api/inbox POST]", error);

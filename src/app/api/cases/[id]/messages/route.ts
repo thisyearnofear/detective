@@ -8,27 +8,34 @@ import {
 import { personToBot, getPersonByFid } from "@/lib/personRepository";
 import { generateBotResponse } from "@/lib/inference";
 import { calculateTypingDelay } from "@/lib/typingDelay";
+import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
  * POST /api/cases/[id]/messages
- * Body: { fid, text } — investigator message + persona reply
+ * Body: { text } — investigator message + persona reply.
+ *
+ * Auth: requireAuth(request). The fid comes from the verified session JWT.
+ * The per-case `investigatorFid` is verified as defense-in-depth.
  */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const auth = requireAuth(request);
+    if (!auth.ok) return auth.response;
+    const fid = auth.token.fid;
+
     const { id: caseId } = await params;
-    const body = await request.json();
-    const fid = typeof body.fid === "number" ? body.fid : parseInt(body.fid, 10);
+    const body = await request.json().catch(() => ({}));
     const text = typeof body.text === "string" ? body.text.trim() : "";
 
-    if (isNaN(fid) || !text) {
+    if (!text) {
       return NextResponse.json(
-        { error: "fid and text are required." },
+        { error: "text is required." },
         { status: 400 },
       );
     }
