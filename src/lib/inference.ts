@@ -23,6 +23,7 @@ import {
   generateWithAssignedLLM,
   getLLMById,
 } from "./openrouter";
+import { logger } from "./logger";
 
 // Configuration - REQUIRED
 const VENICE_API_KEY = process.env.VENICE_API_KEY;
@@ -404,7 +405,12 @@ Answer naturally in their style:`;
       return { content: openRouterResult.content };
     }
     
-    console.warn(`[regenerateWithTighterConstraints] OpenRouter failed: ${openRouterResult.error}, falling back to Venice`);
+    logger.warn("OpenRouter failed in regenerateWithTighterConstraints; falling back to Venice", {
+      apiName: "regenerateWithTighterConstraints",
+      apiError: openRouterResult.error,
+      botFid: bot.fid,
+      botUsername: bot.username,
+    });
   }
 
   // Fall back to Venice
@@ -913,17 +919,36 @@ export async function generateBotResponse(
     if (!openRouterResult.error) {
       apiResult = { content: openRouterResult.content };
     } else {
-      console.warn(`[generateBotResponse] OpenRouter failed: ${openRouterResult.error}, falling back to Venice`);
+      logger.error("OpenRouter primary call failed", {
+        apiName: "generateBotResponse",
+        provider: "openrouter",
+        apiError: openRouterResult.error,
+        botFid: bot.fid,
+        botUsername: bot.username,
+      });
     }
   }
-  
+
   // Fall back to Venice if OpenRouter failed or not available
   if (!apiResult) {
     apiResult = await callVeniceAPI(systemPrompt, lastUserMessage, maxTokens);
+    if (apiResult.error) {
+      logger.error("Venice primary call failed", {
+        apiName: "generateBotResponse",
+        provider: "venice",
+        apiError: apiResult.error,
+        botFid: bot.fid,
+        botUsername: bot.username,
+      });
+    }
   }
-  
+
   if (apiResult.error) {
-    console.warn(`[generateBotResponse] API call failed: ${apiResult.error}`);
+    logger.error("All LLM providers failed; using cast-history fallback", {
+      apiName: "generateBotResponse",
+      botFid: bot.fid,
+      botUsername: bot.username,
+    });
     return generateFallbackResponse(lengthDistribution, bot.recentCasts);
   }
 
@@ -939,7 +964,15 @@ export async function generateBotResponse(
 
     // CRITICAL REJECTION: Score < 0.3 (severe issues) - skip to fallback
     if (coherenceScore.score < 0.3) {
-      console.log(`[coherenceCheck] CRITICAL: Response rejected [${coherenceScore.type}]: ${coherenceScore.reason} (score: ${coherenceScore.score})`);
+      logger.error("Coherence critical rejection — using cast fallback", {
+        apiName: "generateBotResponse",
+        matchId,
+        score: coherenceScore.score,
+        type: coherenceScore.type,
+        reason: coherenceScore.reason,
+        botFid: bot.fid,
+        botUsername: bot.username,
+      });
       return generateFallbackResponse(lengthDistribution, bot.recentCasts);
     }
 

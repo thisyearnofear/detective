@@ -12,15 +12,232 @@
  * For production, consider using Prisma, Drizzle, or Kysely.
  */
 
-// Database configuration - PostgreSQL is REQUIRED in production
-const DATABASE_URL = process.env.DATABASE_URL;
-if (!DATABASE_URL) {
-  throw new Error(
-    `[Database] FATAL: DATABASE_URL not set. PostgreSQL is required. Set DATABASE_URL in .env`
-  );
-}
+// Database configuration: lazily resolved via getEnv() so that a missing
+// DATABASE_URL doesn't crash unrelated modules on import (Phase 1 hardening).
+// In production, getEnv() throws if the var is missing at first call.
+import { getEnv } from "./env";
 
-console.log(`[Database] PostgreSQL configured: ${DATABASE_URL.substring(0, 60)}...`);
+/**
+ * Initial DDL: all CREATE TABLE / CREATE INDEX statements needed to bring
+ * a fresh database to schema-current. This is the single source of truth for
+ * schema; the runtime `initialize()` and the `db:migrate` CLI script both
+ * execute it. Idempotent (uses IF NOT EXISTS) so it's safe to re-run.
+ *
+ * The follow-up ALTER block (INIT_DDL_ALTER) handles legacy databases
+ * that pre-date a column.
+ */
+export const INIT_DDL: string = `
+      CREATE TABLE IF NOT EXISTS game_cycles (
+        id VARCHAR(255) PRIMARY KEY,
+        chain VARCHAR(20) DEFAULT 'local',
+        state VARCHAR(20) NOT NULL,
+        started_at TIMESTAMP NOT NULL,
+        ended_at TIMESTAMP,
+        player_count INTEGER DEFAULT 0,
+        entry_fee_wei VARCHAR(78),
+        prize_pool_wei VARCHAR(78),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS matches (
+        id VARCHAR(255) PRIMARY KEY,
+        cycle_id VARCHAR(255) REFERENCES game_cycles(id),
+        player_fid INTEGER NOT NULL,
+        opponent_fid INTEGER NOT NULL,
+        opponent_type VARCHAR(10) NOT NULL,
+        slot_number INTEGER NOT NULL,
+        round_number INTEGER NOT NULL,
+        vote VARCHAR(10),
+        is_correct BOOLEAN,
+        vote_changes INTEGER DEFAULT 0,
+        vote_speed_ms INTEGER,
+        messages JSONB DEFAULT '[]',
+        staked_amount VARCHAR(78),
+        payout_amount VARCHAR(78),
+        started_at TIMESTAMP NOT NULL,
+        ended_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS player_stats (
+        fid INTEGER PRIMARY KEY,
+        username VARCHAR(255) NOT NULL,
+        display_name VARCHAR(255),
+        pfp_url TEXT,
+        wallet_address VARCHAR(255),
+        total_games INTEGER DEFAULT 0,
+        total_matches INTEGER DEFAULT 0,
+        total_wins INTEGER DEFAULT 0,
+        correct_votes INTEGER DEFAULT 0,
+        accuracy DECIMAL(5,2) DEFAULT 0,
+        avg_speed_ms INTEGER DEFAULT 0,
+        best_streak INTEGER DEFAULT 0,
+        deception_matches INTEGER DEFAULT 0,
+        deception_successes INTEGER DEFAULT 0,
+        deception_accuracy DECIMAL(5,2) DEFAULT 0,
+        last_played_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS game_results (
+        id SERIAL PRIMARY KEY,
+        cycle_id VARCHAR(255) REFERENCES game_cycles(id),
+        player_fid INTEGER NOT NULL,
+        accuracy DECIMAL(5,2) NOT NULL,
+        correct_votes INTEGER NOT NULL,
+        total_votes INTEGER NOT NULL,
+        avg_speed_ms INTEGER NOT NULL,
+        rank INTEGER NOT NULL,
+        total_players INTEGER NOT NULL,
+        prize_won_wei VARCHAR(78),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS game_registrations (
+        id VARCHAR(255) PRIMARY KEY,
+        cycle_id VARCHAR(255) NOT NULL REFERENCES game_cycles(id),
+        fid INTEGER NOT NULL,
+        wallet_address VARCHAR(255) NOT NULL,
+        arbitrum_tx_hash VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_matches_player ON matches(player_fid);
+      CREATE INDEX IF NOT EXISTS idx_matches_cycle ON matches(cycle_id);
+      CREATE INDEX IF NOT EXISTS idx_player_stats_accuracy ON player_stats(accuracy DESC);
+      CREATE INDEX IF NOT EXISTS idx_game_results_cycle ON game_results(cycle_id);
+      CREATE INDEX IF NOT EXISTS idx_game_results_player ON game_results(player_fid);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_registrations_tx_hash ON game_registrations(cycle_id, arbitrum_tx_hash);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_registrations_fid_cycle ON game_registrations(cycle_id, fid);
+      CREATE INDEX IF NOT EXISTS idx_game_results_rank ON game_results(rank);
+
+      -- Durable domain (Phase 1 curiosity-engine foundation)
+      CREATE TABLE IF NOT EXISTS persons (
+        fid INTEGER PRIMARY KEY,
+        username VARCHAR(255) NOT NULL,
+        display_name VARCHAR(255),
+        pfp_url TEXT,
+        source VARCHAR(20) DEFAULT 'farcaster',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS persona_snapshots (
+        id VARCHAR(255) PRIMARY KEY,
+        person_fid INTEGER NOT NULL REFERENCES persons(fid),
+        style TEXT,
+        personality JSONB,
+        casts JSONB DEFAULT '[]',
+        casts_hash VARCHAR(64),
+        captured_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_persona_snapshots_person ON persona_snapshots(person_fid, captured_at DESC);
+
+      CREATE TABLE IF NOT EXISTS cases (
+        id VARCHAR(255) PRIMARY KEY,
+        investigator_fid INTEGER NOT NULL,
+        person_fid INTEGER NOT NULL REFERENCES persons(fid),
+        state VARCHAR(20) DEFAULT 'open',
+        opened_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_activity_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (investigator_fid, person_fid)
+      );
+      CREATE INDEX IF NOT EXISTS idx_cases_investigator ON cases(investigator_fid, last_activity_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_cases_open ON cases(state) WHERE state = 'open';
+
+      CREATE TABLE IF NOT EXISTS artefacts (
+        id VARCHAR(255) PRIMARY KEY,
+        case_id VARCHAR(255) NOT NULL REFERENCES cases(id),
+        kind VARCHAR(30) NOT NULL,
+        author VARCHAR(20) NOT NULL,
+        body TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        seen_at TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_artefacts_case ON artefacts(case_id, created_at);
+
+      CREATE TABLE IF NOT EXISTS commitments (
+        id VARCHAR(255) PRIMARY KEY,
+        case_id VARCHAR(255) NOT NULL REFERENCES cases(id),
+        investigator_fid INTEGER NOT NULL,
+        kind VARCHAR(20) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_commitments_case ON commitments(case_id);
+
+      CREATE TABLE IF NOT EXISTS investigator_memory (
+        investigator_fid INTEGER NOT NULL,
+        person_fid INTEGER NOT NULL,
+        memory JSONB NOT NULL DEFAULT '{}',
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (investigator_fid, person_fid)
+      );
+
+      CREATE TABLE IF NOT EXISTS offline_events (
+        id VARCHAR(255) PRIMARY KEY,
+        case_id VARCHAR(255) NOT NULL REFERENCES cases(id),
+        kind VARCHAR(32) NOT NULL DEFAULT 'follow_up',
+        scheduled_for TIMESTAMP NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        payload_artefact_id VARCHAR(255) REFERENCES artefacts(id),
+        delivered_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_offline_events_due
+        ON offline_events(status, scheduled_for);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_offline_events_one_pending
+        ON offline_events(case_id) WHERE status = 'pending';
+    `;
+
+/**
+ * ALTER block: backfill columns that were added to existing tables after
+ * the original schema shipped. Wrapped in DO $$ so it's a no-op on fresh DBs.
+ */
+export const INIT_DDL_ALTER: string = `
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'player_stats' AND column_name = 'total_wins') THEN
+          ALTER TABLE player_stats ADD COLUMN total_wins INTEGER DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'game_cycles' AND column_name = 'chain') THEN
+          ALTER TABLE game_cycles ADD COLUMN chain VARCHAR(20) DEFAULT 'local';
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'game_cycles' AND column_name = 'entry_fee_wei') THEN
+          ALTER TABLE game_cycles ADD COLUMN entry_fee_wei VARCHAR(78);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'game_cycles' AND column_name = 'prize_pool_wei') THEN
+          ALTER TABLE game_cycles ADD COLUMN prize_pool_wei VARCHAR(78);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'player_stats' AND column_name = 'deception_matches') THEN
+          ALTER TABLE player_stats ADD COLUMN deception_matches INTEGER DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'player_stats' AND column_name = 'deception_successes') THEN
+          ALTER TABLE player_stats ADD COLUMN deception_successes INTEGER DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'player_stats' AND column_name = 'deception_accuracy') THEN
+          ALTER TABLE player_stats ADD COLUMN deception_accuracy DECIMAL(5,2) DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'matches' AND column_name = 'stake_currency') THEN
+          ALTER TABLE matches ADD COLUMN stake_currency VARCHAR(10);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'matches' AND column_name = 'stake_tx_hash') THEN
+          ALTER TABLE matches ADD COLUMN stake_tx_hash VARCHAR(255);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'offline_events' AND column_name = 'kind') THEN
+          ALTER TABLE offline_events ADD COLUMN kind VARCHAR(32) NOT NULL DEFAULT 'follow_up';
+        END IF;
+      END $$;
+    `;
+
+/**
+ * Final unique index that must run after the offline_events table exists.
+ * Lives separately because it depends on the column-add above being applied
+ * first (or the table being fresh).
+ */
+export const INIT_DDL_FINAL_INDEX: string = `
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_offline_events_one_kind
+        ON offline_events(case_id, kind);
+    `;
 
 // Helper to convert PostgreSQL DECIMAL strings to numbers
 function convertAccuracy(entry: any): any {
@@ -133,6 +350,10 @@ class PostgresDatabase {
         try {
             // Dynamic import to avoid build errors when pg is not installed
             const { Pool } = require("pg");
+            // Lazily resolve DATABASE_URL — getEnv() throws in production if
+            // missing, so we surface the failure here at first use rather than
+            // crashing unrelated modules on import.
+            const { DATABASE_URL } = getEnv();
             this.pool = new Pool({
                 connectionString: DATABASE_URL,
                 max: 10,
@@ -156,211 +377,13 @@ class PostgresDatabase {
 
         const pool = await this.getPool();
 
-        // Create tables if they don't exist
-        await pool.query(`
-      CREATE TABLE IF NOT EXISTS game_cycles (
-        id VARCHAR(255) PRIMARY KEY,
-        chain VARCHAR(20) DEFAULT 'local',
-        state VARCHAR(20) NOT NULL,
-        started_at TIMESTAMP NOT NULL,
-        ended_at TIMESTAMP,
-        player_count INTEGER DEFAULT 0,
-        entry_fee_wei VARCHAR(78),
-        prize_pool_wei VARCHAR(78),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-      
-      CREATE TABLE IF NOT EXISTS matches (
-        id VARCHAR(255) PRIMARY KEY,
-        cycle_id VARCHAR(255) REFERENCES game_cycles(id),
-        player_fid INTEGER NOT NULL,
-        opponent_fid INTEGER NOT NULL,
-        opponent_type VARCHAR(10) NOT NULL,
-        slot_number INTEGER NOT NULL,
-        round_number INTEGER NOT NULL,
-        vote VARCHAR(10),
-        is_correct BOOLEAN,
-        vote_changes INTEGER DEFAULT 0,
-        vote_speed_ms INTEGER,
-        messages JSONB DEFAULT '[]',
-        staked_amount VARCHAR(78),
-        payout_amount VARCHAR(78),
-        started_at TIMESTAMP NOT NULL,
-        ended_at TIMESTAMP NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-      
-      CREATE TABLE IF NOT EXISTS player_stats (
-        fid INTEGER PRIMARY KEY,
-        username VARCHAR(255) NOT NULL,
-        display_name VARCHAR(255),
-        pfp_url TEXT,
-        wallet_address VARCHAR(255),
-        total_games INTEGER DEFAULT 0,
-        total_matches INTEGER DEFAULT 0,
-        total_wins INTEGER DEFAULT 0,
-        correct_votes INTEGER DEFAULT 0,
-        accuracy DECIMAL(5,2) DEFAULT 0,
-        avg_speed_ms INTEGER DEFAULT 0,
-        best_streak INTEGER DEFAULT 0,
-        deception_matches INTEGER DEFAULT 0,
-        deception_successes INTEGER DEFAULT 0,
-        deception_accuracy DECIMAL(5,2) DEFAULT 0,
-        last_played_at TIMESTAMP,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-      
-      CREATE TABLE IF NOT EXISTS game_results (
-        id SERIAL PRIMARY KEY,
-        cycle_id VARCHAR(255) REFERENCES game_cycles(id),
-        player_fid INTEGER NOT NULL,
-        accuracy DECIMAL(5,2) NOT NULL,
-        correct_votes INTEGER NOT NULL,
-        total_votes INTEGER NOT NULL,
-        avg_speed_ms INTEGER NOT NULL,
-        rank INTEGER NOT NULL,
-        total_players INTEGER NOT NULL,
-        prize_won_wei VARCHAR(78),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-      
-      CREATE TABLE IF NOT EXISTS game_registrations (
-        id VARCHAR(255) PRIMARY KEY,
-        cycle_id VARCHAR(255) NOT NULL REFERENCES game_cycles(id),
-        fid INTEGER NOT NULL,
-        wallet_address VARCHAR(255) NOT NULL,
-        arbitrum_tx_hash VARCHAR(255),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-      
-      CREATE INDEX IF NOT EXISTS idx_matches_player ON matches(player_fid);
-      CREATE INDEX IF NOT EXISTS idx_matches_cycle ON matches(cycle_id);
-      CREATE INDEX IF NOT EXISTS idx_player_stats_accuracy ON player_stats(accuracy DESC);
-      CREATE INDEX IF NOT EXISTS idx_game_results_cycle ON game_results(cycle_id);
-      CREATE INDEX IF NOT EXISTS idx_game_results_player ON game_results(player_fid);
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_registrations_tx_hash ON game_registrations(cycle_id, arbitrum_tx_hash);
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_registrations_fid_cycle ON game_registrations(cycle_id, fid);
-      CREATE INDEX IF NOT EXISTS idx_game_results_rank ON game_results(rank);
-
-      -- Durable domain (Phase 1 curiosity-engine foundation)
-      CREATE TABLE IF NOT EXISTS persons (
-        fid INTEGER PRIMARY KEY,
-        username VARCHAR(255) NOT NULL,
-        display_name VARCHAR(255),
-        pfp_url TEXT,
-        source VARCHAR(20) DEFAULT 'farcaster',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS persona_snapshots (
-        id VARCHAR(255) PRIMARY KEY,
-        person_fid INTEGER NOT NULL REFERENCES persons(fid),
-        style TEXT,
-        personality JSONB,
-        casts JSONB DEFAULT '[]',
-        casts_hash VARCHAR(64),
-        captured_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE INDEX IF NOT EXISTS idx_persona_snapshots_person ON persona_snapshots(person_fid, captured_at DESC);
-
-      CREATE TABLE IF NOT EXISTS cases (
-        id VARCHAR(255) PRIMARY KEY,
-        investigator_fid INTEGER NOT NULL,
-        person_fid INTEGER NOT NULL REFERENCES persons(fid),
-        state VARCHAR(20) DEFAULT 'open',
-        opened_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        last_activity_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE (investigator_fid, person_fid)
-      );
-      CREATE INDEX IF NOT EXISTS idx_cases_investigator ON cases(investigator_fid, last_activity_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_cases_open ON cases(state) WHERE state = 'open';
-
-      CREATE TABLE IF NOT EXISTS artefacts (
-        id VARCHAR(255) PRIMARY KEY,
-        case_id VARCHAR(255) NOT NULL REFERENCES cases(id),
-        kind VARCHAR(30) NOT NULL,
-        author VARCHAR(20) NOT NULL,
-        body TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        seen_at TIMESTAMP
-      );
-      CREATE INDEX IF NOT EXISTS idx_artefacts_case ON artefacts(case_id, created_at);
-
-      CREATE TABLE IF NOT EXISTS commitments (
-        id VARCHAR(255) PRIMARY KEY,
-        case_id VARCHAR(255) NOT NULL REFERENCES cases(id),
-        investigator_fid INTEGER NOT NULL,
-        kind VARCHAR(20) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE INDEX IF NOT EXISTS idx_commitments_case ON commitments(case_id);
-
-      CREATE TABLE IF NOT EXISTS investigator_memory (
-        investigator_fid INTEGER NOT NULL,
-        person_fid INTEGER NOT NULL,
-        memory JSONB NOT NULL DEFAULT '{}',
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (investigator_fid, person_fid)
-      );
-
-      CREATE TABLE IF NOT EXISTS offline_events (
-        id VARCHAR(255) PRIMARY KEY,
-        case_id VARCHAR(255) NOT NULL REFERENCES cases(id),
-        kind VARCHAR(32) NOT NULL DEFAULT 'follow_up',
-        scheduled_for TIMESTAMP NOT NULL,
-        status VARCHAR(20) DEFAULT 'pending',
-        payload_artefact_id VARCHAR(255) REFERENCES artefacts(id),
-        delivered_at TIMESTAMP,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE INDEX IF NOT EXISTS idx_offline_events_due
-        ON offline_events(status, scheduled_for);
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_offline_events_one_pending
-        ON offline_events(case_id) WHERE status = 'pending';
-    `);
-
-        // Add columns if they don't exist (for existing databases)
-        await pool.query(`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'player_stats' AND column_name = 'total_wins') THEN
-          ALTER TABLE player_stats ADD COLUMN total_wins INTEGER DEFAULT 0;
-        END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'game_cycles' AND column_name = 'chain') THEN
-          ALTER TABLE game_cycles ADD COLUMN chain VARCHAR(20) DEFAULT 'local';
-        END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'game_cycles' AND column_name = 'entry_fee_wei') THEN
-          ALTER TABLE game_cycles ADD COLUMN entry_fee_wei VARCHAR(78);
-        END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'game_cycles' AND column_name = 'prize_pool_wei') THEN
-          ALTER TABLE game_cycles ADD COLUMN prize_pool_wei VARCHAR(78);
-        END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'player_stats' AND column_name = 'deception_matches') THEN
-          ALTER TABLE player_stats ADD COLUMN deception_matches INTEGER DEFAULT 0;
-        END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'player_stats' AND column_name = 'deception_successes') THEN
-          ALTER TABLE player_stats ADD COLUMN deception_successes INTEGER DEFAULT 0;
-        END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'player_stats' AND column_name = 'deception_accuracy') THEN
-          ALTER TABLE player_stats ADD COLUMN deception_accuracy DECIMAL(5,2) DEFAULT 0;
-        END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'matches' AND column_name = 'stake_currency') THEN
-          ALTER TABLE matches ADD COLUMN stake_currency VARCHAR(10);
-        END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'matches' AND column_name = 'stake_tx_hash') THEN
-          ALTER TABLE matches ADD COLUMN stake_tx_hash VARCHAR(255);
-        END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'offline_events' AND column_name = 'kind') THEN
-          ALTER TABLE offline_events ADD COLUMN kind VARCHAR(32) NOT NULL DEFAULT 'follow_up';
-        END IF;
-      END $$;
-    `);
-
-        await pool.query(`
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_offline_events_one_kind
-        ON offline_events(case_id, kind);
-    `);
+        // Schema is owned by INIT_DDL / INIT_DDL_ALTER / INIT_DDL_FINAL_INDEX
+        // — kept at module scope so `scripts/db-migrate.ts` can run the same
+        // statements without booting the app. Idempotent (IF NOT EXISTS) so
+        // re-runs are safe.
+        await pool.query(INIT_DDL);
+        await pool.query(INIT_DDL_ALTER);
+        await pool.query(INIT_DDL_FINAL_INDEX);
 
         this.initialized = true;
         console.log("[Database] Tables initialized");

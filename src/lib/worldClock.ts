@@ -4,6 +4,7 @@
 
 import { generateBotResponse } from "./inference";
 import { personToBot } from "./personRepository";
+import { logger } from "./logger";
 import {
   artefactsToMessages,
   getCaseById,
@@ -104,7 +105,13 @@ export async function deliverDueOfflineEvents(): Promise<{
       const echo = await maybeScheduleOfflineEcho(event.caseId, event.kind);
       if (echo) echoesScheduled++;
     } catch (err) {
-      console.error(`[worldClock] Failed to deliver ${event.id}:`, err);
+      logger.error(`Failed to deliver ${event.id}`, {
+        apiName: "deliverDueOfflineEvents",
+        eventId: event.id,
+        caseId: event.caseId,
+        kind: event.kind,
+        error: err instanceof Error ? err.message : String(err),
+      });
       errors++;
     }
   }

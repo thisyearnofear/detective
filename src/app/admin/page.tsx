@@ -215,6 +215,29 @@ export default function AdminPage() {
     },
   );
 
+  // Phase 2: Recent errors ring-buffer poll (matches return-rate cadence).
+  const { data: recentErrors } = useSWR<{
+    success: boolean;
+    errors: Array<{
+      timestamp: string;
+      message: string;
+      meta?: Record<string, unknown>;
+    }>;
+    count: number;
+  }>(
+    adminSecret ? getApiUrl("/api/admin/logger/recent") : null,
+    async (url: string) => {
+      const response = await fetch(url, { headers: getAuthHeaders() });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    },
+    {
+      refreshInterval: adminSecret ? 15000 : 0,
+      revalidateOnFocus: !!adminSecret,
+      shouldRetryOnError: false,
+    },
+  );
+
   // Force immediate revalidation helper
   const forceRefresh = useCallback(() => {
     mutate(undefined, { revalidate: true });
@@ -522,6 +545,44 @@ export default function AdminPage() {
               Eligible = offline follow-up delivered · Returned = artefact seen
               within 48h
             </p>
+          </div>
+        )}
+
+        {/* Phase 2: Recent errors (last 20, polled every 15s) */}
+        {adminSecret && (
+          <div className="w-full mb-6 sm:mb-8 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-sm p-4 sm:p-6">
+            <h2 className="text-sm uppercase tracking-wider text-white/70 mb-3 text-center">
+              Recent errors (last 20)
+            </h2>
+            {recentErrors?.success && recentErrors.errors.length === 0 ? (
+              <div className="flex items-center justify-center gap-2 py-6 text-green-300/80 text-sm">
+                <span className="inline-block w-2 h-2 rounded-full bg-green-400" />
+                <span>System healthy — no recent errors.</span>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {(recentErrors?.errors ?? []).map((err, i) => (
+                  <div
+                    key={`${err.timestamp}-${i}`}
+                    className="bg-red-950/30 border border-red-500/20 rounded-lg p-3 font-mono text-xs"
+                  >
+                    <div className="flex items-center justify-between gap-3 mb-1">
+                      <span className="text-red-200 truncate">
+                        {err.message}
+                      </span>
+                      <span className="text-white/40 shrink-0">
+                        {new Date(err.timestamp).toLocaleTimeString()}
+                      </span>
+                    </div>
+                    {err.meta && (
+                      <pre className="text-white/50 whitespace-pre-wrap break-words text-[10px]">
+                        {JSON.stringify(err.meta)}
+                      </pre>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

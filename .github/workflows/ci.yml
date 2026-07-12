@@ -1,0 +1,48 @@
+name: CI
+
+# Gates all PRs and pushes to master. Deploy has its own workflow (deploy.yml)
+# which is intentionally separate — PR-time feedback is faster and depends on
+# no infra secrets.
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+# Cancel in-flight runs on the same ref to save minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-checks:
+    name: typecheck + lint + audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        # Matches the project's packageManager (bun@1.1.0). Bun reads bun.lock
+        # natively; npm would not.
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.1.0
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run type-check
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Dependency audit
+        # Non-blocking on PR: dependabot.yml already opens weekly CVE PRs
+        # and the deploy workflow runs the same audit as a final gate.
+        # We surface the same signal here for visibility without blocking
+        # merges on transitive transient noise.
+        run: npm audit --audit-level=high
+        continue-on-error: true
