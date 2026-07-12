@@ -125,6 +125,16 @@ export default function CaseInvestigation({ fid, caseId, onBack }: Props) {
         )}
       </div>
 
+      {artefacts.length > 0 && (
+        <div className="flex justify-end">
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-xs text-white/50">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400/80" />
+            {artefacts.length} {artefacts.length === 1 ? "update" : "updates"}
+            in this case
+          </span>
+        </div>
+      )}
+
       <div className="bg-slate-900/60 border border-white/10 rounded-xl p-4 h-80 overflow-y-auto space-y-3">
         {isLoading && (
           <p className="text-sm text-gray-500 text-center py-8">Loading case file…</p>

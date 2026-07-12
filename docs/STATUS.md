@@ -126,6 +126,16 @@ Smoke: `bun run scripts/smoke-phase4.ts`
 
 ---
 
+## Persona freshness rule
+
+Default: **on-case-open-lazy**. When `POST /api/cases` opens (or re-opens) a case on person X, check `persona_snapshots.captured_at` for X. If older than **24h**, queue a background refresh via the existing `upsertPersonFromBot` path. Because `castsHash()` deduplicates by content hash, the call is a safe no-op when nothing has actually changed — the time check exists to flag *visible* staleness without burning Neynar quota on inactive FIDs.
+
+Why lazy, not cron: background-rebuilding every persona every day is unnecessary work for thousands of inactive subjects. On-case-open pays the cost precisely when a player indicates interest — the only moment freshness matters.
+
+Out of scope for v0.5-beta: the Neynar incremental diff + LLM re-inference of style. Both land alongside the daily-persona cron, post-beta. The rule itself is **documentary only for now** — no `/api/cases` POST path currently performs the 24h check. What buys us safety in the interim is that `upsertPersonFromBot` already short-circuits via `castsHash()` whenever the underlying residue is unchanged, so any future caller can simply re-invoke it without burning Neynar quota. The missing piece remains automatic refresh for FIDs nobody is investigating.
+
+---
+
 ## Module surface (pre-beta consolidation)
 
 `src/lib/` is now lean — 39 files, every one actively consumed by either a route under `src/app/api/**`, a component, or another lib. The Phase 2 observability surface is also extended: `logger.error` now covers every API route's `try/catch` block (23 files migrated at `83a23ec`) in addition to the original two silent-failure paths (`worldClock.deliverDueOfflineEvents` and `generateBotResponse`). Together they form the single Discord-webhook → admin-ring-buffer → `/api/admin/logger/recent` → recent-errors panel channel.

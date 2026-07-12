@@ -6,6 +6,14 @@ import { fetcher, getApiUrl, requestJson } from "@/lib/fetcher";
 import CaseInvestigation from "./CaseInvestigation";
 import ReturnCard from "./ReturnCard";
 
+/**
+ * localStorage key for the post-auth curiosity-loop onboarding card.
+ * Distinct from `detective_onboarding_complete` (page.tsx intro splash)
+ * — this one is shown only after the first successful auth and exists to
+ * teach the loop to returning users who skip the splash.
+ */
+const ONBOARDING_KEY = "detective.curiosity_loop_explained_v1";
+
 type CaseListItem = {
   id: string;
   personFid: number;
@@ -39,6 +47,28 @@ export default function InvestigationHome({
   const [activeCaseId, setActiveCaseId] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Lazy initializer reads localStorage synchronously on the first client
+  // render so returning users skip the card immediately. SSR snapshot is
+  // `false` — same hydration pattern used elsewhere in this app.
+  const [onboardingDismissed, setOnboardingDismissed] = useState<boolean>(
+    () => {
+      if (typeof window === "undefined") return false;
+      try {
+        return !!localStorage.getItem(ONBOARDING_KEY);
+      } catch {
+        return false;
+      }
+    },
+  );
+
+  const dismissOnboarding = useCallback(() => {
+    try {
+      localStorage.setItem(ONBOARDING_KEY, "1");
+    } catch {
+      // Private mode etc. — silently keep the in-memory dismissal only.
+    }
+    setOnboardingDismissed(true);
+  }, []);
 
   const { data, mutate, isLoading } = useSWR<{ cases: CaseListItem[] }>(
     getApiUrl(`/api/cases?fid=${fid}`),
@@ -117,6 +147,42 @@ export default function InvestigationHome({
           Switch
         </button>
       </div>
+
+      {!onboardingDismissed && (
+        <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-4 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-amber-100">
+                How the curiosity loop works
+              </p>
+              <p className="text-xs text-amber-300/70 mt-1">
+                Read once. Dismiss to keep your home screen clean.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={dismissOnboarding}
+              className="text-xs text-amber-300/60 hover:text-amber-200 transition-colors shrink-0"
+              aria-label="Dismiss onboarding"
+            >
+              Dismiss
+            </button>
+          </div>
+          <ol className="text-xs text-amber-100/90 space-y-1.5 list-decimal pl-4 leading-relaxed">
+            <li>
+              Your case stays open even if you close this tab. Step away when
+              the gaps feel right.
+            </li>
+            <li>
+              The persona may reach out with a clue while you&apos;re away — a
+              follow-up you didn&apos;t ask for.
+            </li>
+            <li>
+              Come back. The ReturnCard at the top shows what arrived.
+            </li>
+          </ol>
+        </div>
+      )}
 
       <ReturnCard fid={fid} />
 
