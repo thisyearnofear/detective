@@ -188,8 +188,8 @@ export async function markArtefactSeen(
   artefactId: string,
   investigatorFid: number,
 ): Promise<MarkArtefactSeenResult> {
-  const owner = await dbQuery<{ investigator_fid: number }>(
-    `SELECT c.investigator_fid
+  const owner = await dbQuery<{ investigator_fid: number; kind: string; case_id: string }>(
+    `SELECT c.investigator_fid, a.kind, a.case_id
        FROM artefacts a
        JOIN cases c ON c.id = a.case_id
        WHERE a.id = $1`,
@@ -200,6 +200,9 @@ export async function markArtefactSeen(
     return { seen: false, reason: "forbidden" };
   }
 
+  const artefactKind = owner.rows[0].kind;
+  const caseId = owner.rows[0].case_id;
+
   await dbQuery(
     `UPDATE artefacts SET seen_at = NOW() WHERE id = $1 AND seen_at IS NULL`,
     [artefactId],
@@ -209,6 +212,15 @@ export async function markArtefactSeen(
      WHERE payload_artefact_id = $1 AND status = 'delivered'`,
     [artefactId],
   );
+
+  // Gate the echo on seen_at: only schedule the second touch after the
+  // investigator actually opens the first follow-up. Scheduling at delivery
+  // time wastes LLM spend on users who never return and depresses the
+  // north-star metric (both events enter the denominator).
+  if (artefactKind === "offline_follow_up") {
+    await scheduleOfflineEvent(caseId, "echo");
+  }
+
   return { seen: true };
 }
 

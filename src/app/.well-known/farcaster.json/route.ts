@@ -21,12 +21,10 @@ const MANIFESTS: Record<string, {
     domain: 'detectiveproof.vercel.app',
   },
   'detective.thisyearnofear.com': {
-    // TODO: Generate this at https://farcaster.xyz/~/developers/mini-apps/manifest
-    // Enter domain: detective.thisyearnofear.com and sign with your FID 5254 custody key
     accountAssociation: {
-      header: 'REPLACE_WITH_SIGNED_HEADER',
-      payload: 'REPLACE_WITH_SIGNED_PAYLOAD',
-      signature: 'REPLACE_WITH_SIGNED_SIGNATURE',
+      header: 'eyJmaWQiOjUyNTQsInR5cGUiOiJjdXN0b2R5Iiwia2V5IjoiMHg4QjAzQTJDMzY1YzI2MUFlQmU2ODQyMjREQkI2Qzk1OTJhQkNkRkYyIn0',
+      payload: 'eyJkb21haW4iOiJkZXRlY3RpdmUudGhpc3llYXJub2ZlYXIuY29tIn0',
+      signature: '4kudnZyDENWKeIza46xV81nIOGiZOWxk8mrZYC+Sx7wkemPQ/tkX1LjDfLgF9sUVZFK/kqx0F1WcoWZCZL9Vkxs=',
     },
     domain: 'detective.thisyearnofear.com',
   },
@@ -49,12 +47,9 @@ export async function GET(request: NextRequest) {
       homeUrl: appUrl,
       splashImageUrl: `${appUrl}/detective.png`,
       splashBackgroundColor: '#0f172a',
-      description: 'AI-powered social deduction game. Can you tell if you\'re chatting with a real person or an AI bot?',
+      description: 'Open a case on a person. Investigate through their digital residue. Step away — the world keeps moving.',
       primaryCategory: 'games',
-      requiredChains: ['eip155:42161'],
-      requiredCapabilities: [
-        'wallet.getEthereumProvider',
-      ],
+      webhookUrl: `${appUrl}/api/webhooks/farcaster`,
     },
   };
 

@@ -151,8 +151,8 @@ export const INIT_DDL: string = `
         kind VARCHAR(30) NOT NULL,
         author VARCHAR(20) NOT NULL,
         body TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        seen_at TIMESTAMP
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        seen_at TIMESTAMPTZ
       );
       CREATE INDEX IF NOT EXISTS idx_artefacts_case ON artefacts(case_id, created_at);
 
@@ -177,16 +177,27 @@ export const INIT_DDL: string = `
         id VARCHAR(255) PRIMARY KEY,
         case_id VARCHAR(255) NOT NULL REFERENCES cases(id),
         kind VARCHAR(32) NOT NULL DEFAULT 'follow_up',
-        scheduled_for TIMESTAMP NOT NULL,
+        scheduled_for TIMESTAMPTZ NOT NULL,
         status VARCHAR(20) DEFAULT 'pending',
         payload_artefact_id VARCHAR(255) REFERENCES artefacts(id),
-        delivered_at TIMESTAMP,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        delivered_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
       CREATE INDEX IF NOT EXISTS idx_offline_events_due
         ON offline_events(status, scheduled_for);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_offline_events_one_pending
         ON offline_events(case_id) WHERE status = 'pending';
+
+      -- Farcaster mini-app notification tokens (webhook-delivered)
+      CREATE TABLE IF NOT EXISTS notification_tokens (
+        fid INTEGER NOT NULL,
+        url TEXT NOT NULL,
+        token TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (fid, token)
+      );
+      CREATE INDEX IF NOT EXISTS idx_notification_tokens_fid
+        ON notification_tokens(fid);
     `;
 
 /**
@@ -225,6 +236,23 @@ export const INIT_DDL_ALTER: string = `
         END IF;
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'offline_events' AND column_name = 'kind') THEN
           ALTER TABLE offline_events ADD COLUMN kind VARCHAR(32) NOT NULL DEFAULT 'follow_up';
+        END IF;
+        -- Migrate time columns from TIMESTAMP to TIMESTAMPTZ so the cadence
+        -- and 48h metric window are not skewed by the server's timezone.
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'offline_events' AND column_name = 'scheduled_for' AND data_type = 'timestamp without time zone') THEN
+          ALTER TABLE offline_events ALTER COLUMN scheduled_for TYPE TIMESTAMPTZ;
+        END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'offline_events' AND column_name = 'delivered_at' AND data_type = 'timestamp without time zone') THEN
+          ALTER TABLE offline_events ALTER COLUMN delivered_at TYPE TIMESTAMPTZ;
+        END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'offline_events' AND column_name = 'created_at' AND data_type = 'timestamp without time zone') THEN
+          ALTER TABLE offline_events ALTER COLUMN created_at TYPE TIMESTAMPTZ;
+        END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'artefacts' AND column_name = 'seen_at' AND data_type = 'timestamp without time zone') THEN
+          ALTER TABLE artefacts ALTER COLUMN seen_at TYPE TIMESTAMPTZ;
+        END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'artefacts' AND column_name = 'created_at' AND data_type = 'timestamp without time zone') THEN
+          ALTER TABLE artefacts ALTER COLUMN created_at TYPE TIMESTAMPTZ;
         END IF;
       END $$;
     `;

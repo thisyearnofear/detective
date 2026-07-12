@@ -14,7 +14,7 @@ if (!NEYNAR_API_KEY) {
 const NEYNAR_BASE_URL = "https://api.neynar.com/v2/farcaster";
 
 // As per the docs, the quality score required to play.
-const NEYNAR_SCORE_THRESHOLD = 0.8;
+const NEYNAR_SCORE_THRESHOLD = 0.5;
 
 // Cache for user lookups (in-memory, 5 minute TTL)
 const userCache = new Map<string, { data: any; expires: number }>();
@@ -230,8 +230,8 @@ export async function getFarcasterUserData(
       text: c.text,
     }));
 
-    // Require at least 10 casts for better pattern learning
-    if (recentCasts.length < 10) {
+    // Require at least 5 casts for pattern learning
+    if (recentCasts.length < 5) {
       return { isValid: false, userProfile: null, recentCasts: [], style: "" };
     }
 

@@ -57,3 +57,5 @@ yarn-error.log*
 # Archived files
 /archived
 .env.local
+.vercel
+.env*

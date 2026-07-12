@@ -7,6 +7,7 @@ import { pickRandomPerson, getPersonByFid } from "@/lib/personRepository";
 import { requireAuth } from "@/lib/auth";
 import { logger } from "@/lib/logger";
 import { maybeAlertStaleTick } from "@/lib/cronHealth";
+import { checkUserRateLimit } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +54,14 @@ export async function POST(request: NextRequest) {
       if (!auth.ok) return auth.response;
       const fid = auth.token.fid;
 
+      const rl = await checkUserRateLimit(fid, "api:cases:post");
+      if (!rl.allowed) {
+        return NextResponse.json(
+          { error: "Too many cases opened. Try again later." },
+          { status: 429, headers: { "Retry-After": String(rl.retryAfter) } },
+        );
+      }
+
       const body = await request.json().catch(() => ({}));
       const personFid =
         body.personFid != null
@@ -68,7 +77,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json(
             {
               error:
-                "No subjects available yet. Persons appear after investigators register with cast history.",
+                "No subjects are available yet. We're adding people to investigate — check back soon.",
             },
             { status: 404 },
           );

@@ -1341,7 +1341,7 @@ class GameManager {
       claimed: number;
       delivered: number;
       errors: number;
-      echoesScheduled?: number;
+      notificationsSent?: number;
     };
   }> {
     await this.ensureInitialized();
@@ -1392,7 +1392,7 @@ class GameManager {
     }
 
     // Deliver due offline follow-ups (curiosity loop)
-    let offline = { claimed: 0, delivered: 0, errors: 0 };
+    let offline = { claimed: 0, delivered: 0, errors: 0, notificationsSent: 0 };
     try {
       offline = await deliverDueOfflineEvents();
     } catch (err) {

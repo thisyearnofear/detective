@@ -110,17 +110,45 @@ export const RATE_LIMITS = {
   "api:game:status": { limit: 60, window: 60 },     // 60 req/min - polling
   "api:leaderboard": { limit: 10, window: 60 },   // 10 req/min
   "api:profiles:random": { limit: 5, window: 60 }, // 5 req/min
-  
+
   // Auth endpoints - very strict
   "api:auth:farcaster": { limit: 5, window: 60 },   // 5 req/min
   "api:auth:verify": { limit: 10, window: 60 },   // 10 req/min
-  
+
   // Registration - moderate
   "api:game:register": { limit: 10, window: 60 },  // 10 req/min
-  
+
+  // Consumer (v2) endpoints — per-user, keyed by fid
+  "api:cases:post": { limit: 10, window: 3600 },          // 10 case opens / hour
+  "api:cases:messages:post": { limit: 30, window: 3600 },  // 30 messages / hour
+  "api:cases:messages:daily": { limit: 100, window: 86400 }, // 100 messages / day (LLM spend cap)
+
   // Default for unknown endpoints
   "default": { limit: 20, window: 60 },           // 20 req/min
 } as const;
+
+/**
+ * Per-user rate limit check for authenticated consumer routes.
+ * Keys by fid (from the verified JWT) instead of IP.
+ *
+ * Returns null if allowed, or a NextResponse-ready object with 429 details.
+ */
+export async function checkUserRateLimit(
+  fid: number,
+  configKey: keyof typeof RATE_LIMITS,
+): Promise<{ allowed: true } | { allowed: false; retryAfter: number }> {
+  const config = RATE_LIMITS[configKey];
+  const result = await checkRateLimit({
+    key: `user:${fid}:${configKey}`,
+    limit: config.limit,
+    window: config.window,
+  });
+  if (!result.allowed) {
+    const retryAfter = Math.ceil((result.resetTime - Date.now()) / 1000);
+    return { allowed: false, retryAfter: Math.max(1, retryAfter) };
+  }
+  return { allowed: true };
+}
 
 /**
  * Get rate limit config for an API path

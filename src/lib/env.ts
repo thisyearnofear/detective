@@ -30,6 +30,7 @@ export interface Env {
   UPSTASH_REDIS_REST_TOKEN: string | null;
   ADMIN_SECRET: string | null;
   LOG_WEBHOOK_URL: string | null;
+  APP_URL: string | null;
 
   // Research platform flags
   RESEARCH_PLATFORM_ENABLED: boolean;
@@ -92,6 +93,7 @@ export function getEnv(): Env {
     UPSTASH_REDIS_REST_TOKEN: readOptional("UPSTASH_REDIS_REST_TOKEN"),
     ADMIN_SECRET: readOptional("ADMIN_SECRET"),
     LOG_WEBHOOK_URL: readOptional("LOG_WEBHOOK_URL"),
+    APP_URL: readOptional("APP_URL"),
     RESEARCH_PLATFORM_ENABLED: readBoolean("RESEARCH_PLATFORM_ENABLED"),
     STORACHA_ENABLED: readBoolean("STORACHA_ENABLED"),
   };

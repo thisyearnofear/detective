@@ -26,6 +26,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.0",
     "@farcaster/auth-kit": "^0.6.1",
+    "@farcaster/miniapp-node": "^0.2.0",
     "@farcaster/miniapp-sdk": "^0.2.1",
     "@neynar/nodejs-sdk": "^3.97.0",
     "@storacha/client": "^2.1.2",

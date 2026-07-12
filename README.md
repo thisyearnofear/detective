@@ -23,7 +23,7 @@ cp .env.example .env.local
 bun run dev
 ```
 
-Required env in production: `DATABASE_URL`, `JWT_SECRET`, `CRON_SECRET`, `NEYNAR_API_KEY`, plus one of `VENICE_API_KEY` / `OPENROUTER_API_KEY`. Optional but recommended: `ADMIN_SECRET` (admin dashboard bearer), `LOG_WEBHOOK_URL` (Discord webhook URL for prod error-level logs).
+Required env in production: `DATABASE_URL`, `JWT_SECRET`, `CRON_SECRET`, `NEYNAR_API_KEY`, plus one of `VENICE_API_KEY` / `OPENROUTER_API_KEY`. Optional but recommended: `ADMIN_SECRET` (admin dashboard bearer), `LOG_WEBHOOK_URL` (Discord webhook URL for prod error-level logs), `APP_URL` (production domain — set this to enable Farcaster push notifications when offline clues are delivered).
 
 Pre-beta unboxing once code is deployed: `bun run db:migrate` then swap `REPLACE_ME_*` placeholders in `scripts/seed-beta-persons.json` to 10–15 real Farcaster accounts and `bun run seed:beta`.
 
@@ -60,6 +60,7 @@ See [Development Guide](docs/DEVELOPMENT.md) for setup, env vars, cron, smoke te
 | GET/POST | `/api/inbox` | Unseen offline clues / mark seen |
 | GET | `/api/metrics/return-rate` | North-star (admin/cron auth) |
 | GET | `/api/cron/tick` | Deliver due offline events |
+| POST | `/api/webhooks/farcaster` | Mini-app lifecycle events (notification tokens) |
 
 ## Research platform
 

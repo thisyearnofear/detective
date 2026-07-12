@@ -40,6 +40,7 @@ If that rate does not move with real leavers, do **not** add content richness (p
 | **4.1** | `953ac91` | Second offline event (`echo`, 18–36h) chained after first delivery; cap 2 events/case |
 | **Pre-beta hardening** | `4a0ae1f` → `83a23ec` | Phase 0+0.5 (requireAuth + real QuickAuth/SIWF signature verification, single `/api/auth/quick-auth/verify` endpoint), Phase 1 (env validation fail-closed + DDL out of request path + `pg` as a hard dep), Phase 2 (Discord-webhook logger + 20-entry admin ring buffer, later extended to all 23 API routes at `83a23ec`), Phase 3 (`.github/workflows/ci.yml`), Phase 4 (CSP/HSTS/Permissions-Policy), Phase 5 (`bun run seed:beta`); plus pre-beta Phase 6+ cleanups (`bb5a6cd` lint hygiene, `2b25fb8` React Hooks lint warnings, `11a3b2b` deletion of 3 orphan lib files). See `docs/HARDENING_PLAN.md` for the engineering audit. |
 | **Pre-beta Phase 6+ cleanup** | `bb5a6cd`, `2b25fb8`, `11a3b2b`, `83a23ec` | Proactive subset of Phase 6 executed pre-beta (because it was quick + safe): mechanical lint hygiene (5 of 15 warnings), subtle React Hooks refactors (10 of 10 warnings), orphan library deletion (`mobile.ts`/`performance.ts`/`viewport.ts`), and routing the full API error surface through `logger.error`. The larger Phase 6 (audit `gameState.ts`/`database.ts` for legacy research-only paths) remains **post-beta** per its own "refactor during validation violates prevent-bloat" principle. |
+| **Beta readiness pass** | (this branch) | Per-user rate limiting on `POST /api/cases` + `POST /api/cases/[id]/messages` (hourly + daily LLM spend cap); manifest updated to v2 copy + `webhookUrl` (dropped wallet/chain); Farcaster mini-app notification webhook (`/api/webhooks/farcaster`) + token storage + push on offline delivery; echo gated on `seen_at` (not delivery); `TIMESTAMPTZ` migration for `offline_events` + `artefacts` time columns; `APP_URL` env var for notification deep-links. |
 
 
 ### Consumer spine (always on)
@@ -48,11 +49,12 @@ If that rate does not move with real leavers, do **not** add content richness (p
 Auth → InvestigationHome (+ ReturnCard)
      → CaseInvestigation (artefacts)
      → leave → schedule follow_up
-     → cron tickWorld → deliver → maybe schedule echo
-     → inbox / ReturnCard → mark seen
+     → cron tickWorld → deliver + push notification
+     → inbox / ReturnCard → mark seen → schedule echo
+     → cron tickWorld → deliver echo + push
 ```
 
-Key routes: `/api/cases`, `/api/cases/[id]/messages`, `/api/cases/[id]/leave`, `/api/inbox`, `/api/metrics/return-rate`, `/api/cron/tick`.
+Key routes: `/api/cases`, `/api/cases/[id]/messages`, `/api/cases/[id]/leave`, `/api/inbox`, `/api/metrics/return-rate`, `/api/cron/tick`, `/api/webhooks/farcaster`.
 
 ### Research platform (gated)
 
@@ -71,12 +73,13 @@ Operational checklist before judging the metric:
 
 1. Deploy includes the pre-beta hardening batch (`+` 953ac91)
 2. **Required env in production:** `DATABASE_URL`, `JWT_SECRET`, `CRON_SECRET`, `NEYNAR_API_KEY`, plus one of `VENICE_API_KEY` / `OPENROUTER_API_KEY`. Missing any one of the first four fails the boot.
-3. **Optional env:** `ADMIN_SECRET` (admin bearer), `LOG_WEBHOOK_URL` (Discord webhook for prod error-level logs — set this before inviting users).
+3. **Optional env:** `ADMIN_SECRET` (admin bearer), `LOG_WEBHOOK_URL` (Discord webhook for prod error-level logs — set this before inviting users), `APP_URL` (production domain — set this to enable Farcaster push notifications on offline event delivery).
 4. **Pre-unboxing seed:** `bun run db:migrate` then `bun run seed:beta` (after swapping the `REPLACE_ME_*` placeholders in `scripts/seed-beta-persons.json` to 10–15 real Farcaster accounts that have ≥10 recent casts).
 5. Vercel cron hits `/api/cron/tick` every minute (`CRON_SECRET`)
-6. Postgres migrations applied (incl. `offline_events.kind`)
+6. Postgres migrations applied (incl. `offline_events.kind`, `notification_tokens` table, and `TIMESTAMPTZ` column migrations)
 7. At least one person with a `persona_snapshots` row — either from `seed:beta` or prior data — so `POST /api/cases` can open subjects
-8. Watch `/admin` return-rate + recent-errors panels after real loops (or short delays in staging — see env below)
+8. **Sign the second domain's manifest** if deploying to `detective.thisyearnofear.com` — the `accountAssociation` in `src/app/.well-known/farcaster.json/route.ts` still has `REPLACE_WITH_SIGNED_*` placeholders. Generate at https://farcaster.xyz/~/developers/mini-apps/manifest with FID 5254 custody key.
+9. Watch `/admin` return-rate + recent-errors panels after real loops (or short delays in staging — see env below)
 
 ---
 
@@ -84,7 +87,7 @@ Operational checklist before judging the metric:
 
 | # | Work | When |
 |---|------|------|
-| **4.2** | Push surface (Farcaster / web push) as amplifier of the proven loop | Only if return-rate is meaningful |
+| **4.2** | Push surface — **infrastructure built** (webhook, token storage, send-on-delivery). Remaining: verify in production that notifications arrive and that the return-rate moves with `APP_URL` set. | Verify during beta |
 | **4.3** | Append-only persona snapshots over time (person visibly continues) | After loop retention is solid |
 | **4.4** | Light cross-person reference | Only after single-case retention is solid |
 
@@ -95,9 +98,10 @@ Operational checklist before judging the metric:
 ## Offline loop (current behavior)
 
 1. Investigator leaves a case with ≥1 message → schedule `follow_up` in **6–12h**
-2. `tickWorld` delivers → artefact `offline_follow_up` → ReturnCard
-3. After delivery → schedule at most one `echo` in **18–36h** → artefact `offline_echo`
-4. Cap: **2 events per case**, one pending at a time, one of each kind
+2. `tickWorld` delivers → artefact `offline_follow_up` → ReturnCard + **push notification** (if `APP_URL` set and user granted permissions)
+3. Investigator opens the follow-up (`markArtefactSeen`) → schedule at most one `echo` in **18–36h** (gated on `seen_at`, not delivery — saves LLM spend on users who never return)
+4. `tickWorld` delivers echo → artefact `offline_echo` → ReturnCard + push
+5. Cap: **2 events per case**, one pending at a time, one of each kind
 
 ### Env (testing / staging)
 
@@ -157,4 +161,4 @@ A separate, larger cleanup — selective migration of the ~313 raw `console.log`
 
 ## Resume prompt (for a future session)
 
-> Read `docs/STATUS.md`. Check `/admin` return-rate and recent offline_events. If the north-star looks meaningful, implement Phase 4.2 (push). If not, diagnose the leave → deliver → return path before adding features.
+> Read `docs/STATUS.md`. Check `/admin` return-rate and recent offline_events. The push notification infrastructure is built (webhook + token storage + send-on-delivery) — verify `APP_URL` is set in production and that notifications arrive. If the north-star looks meaningful, proceed to Phase 4.3 (persona freshness). If not, diagnose the leave → deliver → push → return path before adding features.

@@ -10,6 +10,7 @@ import { generateBotResponse } from "@/lib/inference";
 import { calculateTypingDelay } from "@/lib/typingDelay";
 import { requireAuth } from "@/lib/auth";
 import { logger } from "@/lib/logger";
+import { checkUserRateLimit } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -30,6 +31,23 @@ export async function POST(
       const auth = requireAuth(request);
       if (!auth.ok) return auth.response;
       const fid = auth.token.fid;
+
+      // Per-user rate limits — each message triggers an LLM call, so we
+      // guard both hourly burst and daily total to cap spend.
+      const hourly = await checkUserRateLimit(fid, "api:cases:messages:post");
+      if (!hourly.allowed) {
+        return NextResponse.json(
+          { error: "Too many messages. Try again later." },
+          { status: 429, headers: { "Retry-After": String(hourly.retryAfter) } },
+        );
+      }
+      const daily = await checkUserRateLimit(fid, "api:cases:messages:daily");
+      if (!daily.allowed) {
+        return NextResponse.json(
+          { error: "Daily message limit reached. Try again tomorrow." },
+          { status: 429, headers: { "Retry-After": String(daily.retryAfter) } },
+        );
+      }
 
       const { id: caseId } = await params;
       const body = await request.json().catch(() => ({}));

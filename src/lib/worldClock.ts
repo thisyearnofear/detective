@@ -14,8 +14,9 @@ import { dbQuery } from "./database";
 import {
   artefactKindForEvent,
   claimDueOfflineEvents,
-  maybeScheduleOfflineEcho,
 } from "./offlineEvents";
+import { sendNotificationToFid } from "./notifications";
+import { getEnv } from "./env";
 import type { ChatMessage } from "./types";
 
 /**
@@ -26,11 +27,11 @@ export async function deliverDueOfflineEvents(): Promise<{
   claimed: number;
   delivered: number;
   errors: number;
-  echoesScheduled: number;
+  notificationsSent: number;
 }> {
   let delivered = 0;
   let errors = 0;
-  let echoesScheduled = 0;
+  let notificationsSent = 0;
 
   const events = await claimDueOfflineEvents(20);
   const claimed = events.length;
@@ -102,8 +103,27 @@ export async function deliverDueOfflineEvents(): Promise<{
         `[worldClock] Delivered ${event.kind} ${artefactId} for case ${event.caseId}`,
       );
 
-      const echo = await maybeScheduleOfflineEcho(event.caseId, event.kind);
-      if (echo) echoesScheduled++;
+      // Echo is now gated on seen_at — scheduled in markArtefactSeen when
+      // the investigator opens the follow-up, not here at delivery time.
+
+      // Push notification — the doorbell that makes the return loop measurable.
+      // No-op if the investigator hasn't granted notification permissions (no
+      // stored tokens). The notification deep-links back to the case.
+      const { APP_URL } = getEnv();
+      if (APP_URL) {
+        const title =
+          event.kind === "echo"
+            ? "Something else surfaced"
+            : "A new clue landed";
+        const bodyText = `${bot.username} left something while you were away.`;
+        const sent = await sendNotificationToFid(c.investigatorFid, {
+          notificationId: `offline-${event.id}`,
+          title,
+          body: bodyText,
+          targetUrl: `${APP_URL}/?case=${event.caseId}`,
+        });
+        if (sent) notificationsSent++;
+      }
     } catch (err) {
       logger.error(`Failed to deliver ${event.id}`, {
         apiName: "deliverDueOfflineEvents",
@@ -116,5 +136,5 @@ export async function deliverDueOfflineEvents(): Promise<{
     }
   }
 
-  return { claimed, delivered, errors, echoesScheduled };
+  return { claimed, delivered, errors, notificationsSent };
 }
