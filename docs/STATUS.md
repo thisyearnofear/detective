@@ -122,6 +122,22 @@ Smoke: `bun run scripts/smoke-phase4.ts`
 
 ---
 
+## Module surface (post-beta consolidation)
+
+`src/lib/` is now lean — 39 files, every one actively consumed by either a route under `src/app/api/**`, a component, or another lib. Three previously-shipped utility layers were deleted in Phase 6+ because no caller imported them (verified by repo-wide grep at deletion time):
+
+| Removed | Was | Recoverable via |
+|---|---|---|
+| `src/lib/mobile.ts` | Touch gestures, haptics, virtual-keyboard, pull-to-refresh, lazy image, postMessage, network-type, safe-area hooks (8 exports, 0 callers) | `git log -- src/lib/mobile.ts` |
+| `src/lib/performance.ts` | Debounce/throttle, regex cache, emoji hook, intersection observer, adaptive polling, scroll handler, frame-rate, memory guard, battery hook (12 exports, 0 callers) | `git log -- src/lib/performance.ts` |
+| `src/lib/viewport.ts` | `useViewport`, `responsive`, `farcaster` helpers, breakpoints (single-caller: `mobile.ts`, now gone) | `git log -- src/lib/viewport.ts` |
+
+If a future feature legitimately needs one of those hooks, copy it back from git history rather than maintaining it pre-emptively. The decision rule going forward: a hook lives until something calls it; the dead-code purge is a periodic pass, not a one-time event.
+
+A separate, larger cleanup — selective migration of the ~313 raw `console.log` / `console.warn` calls in `src/**` to `logger` / `logger.error` — is intentionally deferred. The Phase 2 logger already covers the two critical silent-failure paths (`worldClock.deliverDueOfflineEvents`, `generateBotResponse`); a blanket 313-site migration is too risky for one PR.**
+
+---
+
 ## Resume prompt (for a future session)
 
 > Read `docs/STATUS.md`. Check `/admin` return-rate and recent offline_events. If the north-star looks meaningful, implement Phase 4.2 (push). If not, diagnose the leave → deliver → return path before adding features.
