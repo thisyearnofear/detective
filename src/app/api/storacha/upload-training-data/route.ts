@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isResearchPlatformEnabled } from "@/platform";
 import { uploadBotTrainingData, isStorachaEnabled } from "@/platform/storacha";
+import { logger } from "@/lib/logger";
 
 export async function POST(request: NextRequest) {
   if (!isResearchPlatformEnabled()) {
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
       gatewayUrl: result.gatewayUrl,
     });
   } catch (error) {
-    console.error("[API] Storacha upload error:", error);
+    logger.error("[api/storacha/upload-training-data] handler failed", { error });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

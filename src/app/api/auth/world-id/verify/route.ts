@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getWorldIdConfig, isWorldIdEnabled } from "@/lib/worldid";
+import { logger } from "@/lib/logger";
 
 /**
  * World ID 4.0 Verification API
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest) {
       verifiedAt: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("[World ID] Verification error:", error);
+    logger.error("[api/auth/world-id/verify] handler failed", { error });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

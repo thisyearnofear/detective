@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
 import { UserProfile } from "@/lib/types";
+import { logger } from "@/lib/logger";
 
 export async function GET(request: NextRequest) {
   try {
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, username: profile.username, userProfile: profile });
   } catch (error) {
-    console.error("Error in profiles/random:", error);
+    logger.error("[api/profiles/random] handler failed", { error });
     return NextResponse.json({ error: "An unexpected error occurred" }, { status: 500 });
   }
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCaseById, listArtefacts } from "@/lib/caseRepository";
 import { scheduleOfflineFollowUp } from "@/lib/offlineEvents";
 import { requireAuth } from "@/lib/auth";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +49,7 @@ export async function POST(
       scheduledFor: event?.scheduledFor ?? null,
     });
   } catch (error) {
-    console.error("[api/cases/[id]/leave]", error);
+    logger.error("[api/cases/[id]/leave] handler failed", { error });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 },

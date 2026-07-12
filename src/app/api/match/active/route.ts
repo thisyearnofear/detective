@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
 import { GAME_CONSTANTS } from "@/lib/gameConstants";
 import type { Bot, Match, Player } from "@/lib/types";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -105,7 +106,7 @@ export async function GET(request: NextRequest) {
       currentState: gameState.state,
     });
   } catch (error) {
-    console.error("[api/match/active] Error:", error);
+    logger.error("[api/match/active] handler failed", { error });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 },

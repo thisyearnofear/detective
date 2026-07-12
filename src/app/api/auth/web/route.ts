@@ -1,6 +1,7 @@
 // src/app/api/auth/web/route.ts
 import { NextResponse } from "next/server";
 import { getFarcasterUserDataByUsername } from "@/lib/neynar";
+import { logger } from "@/lib/logger";
 
 /**
  * Web authentication endpoint for non-Farcaster SDK users.
@@ -34,7 +35,7 @@ export async function GET(request: Request) {
       userProfile,
     });
   } catch (error) {
-    console.error("Error in web authentication:", error);
+    logger.error("[api/auth/web GET] handler failed", { error });
     return NextResponse.json(
       { error: "An unexpected error occurred" },
       { status: 500 },

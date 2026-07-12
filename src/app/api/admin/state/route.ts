@@ -16,6 +16,7 @@ import type {
   AdminStateResponse,
   GameConfig,
 } from "@/lib/types";
+import { logger } from "@/lib/logger";
 
 /**
  * GET /api/admin/state
@@ -86,7 +87,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error("[Admin State GET] Error:", error);
+    logger.error("[Admin State GET] handler failed", { error });
     return NextResponse.json(
       { error: "Failed to fetch game state" },
       { status: 500 },
@@ -165,7 +166,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Invalid action" }, { status: 400 });
     }
   } catch (error) {
-    console.error("[Admin State POST] Error:", error);
+    logger.error("[Admin State POST] handler failed", { error });
     return NextResponse.json(
       { error: "Failed to process action" },
       { status: 500 },

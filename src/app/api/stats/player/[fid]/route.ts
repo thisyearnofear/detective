@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { database } from "@/lib/database";
+import { logger } from "@/lib/logger";
 
 export async function GET(
     _request: NextRequest,
@@ -68,7 +69,7 @@ export async function GET(
             })),
         });
     } catch (error) {
-        console.error("[Stats] Error fetching player stats:", error);
+        logger.error("[api/stats/player] handler failed", { error });
         return NextResponse.json(
             { success: false, error: "Failed to fetch player stats" },
             { status: 500 }

@@ -9,6 +9,7 @@ import type {
   AdminBulkRegisterResponse,
   AdminBulkRegisterResult,
 } from "@/lib/types";
+import { logger } from "@/lib/logger";
 
 type AdminBulkRegisterRequest = {
   usernames?: string[];
@@ -139,7 +140,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error: unknown) {
-    console.error("[Admin Bulk Register] Error:", error);
+    logger.error("[Admin Bulk Register] handler failed", { error });
     return NextResponse.json(
       { success: false, error: "Failed to process bulk registration" },
       { status: 500 },

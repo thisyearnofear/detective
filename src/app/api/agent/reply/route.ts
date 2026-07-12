@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
 import { isResearchPlatformEnabled } from "@/platform";
 import { guardAgentEndpoint, unauthorizedResponse } from "@/platform/agentAuth";
+import { logger } from "@/lib/logger";
 
 export const dynamic = 'force-dynamic';
 
@@ -98,7 +99,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, message });
 
   } catch (error) {
-    console.error("[api/agent/reply] Error:", error);
+    logger.error("[api/agent/reply] handler failed", { error });
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

@@ -9,6 +9,7 @@ import { personToBot, getPersonByFid } from "@/lib/personRepository";
 import { generateBotResponse } from "@/lib/inference";
 import { calculateTypingDelay } from "@/lib/typingDelay";
 import { requireAuth } from "@/lib/auth";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -116,7 +117,7 @@ export async function POST(
       typingIndicator: { isTyping: true, duration },
     });
   } catch (error) {
-    console.error("[api/cases/[id]/messages]", error);
+    logger.error("[api/cases/[id]/messages] handler failed", { error });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 },

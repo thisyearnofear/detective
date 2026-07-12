@@ -3,6 +3,7 @@ import { gameManager } from "@/lib/gameState";
 import { generateBotResponse } from "@/lib/inference";
 import { calculateTypingDelay } from "@/lib/typingDelay";
 import type { Bot } from "@/lib/types";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -104,7 +105,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error("[api/chat/send] Error:", error);
+    logger.error("[api/chat/send] handler failed", { error });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 },

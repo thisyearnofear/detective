@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listUnseenFollowUps, markArtefactSeen } from "@/lib/offlineEvents";
 import { requireAuth } from "@/lib/auth";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
     const items = await listUnseenFollowUps(fid);
     return NextResponse.json({ items, count: items.length });
   } catch (error) {
-    console.error("[api/inbox GET]", error);
+    logger.error("[api/inbox GET] handler failed", { error });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 },
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json({ success: true, artefactId });
   } catch (error) {
-    console.error("[api/inbox POST]", error);
+    logger.error("[api/inbox POST] handler failed", { error });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 },

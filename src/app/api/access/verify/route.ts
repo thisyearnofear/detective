@@ -1,6 +1,7 @@
 // src/app/api/access/verify/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { checkUserAccess, ACCESS_CONFIG } from "@/lib/accessControl";
+import { logger } from "@/lib/logger";
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error("[AccessVerify] Error verifying access:", error);
+    logger.error("[api/access/verify] handler failed", { error });
     
     return NextResponse.json(
       { 
@@ -71,7 +72,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error("[AccessVerify] Error verifying access:", error);
+    logger.error("[api/access/verify] handler failed", { error });
     
     return NextResponse.json(
       { 

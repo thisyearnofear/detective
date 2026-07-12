@@ -5,6 +5,7 @@ import {
 } from "@/lib/caseRepository";
 import { pickRandomPerson, getPersonByFid } from "@/lib/personRepository";
 import { requireAuth } from "@/lib/auth";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
     const cases = await listCasesWithDetails(fid);
     return NextResponse.json({ cases });
   } catch (error) {
-    console.error("[api/cases GET]", error);
+    logger.error("[api/cases GET] handler failed", { error });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 },
@@ -90,7 +91,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("[api/cases POST]", error);
+    logger.error("[api/cases POST] handler failed", { error });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 },

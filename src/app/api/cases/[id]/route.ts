@@ -4,6 +4,7 @@ import {
 } from "@/lib/caseRepository";
 import { getPersonByFid } from "@/lib/personRepository";
 import { requireAuth } from "@/lib/auth";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +46,7 @@ export async function GET(
         : null,
     });
   } catch (error) {
-    console.error("[api/cases/[id] GET]", error);
+    logger.error("[api/cases/[id] GET] handler failed", { error });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 },

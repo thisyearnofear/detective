@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getReturnRateMetric } from "@/lib/offlineEvents";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest) {
       ratePercent: Math.round(metric.rate * 1000) / 10,
     });
   } catch (error) {
-    console.error("[api/metrics/return-rate]", error);
+    logger.error("[api/metrics/return-rate] handler failed", { error });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 },

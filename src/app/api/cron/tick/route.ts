@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
+import { logger } from "@/lib/logger";
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Offline LLM delivery may need headroom
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('[api/cron/tick] Error:', error);
+    logger.error('[api/cron/tick] handler failed', { error });
     return NextResponse.json(
       { 
         success: false, 

@@ -34,6 +34,7 @@ import {
 } from "@/lib/auth";
 import { getFarcasterUserData } from "@/lib/neynar";
 import { getEnv } from "@/lib/env";
+import { logger } from "@/lib/logger";
 
 type VerifyRequest =
   | { kind: "quick-auth"; token: string }
@@ -114,7 +115,7 @@ export async function POST(request: Request) {
   try {
     profile = await getFarcasterUserData(fid);
   } catch (err) {
-    console.error("[auth/verify] Neynar failure:", err);
+    logger.error("[auth/verify] Neynar profile lookup failed", { error: err });
     return NextResponse.json(
       { error: "User profile lookup unavailable" },
       { status: 503 },

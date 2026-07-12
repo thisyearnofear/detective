@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isResearchPlatformEnabled } from "@/platform";
 import { verifyStoredData } from "@/platform/storacha";
+import { logger } from "@/lib/logger";
 
 export async function GET(request: NextRequest) {
   if (!isResearchPlatformEnabled()) {
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest) {
     const result = await verifyStoredData(cid);
     return NextResponse.json(result);
   } catch (error) {
-    console.error("[API] Storacha verify error:", error);
+    logger.error("[api/storacha/verify] handler failed", { error });
     return NextResponse.json(
       { error: "Verification failed" },
       { status: 500 }

@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { getFarcasterUserByAddress } from "@/lib/neynar";
 import { createAuthToken } from "@/lib/auth";
+import { logger } from "@/lib/logger";
 
 /**
  * API route to fetch Farcaster profile by wallet address
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
       expiresIn: 7 * 24 * 60 * 60, // 7 days in seconds
     });
   } catch (error: any) {
-    console.error("Error fetching profile by address:", error);
+    logger.error("[api/profiles/by-address] handler failed", { error });
     
     return NextResponse.json(
       { 

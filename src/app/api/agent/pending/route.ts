@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
 import { isResearchPlatformEnabled } from "@/platform";
 import { guardAgentEndpoint } from "@/platform/agentAuth";
+import { logger } from "@/lib/logger";
 
 export const dynamic = 'force-dynamic';
 
@@ -84,7 +85,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error("[api/agent/pending] Error:", error);
+    logger.error("[api/agent/pending] handler failed", { error });
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

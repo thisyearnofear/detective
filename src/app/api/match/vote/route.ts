@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
 import { NextRequest } from "next/server";
 import { invalidateMatchData } from "@/lib/performanceCache";
+import { logger } from "@/lib/logger";
 
 /**
  * API route to update the vote for a specific match.
@@ -37,10 +38,7 @@ export async function POST(request: NextRequest) {
     // Verify the match belongs to this player (check Redis if not in memory)
     const match = await gameManager.getMatch(matchId);
     if (!match) {
-      console.error(`[/api/match/vote POST] Match ${matchId} not found for FID ${playerFid}. Match was likely deleted or never existed.`);
-      const rawState = await gameManager.getRawState();
-      const allMatches = Array.from(rawState.matches.keys());
-      console.log(`[/api/match/vote POST] Currently available matches in memory: ${allMatches.length > 0 ? allMatches.join(', ') : 'NONE'}`);
+      logger.error(`[/api/match/vote POST] Match ${matchId} not found for FID ${playerFid}; likely deleted or never existed`);
       return NextResponse.json(
         { error: "Match not found." },
         { status: 404 }
@@ -91,7 +89,7 @@ export async function POST(request: NextRequest) {
       llmModelName: updatedMatch.opponent.type === "BOT" ? updatedMatch.opponent.llmModelName : undefined,
     });
   } catch (error) {
-    console.error("Error updating vote:", error);
+    logger.error("[/api/match/vote POST] handler failed", { error });
     return NextResponse.json(
       { error: "An unexpected error occurred." },
       { status: 500 }
@@ -124,10 +122,7 @@ export async function PUT(request: NextRequest) {
     // Verify the match belongs to this player (check Redis if not in memory)
     const match = await gameManager.getMatch(matchId);
     if (!match) {
-      console.error(`[/api/match/vote PUT] Match ${matchId} not found for FID ${playerFid}. Match was likely deleted or never existed.`);
-      const rawState = await gameManager.getRawState();
-      const allMatches = Array.from(rawState.matches.keys());
-      console.log(`[/api/match/vote PUT] Currently available matches in memory: ${allMatches.length > 0 ? allMatches.join(', ') : 'NONE'}`);
+      logger.error(`[/api/match/vote PUT] Match ${matchId} not found for FID ${playerFid}; likely deleted or never existed`);
       return NextResponse.json(
         { error: "Match not found." },
         { status: 404 }
@@ -188,7 +183,7 @@ export async function PUT(request: NextRequest) {
       userLlmGuess: match.userLlmGuess,
     });
   } catch (error) {
-    console.error("Error finalizing vote:", error);
+    logger.error("[/api/match/vote PUT] handler failed", { error });
     return NextResponse.json(
       { error: "An unexpected error occurred." },
       { status: 500 }
