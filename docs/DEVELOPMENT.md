@@ -107,6 +107,30 @@ STORACHA_ENABLED=true
 
 Agent routes (`/api/agent/pending`, `/api/agent/reply`) and Storacha routes return **404** when the flag is off.
 
+## Logging in API routes
+
+Every `try/catch` in a route file under `src/app/api/**` should route the error through `logger.error` from `src/lib/logger.ts` so that the Discord webhook (`LOG_WEBHOOK_URL`, production only) and the admin recent-errors panel (`/admin`) see it. Standard pattern:
+
+```ts
+import { logger } from "@/lib/logger";
+
+export async function GET(request: NextRequest) {
+  try {
+    // ...
+  } catch (error) {
+    logger.error("[/api/foo GET] handler failed", { error });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 },
+    );
+  }
+}
+```
+
+Tag the message with a stable prefix (`[/api/foo GET] handler failed` etc.) so an operator scanning the admin panel can correlate a Discord ping back to a specific route. For the not-found-as-error case (e.g. `match-not-found`), use the same `logger.error` with the matched-prefix pattern and skip the catch-block wrapper.
+
+Do **not** use `console.error` for production failure paths — it bypasses the webhook + ring buffer. Pure `console.log` is fine for INFO / audit-only lines (e.g. the request-shape echo in `/api/match/vote`).
+
 ## Common issues
 
 ### `POST /api/cases` → 404

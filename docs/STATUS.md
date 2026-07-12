@@ -1,9 +1,11 @@
 # Detective — Status & Roadmap (Curiosity OS)
 
-**Last updated:** 2026-07-11  
-**HEAD at write-up:** `953ac91` (Phase 4.1 echo) on `master`
+**Last updated:** 2026-07-12
+**Branch:** `master` (current HEAD on `main` repo; see `git log` for the latest SHA)
 
 This is the pickup document. Product thesis and sequencing live here; older “Turing tournament” docs are historical for research/platform code only.
+
+> The `git log --oneline -10` line at the top of `git log`: as of write-up, the most recent commits ending this doc are the pre-beta Phase 6+ cleanup sequence (`bb5a6cd` → `83a23ec`).
 
 ---
 
@@ -36,7 +38,9 @@ If that rate does not move with real leavers, do **not** add content richness (p
 | **3** | `0c5b83d` | Consumer UX = cases (`InvestigationHome` / `CaseInvestigation`); tournament UI off primary path |
 | **Housekeeping** | `9db9230`, `8333079` | Next.js 16 + React 19; deleted leftover game chrome; research/payments under `src/platform/` |
 | **4.1** | `953ac91` | Second offline event (`echo`, 18–36h) chained after first delivery; cap 2 events/case |
-| **Pre-beta hardening** | (this batch) | Phase 0+0.5 (requireAuth + real QuickAuth/SIWF signature verification), Phase 1 (env validation + DDL extraction), Phase 2 (Discord-webhook logger + admin ring buffer), Phase 3 (`.github/workflows/ci.yml`), Phase 4 (CSP/HSTS/Permissions-Policy), Phase 5 (`bun run seed:beta`), orphan-route cleanup, 401 handler. See `docs/HARDENING_PLAN.md` for the engineering audit. |
+| **Pre-beta hardening** | `4a0ae1f` → `83a23ec` | Phase 0+0.5 (requireAuth + real QuickAuth/SIWF signature verification, single `/api/auth/quick-auth/verify` endpoint), Phase 1 (env validation fail-closed + DDL out of request path + `pg` as a hard dep), Phase 2 (Discord-webhook logger + 20-entry admin ring buffer, later extended to all 23 API routes at `83a23ec`), Phase 3 (`.github/workflows/ci.yml`), Phase 4 (CSP/HSTS/Permissions-Policy), Phase 5 (`bun run seed:beta`); plus pre-beta Phase 6+ cleanups (`bb5a6cd` lint hygiene, `2b25fb8` React Hooks lint warnings, `11a3b2b` deletion of 3 orphan lib files). See `docs/HARDENING_PLAN.md` for the engineering audit. |
+| **Pre-beta Phase 6+ cleanup** | `bb5a6cd`, `2b25fb8`, `11a3b2b`, `83a23ec` | Proactive subset of Phase 6 executed pre-beta (because it was quick + safe): mechanical lint hygiene (5 of 15 warnings), subtle React Hooks refactors (10 of 10 warnings), orphan library deletion (`mobile.ts`/`performance.ts`/`viewport.ts`), and routing the full API error surface through `logger.error`. The larger Phase 6 (audit `gameState.ts`/`database.ts` for legacy research-only paths) remains **post-beta** per its own "refactor during validation violates prevent-bloat" principle. |
+
 
 ### Consumer spine (always on)
 
@@ -122,15 +126,18 @@ Smoke: `bun run scripts/smoke-phase4.ts`
 
 ---
 
-## Module surface (post-beta consolidation)
+## Module surface (pre-beta consolidation)
 
-`src/lib/` is now lean — 39 files, every one actively consumed by either a route under `src/app/api/**`, a component, or another lib. Three previously-shipped utility layers were deleted in Phase 6+ because no caller imported them (verified by repo-wide grep at deletion time):
+`src/lib/` is now lean — 39 files, every one actively consumed by either a route under `src/app/api/**`, a component, or another lib. The Phase 2 observability surface is also extended: `logger.error` now covers every API route's `try/catch` block (23 files migrated at `83a23ec`) in addition to the original two silent-failure paths (`worldClock.deliverDueOfflineEvents` and `generateBotResponse`). Together they form the single Discord-webhook → admin-ring-buffer → `/api/admin/logger/recent` → recent-errors panel channel.
 
 | Removed | Was | Recoverable via |
 |---|---|---|
 | `src/lib/mobile.ts` | Touch gestures, haptics, virtual-keyboard, pull-to-refresh, lazy image, postMessage, network-type, safe-area hooks (8 exports, 0 callers) | `git log -- src/lib/mobile.ts` |
 | `src/lib/performance.ts` | Debounce/throttle, regex cache, emoji hook, intersection observer, adaptive polling, scroll handler, frame-rate, memory guard, battery hook (12 exports, 0 callers) | `git log -- src/lib/performance.ts` |
 | `src/lib/viewport.ts` | `useViewport`, `responsive`, `farcaster` helpers, breakpoints (single-caller: `mobile.ts`, now gone) | `git log -- src/lib/viewport.ts` |
+
+Note: this list moved **forward** by ~313 sites vs. the original Phase 2 plan. Original Phase 2 deferred `console.*` migration because Selective migration landed pre-beta at commit `83a23ec`. The remaining ~250 `console.log`/`console.warn` calls in `components/**`, `lib/*` internal helpers, and `scripts/*` are intentionally left in place — they are noise, not risk, and the Phase 2 logger's scope is explicitly "silent-failure surface only."
+
 
 If a future feature legitimately needs one of those hooks, copy it back from git history rather than maintaining it pre-emptively. The decision rule going forward: a hook lives until something calls it; the dead-code purge is a periodic pass, not a one-time event.
 
