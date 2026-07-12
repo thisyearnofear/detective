@@ -26,95 +26,97 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const auth = requireAuth(request);
-    if (!auth.ok) return auth.response;
-    const fid = auth.token.fid;
+    return await logger.time("/api/cases/[id]/messages", "POST", async () => {
+      const auth = requireAuth(request);
+      if (!auth.ok) return auth.response;
+      const fid = auth.token.fid;
 
-    const { id: caseId } = await params;
-    const body = await request.json().catch(() => ({}));
-    const text = typeof body.text === "string" ? body.text.trim() : "";
+      const { id: caseId } = await params;
+      const body = await request.json().catch(() => ({}));
+      const text = typeof body.text === "string" ? body.text.trim() : "";
 
-    if (!text) {
-      return NextResponse.json(
-        { error: "text is required." },
-        { status: 400 },
+      if (!text) {
+        return NextResponse.json(
+          { error: "text is required." },
+          { status: 400 },
+        );
+      }
+
+      const c = await getCaseById(caseId);
+      if (!c) {
+        return NextResponse.json({ error: "Case not found." }, { status: 404 });
+      }
+      if (c.investigatorFid !== fid) {
+        return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+      }
+
+      const investigator = await getPersonByFid(fid);
+      const person = await getPersonByFid(c.personFid);
+      const investigatorUsername = investigator?.username || `fid:${fid}`;
+
+      const trimmed = text.slice(0, 500);
+      const playerMessage = {
+        id: `msg-${Date.now()}-${fid}`,
+        sender: { fid, username: investigatorUsername },
+        text: trimmed,
+        timestamp: Date.now(),
+      };
+
+      await appendMessageArtefact({
+        caseId,
+        message: playerMessage,
+        investigatorFid: fid,
+        personFid: c.personFid,
+      });
+
+      const bot = await personToBot(c.personFid);
+      if (!bot) {
+        return NextResponse.json({
+          success: true,
+          message: playerMessage,
+          reply: null,
+        });
+      }
+
+      const artefacts = await listArtefacts(caseId);
+      const history = artefactsToMessages(
+        artefacts,
+        fid,
+        c.personFid,
+        investigatorUsername,
+        person?.username || bot.username,
       );
-    }
 
-    const c = await getCaseById(caseId);
-    if (!c) {
-      return NextResponse.json({ error: "Case not found." }, { status: 404 });
-    }
-    if (c.investigatorFid !== fid) {
-      return NextResponse.json({ error: "Forbidden." }, { status: 403 });
-    }
+      const replyText = await generateBotResponse(bot, history, caseId);
+      const personality = bot.personality as { communicationStyle?: string } | undefined;
+      const style =
+        (personality?.communicationStyle as
+          | "terse"
+          | "conversational"
+          | "verbose"
+          | undefined) || "conversational";
+      const duration = Math.min(calculateTypingDelay(replyText, style, trimmed), 8000);
 
-    const investigator = await getPersonByFid(fid);
-    const person = await getPersonByFid(c.personFid);
-    const investigatorUsername = investigator?.username || `fid:${fid}`;
+      const replyMessage = {
+        id: `msg-${Date.now()}-${bot.fid}`,
+        sender: { fid: bot.fid, username: bot.username },
+        text: replyText,
+        timestamp: Date.now(),
+      };
 
-    const trimmed = text.slice(0, 500);
-    const playerMessage = {
-      id: `msg-${Date.now()}-${fid}`,
-      sender: { fid, username: investigatorUsername },
-      text: trimmed,
-      timestamp: Date.now(),
-    };
+      await appendMessageArtefact({
+        caseId,
+        message: replyMessage,
+        investigatorFid: fid,
+        personFid: c.personFid,
+      });
 
-    await appendMessageArtefact({
-      caseId,
-      message: playerMessage,
-      investigatorFid: fid,
-      personFid: c.personFid,
-    });
-
-    const bot = await personToBot(c.personFid);
-    if (!bot) {
       return NextResponse.json({
         success: true,
         message: playerMessage,
-        reply: null,
+        reply: replyMessage,
+        typingIndicator: { isTyping: true, duration },
       });
-    }
-
-    const artefacts = await listArtefacts(caseId);
-    const history = artefactsToMessages(
-      artefacts,
-      fid,
-      c.personFid,
-      investigatorUsername,
-      person?.username || bot.username,
-    );
-
-    const replyText = await generateBotResponse(bot, history, caseId);
-    const personality = bot.personality as { communicationStyle?: string } | undefined;
-    const style =
-      (personality?.communicationStyle as
-        | "terse"
-        | "conversational"
-        | "verbose"
-        | undefined) || "conversational";
-    const duration = Math.min(calculateTypingDelay(replyText, style, trimmed), 8000);
-
-    const replyMessage = {
-      id: `msg-${Date.now()}-${bot.fid}`,
-      sender: { fid: bot.fid, username: bot.username },
-      text: replyText,
-      timestamp: Date.now(),
-    };
-
-    await appendMessageArtefact({
-      caseId,
-      message: replyMessage,
-      investigatorFid: fid,
-      personFid: c.personFid,
-    });
-
-    return NextResponse.json({
-      success: true,
-      message: playerMessage,
-      reply: replyMessage,
-      typingIndicator: { isTyping: true, duration },
     });
   } catch (error) {
     logger.error("[api/cases/[id]/messages] handler failed", { error });

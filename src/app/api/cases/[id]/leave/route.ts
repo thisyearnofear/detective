@@ -18,35 +18,37 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const auth = requireAuth(request);
-    if (!auth.ok) return auth.response;
-    const fid = auth.token.fid;
+    return await logger.time("/api/cases/[id]/leave", "POST", async () => {
+      const auth = requireAuth(request);
+      if (!auth.ok) return auth.response;
+      const fid = auth.token.fid;
 
-    const { id: caseId } = await params;
-    const c = await getCaseById(caseId);
-    if (!c) {
-      return NextResponse.json({ error: "Case not found." }, { status: 404 });
-    }
-    if (c.investigatorFid !== fid) {
-      return NextResponse.json({ error: "Forbidden." }, { status: 403 });
-    }
+      const { id: caseId } = await params;
+      const c = await getCaseById(caseId);
+      if (!c) {
+        return NextResponse.json({ error: "Case not found." }, { status: 404 });
+      }
+      if (c.investigatorFid !== fid) {
+        return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+      }
 
-    const artefacts = await listArtefacts(caseId);
-    const hasExchange = artefacts.some((a) => a.kind === "message");
-    if (!hasExchange) {
+      const artefacts = await listArtefacts(caseId);
+      const hasExchange = artefacts.some((a) => a.kind === "message");
+      if (!hasExchange) {
+        return NextResponse.json({
+          success: true,
+          scheduled: false,
+          reason: "no_exchange",
+        });
+      }
+
+      const event = await scheduleOfflineFollowUp(caseId);
       return NextResponse.json({
         success: true,
-        scheduled: false,
-        reason: "no_exchange",
+        scheduled: !!event,
+        eventId: event?.id ?? null,
+        scheduledFor: event?.scheduledFor ?? null,
       });
-    }
-
-    const event = await scheduleOfflineFollowUp(caseId);
-    return NextResponse.json({
-      success: true,
-      scheduled: !!event,
-      eventId: event?.id ?? null,
-      scheduledFor: event?.scheduledFor ?? null,
     });
   } catch (error) {
     logger.error("[api/cases/[id]/leave] handler failed", { error });

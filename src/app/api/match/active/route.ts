@@ -66,44 +66,46 @@ function sanitizeMatch(match: Match) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const fidParam = request.nextUrl.searchParams.get("fid");
-    if (!fidParam) {
-      return NextResponse.json({ error: "fid is required." }, { status: 400 });
-    }
+    return await logger.time("/api/match/active", "GET", async () => {
+      const fidParam = request.nextUrl.searchParams.get("fid");
+      if (!fidParam) {
+        return NextResponse.json({ error: "fid is required." }, { status: 400 });
+      }
 
-    const fid = parseInt(fidParam, 10);
-    if (isNaN(fid)) {
-      return NextResponse.json({ error: "Invalid fid." }, { status: 400 });
-    }
+      const fid = parseInt(fidParam, 10);
+      if (isNaN(fid)) {
+        return NextResponse.json({ error: "Invalid fid." }, { status: 400 });
+      }
 
-    const gameState = await gameManager.getGameState();
+      const gameState = await gameManager.getGameState();
 
-    if (gameState.state !== "LIVE") {
-      return NextResponse.json(
-        { error: "Game is not live.", currentState: gameState.state },
-        { status: 403 },
-      );
-    }
+      if (gameState.state !== "LIVE") {
+        return NextResponse.json(
+          { error: "Game is not live.", currentState: gameState.state },
+          { status: 403 },
+        );
+      }
 
-    const matches = await gameManager.getActiveMatches(fid);
-    const rawState = await gameManager.getRawState();
-    const session = rawState.playerSessions.get(fid);
-    const player = rawState.players.get(fid);
+      const matches = await gameManager.getActiveMatches(fid);
+      const rawState = await gameManager.getRawState();
+      const session = rawState.playerSessions.get(fid);
+      const player = rawState.players.get(fid);
 
-    const leaderboard = await gameManager.getLeaderboard();
-    const rankIndex = leaderboard.findIndex((e) => e.player.fid === fid);
-    const playerRank = rankIndex >= 0 ? rankIndex + 1 : undefined;
+      const leaderboard = await gameManager.getLeaderboard();
+      const rankIndex = leaderboard.findIndex((e) => e.player.fid === fid);
+      const playerRank = rankIndex >= 0 ? rankIndex + 1 : undefined;
 
-    return NextResponse.json({
-      matches: matches.map(sanitizeMatch),
-      currentRound: session?.currentRound || 1,
-      totalRounds: GAME_CONSTANTS.FIXED_ROUNDS,
-      cycleId: gameState.cycleId,
-      serverTime: Date.now(),
-      voteHistory: player?.voteHistory || [],
-      playerRank,
-      totalPlayers: gameState.playerCount,
-      currentState: gameState.state,
+      return NextResponse.json({
+        matches: matches.map(sanitizeMatch),
+        currentRound: session?.currentRound || 1,
+        totalRounds: GAME_CONSTANTS.FIXED_ROUNDS,
+        cycleId: gameState.cycleId,
+        serverTime: Date.now(),
+        voteHistory: player?.voteHistory || [],
+        playerRank,
+        totalPlayers: gameState.playerCount,
+        currentState: gameState.state,
+      });
     });
   } catch (error) {
     logger.error("[api/match/active] handler failed", { error });

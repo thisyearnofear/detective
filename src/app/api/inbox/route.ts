@@ -12,12 +12,14 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(request: NextRequest) {
   try {
-    const auth = requireAuth(request);
-    if (!auth.ok) return auth.response;
-    const fid = auth.token.fid;
+    return await logger.time("/api/inbox", "GET", async () => {
+      const auth = requireAuth(request);
+      if (!auth.ok) return auth.response;
+      const fid = auth.token.fid;
 
-    const items = await listUnseenFollowUps(fid);
-    return NextResponse.json({ items, count: items.length });
+      const items = await listUnseenFollowUps(fid);
+      return NextResponse.json({ items, count: items.length });
+    });
   } catch (error) {
     logger.error("[api/inbox GET] handler failed", { error });
     return NextResponse.json(
@@ -36,27 +38,29 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const auth = requireAuth(request);
-    if (!auth.ok) return auth.response;
-    const fid = auth.token.fid;
+    return await logger.time("/api/inbox", "POST", async () => {
+      const auth = requireAuth(request);
+      if (!auth.ok) return auth.response;
+      const fid = auth.token.fid;
 
-    const body = await request.json().catch(() => ({}));
-    const artefactId = body.artefactId;
-    if (!artefactId || typeof artefactId !== "string") {
-      return NextResponse.json(
-        { error: "artefactId is required." },
-        { status: 400 },
-      );
-    }
-
-    const result = await markArtefactSeen(artefactId, fid);
-    if (!result.seen) {
-      if (result.reason === "not_found") {
-        return NextResponse.json({ error: "Artefact not found." }, { status: 404 });
+      const body = await request.json().catch(() => ({}));
+      const artefactId = body.artefactId;
+      if (!artefactId || typeof artefactId !== "string") {
+        return NextResponse.json(
+          { error: "artefactId is required." },
+          { status: 400 },
+        );
       }
-      return NextResponse.json({ error: "Forbidden." }, { status: 403 });
-    }
-    return NextResponse.json({ success: true, artefactId });
+
+      const result = await markArtefactSeen(artefactId, fid);
+      if (!result.seen) {
+        if (result.reason === "not_found") {
+          return NextResponse.json({ error: "Artefact not found." }, { status: 404 });
+        }
+        return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+      }
+      return NextResponse.json({ success: true, artefactId });
+    });
   } catch (error) {
     logger.error("[api/inbox POST] handler failed", { error });
     return NextResponse.json(

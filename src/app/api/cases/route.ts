@@ -19,16 +19,18 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(request: NextRequest) {
   try {
-    const auth = requireAuth(request);
-    if (!auth.ok) return auth.response;
-    const fid = auth.token.fid;
+    return await logger.time("/api/cases", "GET", async () => {
+      const auth = requireAuth(request);
+      if (!auth.ok) return auth.response;
+      const fid = auth.token.fid;
 
-    // Lazy heartbeat probe — debounced to at most one logger.error per
-    // hour, and never in dev (where the cron typically is not running).
-    void maybeAlertStaleTick();
+      // Lazy heartbeat probe — debounced to at most one logger.error per
+      // hour, and never in dev (where the cron typically is not running).
+      void maybeAlertStaleTick();
 
-    const cases = await listCasesWithDetails(fid);
-    return NextResponse.json({ cases });
+      const cases = await listCasesWithDetails(fid);
+      return NextResponse.json({ cases });
+    });
   } catch (error) {
     logger.error("[api/cases GET] handler failed", { error });
     return NextResponse.json(
@@ -46,54 +48,56 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const auth = requireAuth(request);
-    if (!auth.ok) return auth.response;
-    const fid = auth.token.fid;
+    return await logger.time("/api/cases", "POST", async () => {
+      const auth = requireAuth(request);
+      if (!auth.ok) return auth.response;
+      const fid = auth.token.fid;
 
-    const body = await request.json().catch(() => ({}));
-    const personFid =
-      body.personFid != null
-        ? typeof body.personFid === "number"
-          ? body.personFid
-          : parseInt(body.personFid, 10)
-        : null;
+      const body = await request.json().catch(() => ({}));
+      const personFid =
+        body.personFid != null
+          ? typeof body.personFid === "number"
+            ? body.personFid
+            : parseInt(body.personFid, 10)
+          : null;
 
-    let resolvedPersonFid = personFid;
-    if (resolvedPersonFid == null || isNaN(resolvedPersonFid)) {
-      const person = await pickRandomPerson(fid);
-      if (!person) {
+      let resolvedPersonFid = personFid;
+      if (resolvedPersonFid == null || isNaN(resolvedPersonFid)) {
+        const person = await pickRandomPerson(fid);
+        if (!person) {
+          return NextResponse.json(
+            {
+              error:
+                "No subjects available yet. Persons appear after investigators register with cast history.",
+            },
+            { status: 404 },
+          );
+        }
+        resolvedPersonFid = person.fid;
+      }
+
+      if (resolvedPersonFid === fid) {
         return NextResponse.json(
-          {
-            error:
-              "No subjects available yet. Persons appear after investigators register with cast history.",
-          },
-          { status: 404 },
+          { error: "Cannot investigate yourself." },
+          { status: 400 },
         );
       }
-      resolvedPersonFid = person.fid;
-    }
 
-    if (resolvedPersonFid === fid) {
-      return NextResponse.json(
-        { error: "Cannot investigate yourself." },
-        { status: 400 },
-      );
-    }
+      const person = await getPersonByFid(resolvedPersonFid);
+      if (!person) {
+        return NextResponse.json({ error: "Person not found." }, { status: 404 });
+      }
 
-    const person = await getPersonByFid(resolvedPersonFid);
-    if (!person) {
-      return NextResponse.json({ error: "Person not found." }, { status: 404 });
-    }
-
-    const c = await upsertCase(fid, resolvedPersonFid);
-    return NextResponse.json({
-      case: c,
-      person: {
-        fid: person.fid,
-        username: person.username,
-        displayName: person.displayName,
-        pfpUrl: person.pfpUrl,
-      },
+      const c = await upsertCase(fid, resolvedPersonFid);
+      return NextResponse.json({
+        case: c,
+        person: {
+          fid: person.fid,
+          username: person.username,
+          displayName: person.displayName,
+          pfpUrl: person.pfpUrl,
+        },
+      });
     });
   } catch (error) {
     logger.error("[api/cases POST] handler failed", { error });
