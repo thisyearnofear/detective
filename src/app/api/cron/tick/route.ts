@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { gameManager } from "@/lib/gameState";
 import { logger } from "@/lib/logger";
+import { recordTickHeartbeat } from "@/lib/cronHealth";
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Offline LLM delivery may need headroom
@@ -37,6 +38,10 @@ export async function GET(request: NextRequest) {
     const startTime = Date.now();
     const result = await gameManager.tickWorld();
     const duration = Date.now() - startTime;
+
+    // Refresh the world-tick heartbeat so the /api/health probe + the
+    // /api/cases lazy checker can detect a dead cron within ~20 min.
+    await recordTickHeartbeat();
 
     return NextResponse.json({
       success: true,

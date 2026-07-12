@@ -6,6 +6,7 @@ import {
 import { pickRandomPerson, getPersonByFid } from "@/lib/personRepository";
 import { requireAuth } from "@/lib/auth";
 import { logger } from "@/lib/logger";
+import { maybeAlertStaleTick } from "@/lib/cronHealth";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,10 @@ export async function GET(request: NextRequest) {
     const auth = requireAuth(request);
     if (!auth.ok) return auth.response;
     const fid = auth.token.fid;
+
+    // Lazy heartbeat probe — debounced to at most one logger.error per
+    // hour, and never in dev (where the cron typically is not running).
+    void maybeAlertStaleTick();
 
     const cases = await listCasesWithDetails(fid);
     return NextResponse.json({ cases });
