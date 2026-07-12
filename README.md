@@ -2,6 +2,8 @@
 
 Farcaster mini-app: investigate people through their digital residue. Step away — the world keeps moving.
 
+> **Pre-beta engineering hardening complete.** See [**docs/HARDENING_PLAN.md**](docs/HARDENING_PLAN.md) for the full audit. Below: the consumer product; above: the engineering readiness.
+
 > **Pickup / roadmap:** see **[docs/STATUS.md](docs/STATUS.md)** — phases done, north-star metric, what we’re waiting on, gated next steps.
 
 ## Product (consumer)
@@ -21,7 +23,11 @@ cp .env.example .env.local
 bun run dev
 ```
 
-See [Development Guide](docs/DEVELOPMENT.md) for setup, env vars, and the case/offline loop.
+Required env in production: `DATABASE_URL`, `JWT_SECRET`, `CRON_SECRET`, `NEYNAR_API_KEY`, plus one of `VENICE_API_KEY` / `OPENROUTER_API_KEY`. Optional but recommended: `ADMIN_SECRET` (admin dashboard bearer), `LOG_WEBHOOK_URL` (Discord webhook URL for prod error-level logs).
+
+Pre-beta unboxing once code is deployed: `bun run db:migrate` then swap `REPLACE_ME_*` placeholders in `scripts/seed-beta-persons.json` to 10–15 real Farcaster accounts and `bun run seed:beta`.
+
+See [Development Guide](docs/DEVELOPMENT.md) for setup, env vars, cron, smoke tests, and the case/offline loop.
 
 ## Documentation
 

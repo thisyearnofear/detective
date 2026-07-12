@@ -72,6 +72,25 @@ curl -H "Authorization: Bearer $ADMIN_SECRET" \
   http://localhost:3000/api/metrics/return-rate
 ```
 
+## Beta seeding
+
+Before inviting the first batch of beta users, give them subjects to investigate on their first try by seeding the durable `persons` + `persona_snapshots` tables via the existing admin bulk-register endpoint.
+
+```bash
+# 1. (one-time) edit scripts/seed-beta-persons.json — replace the
+#    REPLACE_ME_builder_* placeholders with 10–15 real Farcaster usernames
+#    of accounts that have ≥10 recent casts (the endpoint validates this).
+
+# 2. Run the seeder. It auto-transitions game state to REGISTRATION, runs
+#    bulk register, and rolls the state back to whatever it was before.
+#    Set ADMIN_SECRET in .env.local first.
+bun run seed:beta
+```
+
+The script targets `NEXT_PUBLIC_BACKEND_URL` if set, otherwise `http://localhost:3000`. Per-username outcomes print per-line (`[OK]`, `[SKIP]`) and the final summary reports `registered/total`.
+
+**Re-runs are safe** — already-registered users are returned as `[SKIP] Already registered` and the script does not crash on partial failures.
+
 ## Cron
 
 `vercel.json` schedules `/api/cron/tick` every minute. Locally curl with `CRON_SECRET`.

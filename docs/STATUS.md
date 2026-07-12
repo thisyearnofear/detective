@@ -36,6 +36,7 @@ If that rate does not move with real leavers, do **not** add content richness (p
 | **3** | `0c5b83d` | Consumer UX = cases (`InvestigationHome` / `CaseInvestigation`); tournament UI off primary path |
 | **Housekeeping** | `9db9230`, `8333079` | Next.js 16 + React 19; deleted leftover game chrome; research/payments under `src/platform/` |
 | **4.1** | `953ac91` | Second offline event (`echo`, 18–36h) chained after first delivery; cap 2 events/case |
+| **Pre-beta hardening** | (this batch) | Phase 0+0.5 (requireAuth + real QuickAuth/SIWF signature verification), Phase 1 (env validation + DDL extraction), Phase 2 (Discord-webhook logger + admin ring buffer), Phase 3 (`.github/workflows/ci.yml`), Phase 4 (CSP/HSTS/Permissions-Policy), Phase 5 (`bun run seed:beta`), orphan-route cleanup, 401 handler. See `docs/HARDENING_PLAN.md` for the engineering audit. |
 
 ### Consumer spine (always on)
 
@@ -64,11 +65,14 @@ Enable with `RESEARCH_PLATFORM_ENABLED=true`. Agent/Storacha APIs return 404 whe
 
 Operational checklist before judging the metric:
 
-1. Deploy includes `953ac91`+
-2. Vercel cron hits `/api/cron/tick` every minute (`CRON_SECRET`)
-3. Postgres migrations applied (incl. `offline_events.kind`)
-4. At least one person with a `persona_snapshots` row (registration / bulk admin / prior data) so `POST /api/cases` can open subjects
-5. Watch `/admin` return-rate after real loops (or short delays in staging — see env below)
+1. Deploy includes the pre-beta hardening batch (`+` 953ac91)
+2. **Required env in production:** `DATABASE_URL`, `JWT_SECRET`, `CRON_SECRET`, `NEYNAR_API_KEY`, plus one of `VENICE_API_KEY` / `OPENROUTER_API_KEY`. Missing any one of the first four fails the boot.
+3. **Optional env:** `ADMIN_SECRET` (admin bearer), `LOG_WEBHOOK_URL` (Discord webhook for prod error-level logs — set this before inviting users).
+4. **Pre-unboxing seed:** `bun run db:migrate` then `bun run seed:beta` (after swapping the `REPLACE_ME_*` placeholders in `scripts/seed-beta-persons.json` to 10–15 real Farcaster accounts that have ≥10 recent casts).
+5. Vercel cron hits `/api/cron/tick` every minute (`CRON_SECRET`)
+6. Postgres migrations applied (incl. `offline_events.kind`)
+7. At least one person with a `persona_snapshots` row — either from `seed:beta` or prior data — so `POST /api/cases` can open subjects
+8. Watch `/admin` return-rate + recent-errors panels after real loops (or short delays in staging — see env below)
 
 ---
 
