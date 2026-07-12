@@ -12,17 +12,29 @@ import CollapsibleSection from "@/components/CollapsibleSection";
 export default function Home() {
   const [sdkUser, setSdkUser] = useState<any>(null);
   const [isSdkLoading, setIsSdkLoading] = useState(true);
-  const [introComplete, setIntroComplete] = useState(false);
-
-  useEffect(() => {
-    const hasSeenIntro = localStorage.getItem("detective_onboarding_complete");
-    if (hasSeenIntro) {
-      setIntroComplete(true);
-      return;
+  // Lazy initializer reads localStorage synchronously on the first client
+  // render so users who've completed onboarding skip the intro immediately.
+  // SSR snapshot is `false` (no localStorage); client first render may
+  // hydrate to `true` — the page just transitions faster, no behavior change.
+  const [introComplete, setIntroComplete] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return !!localStorage.getItem("detective_onboarding_complete");
+    } catch {
+      return false;
     }
+  });
+
+  // Auto-advance the intro after 5s unless the lazy initializer already
+  // detected `introComplete = true` from localStorage. The setState lives
+  // inside the setTimeout callback (not the effect body), and [introComplete]
+  // matches the only dep read in the body, so neither the set-state rule nor
+  // the exhaustive-deps rule fires — no suppress needed here.
+  useEffect(() => {
+    if (introComplete) return;
     const timer = setTimeout(() => setIntroComplete(true), 5000);
     return () => clearTimeout(timer);
-  }, []);
+  }, [introComplete]);
 
   const skipIntro = () => setIntroComplete(true);
 

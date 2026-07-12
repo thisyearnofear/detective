@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import useSWR from "swr";
@@ -133,22 +133,36 @@ export default function AdminPage() {
   } | null>(null);
   const [showResetModal, setShowResetModal] = useState(false);
   
-  // Admin secret for Bearer token auth (optional, stored in sessionStorage)
-  const [adminSecret, setAdminSecret] = useState<string>("");
+  // Admin secret for Bearer token auth (optional, stored in sessionStorage).
+  // Lazy initializer reads sessionStorage on the first client render so SWR
+  // keys + helpers don't need a mount-time re-render to find out whether we
+  // have a stored secret. SSR has no sessionStorage so the server snapshot is
+  // always ""; client first render may hydrate to a stored value. The page is
+  // gated on the secret mismatch but doesn't show different UI shells on
+  // either side.
+  const [adminSecret, setAdminSecret] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      return sessionStorage.getItem("admin_secret") ?? "";
+    } catch {
+      return "";
+    }
+  });
   const [showSecretPrompt, setShowSecretPrompt] = useState(false);
   const [tempSecret, setTempSecret] = useState<string>("");
   const [authError, setAuthError] = useState<string>("");
 
-  // Load admin secret from sessionStorage on mount
+  // If the lazy initializer found nothing in sessionStorage, surface the
+  // password prompt on first mount. Single mount-time side-effect derivation,
+  // not a reactive effect — block-disabled because the setState + empty-deps
+  // combination is intentional (matches the pre-refactor sessionStorage-read
+  // pattern, just consolidated to one place after the useState lazy init
+  // above pulled the actual value read out of the effect body).
+  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps -- mount-time-only prompt fallback; adminSecret is captured once */
   useEffect(() => {
-    const stored = sessionStorage.getItem("admin_secret");
-    if (stored) {
-      setAdminSecret(stored);
-    } else {
-      // Show prompt on first load if no secret stored
-      setShowSecretPrompt(true);
-    }
+    if (!adminSecret) setShowSecretPrompt(true);
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 
   // Save admin secret to sessionStorage when it changes
   useEffect(() => {
@@ -157,8 +171,9 @@ export default function AdminPage() {
     }
   }, [adminSecret]);
 
-  // Helper to get headers with optional Bearer token
-  const getAuthHeaders = () => {
+  // Helper to get headers with optional Bearer token. Memoized so SWR fetch
+  // handlers + handlers below can list it as a stable dependency.
+  const getAuthHeaders = useCallback(() => {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
@@ -166,7 +181,7 @@ export default function AdminPage() {
       headers["Authorization"] = `Bearer ${adminSecret}`;
     }
     return headers;
-  };
+  }, [adminSecret]);
 
   // Poll admin data every 2 seconds for responsive updates
   const { data: adminData, mutate } = useSWR<AdminStateResponse>(
@@ -347,7 +362,7 @@ export default function AdminPage() {
     } finally {
       setIsTransitioning(false);
     }
-  }, [forceRefresh]);
+  }, [forceRefresh, getAuthHeaders]);
 
   const handleToggleMonetization = async () => {
     const currentEnabled = adminData?.gameState?.config?.monetizationEnabled;
@@ -379,10 +394,10 @@ export default function AdminPage() {
     }
   };
 
-  // Generate grid images array
-  const gridImages = Array.from(
-    { length: 9 },
-    (_, i) => `/grid-images/${i + 1}.jpg`,
+  // Generate grid images array (stable per render — memoized).
+  const gridImages = useMemo(
+    () => Array.from({ length: 9 }, (_, i) => `/grid-images/${i + 1}.jpg`),
+    [],
   );
 
   return (

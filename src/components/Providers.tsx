@@ -25,11 +25,18 @@ function MiniAppInitializer({ children }: { children: React.ReactNode }) {
 }
 
 export function RootProviders({ children }: { children: React.ReactNode }) {
-  const [isMiniApp, setIsMiniApp] = useState(false);
-
-  useEffect(() => {
-    setIsMiniApp(isFarcasterMiniApp());
-  }, []);
+  // Lazy initializer runs `isFarcasterMiniApp()` once on the first client
+  // render. Server snapshot is `false` (no global window); client may
+  // hydrate to `true` or stay `false` — the only difference is whether
+  // the AuthKitProvider wraps the tree, with no visible UI flash.
+  const [isMiniApp] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return isFarcasterMiniApp();
+    } catch {
+      return false;
+    }
+  });
 
   // In miniapp: skip AuthKitProvider (uses miniapp SDK auth instead)
   // In browser: use AuthKitProvider for Farcaster Auth Kit

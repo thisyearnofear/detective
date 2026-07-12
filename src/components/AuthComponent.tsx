@@ -12,7 +12,7 @@
  * requireAuth(). Reference: https://miniapps.farcaster.xyz/docs/sdk/quick-auth
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { sdk } from "@farcaster/miniapp-sdk";
 import { SignInButton } from "@farcaster/auth-kit";
 import { requestJson } from "@/lib/fetcher";
@@ -68,8 +68,9 @@ export default function AuthComponent({
    * Handle successful authentication from either MiniApp or Web source.
    * The `input` is a payload; the server returns the session JWT; we store
    * the session JWT (NOT the inbound token) as our `auth-token`.
+   * Memoized so the detection effect can list it as a stable dependency.
    */
-  const handleAuthSuccess = async (input: VerifyPayload) => {
+  const handleAuthSuccess = useCallback(async (input: VerifyPayload) => {
     try {
       setStep("authenticating");
       const session = await exchangeForSession(input);
@@ -100,7 +101,7 @@ export default function AuthComponent({
       setStep("error");
       onErrorAction?.(errorMessage);
     }
-  };
+  }, [onAuthSuccessAction, onErrorAction]);
 
   /**
    * Detect context and initiate appropriate auth flow
@@ -167,7 +168,8 @@ export default function AuthComponent({
     };
 
     detectContextAndAuth();
-  }, [onAuthSuccessAction, onErrorAction]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- handleAuthSuccess is captured by closure, deps intentionally omitted; mount-only effect
+  }, []);
 
   // =========================================================================
   // RENDER: Detecting

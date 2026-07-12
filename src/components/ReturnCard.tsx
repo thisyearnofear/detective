@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import useSWR from "swr";
 import { fetcher, getApiUrl, requestJson } from "@/lib/fetcher";
 
@@ -38,7 +38,8 @@ export default function ReturnCard({ fid }: Props) {
     },
   );
 
-  const items = data?.items || [];
+  // Memoize so handleOpen's deps don't change identity every render.
+  const items = useMemo(() => data?.items || [], [data]);
   const top = revealed || items[0];
 
   const handleOpen = useCallback(async () => {

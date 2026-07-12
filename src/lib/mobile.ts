@@ -259,17 +259,18 @@ export function useLazyImage(src: string) {
 
 // FARCASTER FRAME COMMUNICATION
 export function useFarcasterFrame() {
-  const [isInFrame, setIsInFrame] = useState(false);
-
-  useEffect(() => {
-    // Detect if running in Farcaster frame
+  // Lazy initializer detects the parent-frame relationship once on the first
+  // client render. SSR returns `false`; client may hydrate to `true` — the
+  // only difference is whether `postMessage` is disabled, with no visible UI.
+  const [isInFrame] = useState(() => {
+    if (typeof window === "undefined") return false;
     try {
-      setIsInFrame(window.parent !== window && window.location !== window.parent.location);
-    } catch (e) {
+      return window.parent !== window && window.location !== window.parent.location;
+    } catch {
       // Cross-origin frame - likely Farcaster
-      setIsInFrame(true);
+      return true;
     }
-  }, []);
+  });
 
   const postMessage = useCallback((action: string, data?: any) => {
     if (!isInFrame) return;

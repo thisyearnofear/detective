@@ -86,7 +86,7 @@ export function useIntersectionObserver(
 
     observer.observe(element);
     return () => observer.disconnect();
-  }, [callback, options]);
+  }, [elementRef, callback, options]);
 }
 
 // ADAPTIVE POLLING BASED ON VISIBILITY
@@ -234,22 +234,31 @@ export function useFrameRateOptimization() {
 }
 
 // MEMORY MANAGEMENT
+//
+// Exposes only `safeSetState` — a guarded setter that callers can invoke
+// even after the host component has unmounted. We deliberately do not expose
+// `mounted` as a render-time value: no caller in this codebase consults it,
+// and exposing it via `useState` would either (a) read `mounted.current` on a
+// ref during render (the original lint complaint) or (b) bake the closure-
+// captured value into `safeSetState`, defeating the post-unmount guard.
+//
+// The ref is read inside the callback so it always reflects the live value.
 export function useMemoryOptimization() {
-  const mounted = useRef(true);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
     return () => {
-      mounted.current = false;
+      mountedRef.current = false;
     };
   }, []);
 
   const safeSetState = useCallback((setter: () => void) => {
-    if (mounted.current) {
+    if (mountedRef.current) {
       setter();
     }
   }, []);
 
-  return { mounted: mounted.current, safeSetState };
+  return { safeSetState };
 }
 
 // BATTERY API DETECTION (for aggressive optimization)
