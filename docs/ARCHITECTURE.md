@@ -42,6 +42,17 @@ For **what’s shipped vs gated**, see [STATUS.md](STATUS.md).
 Repositories: `src/lib/personRepository.ts`, `src/lib/caseRepository.ts`, `src/lib/offlineEvents.ts`.  
 Orchestration still centered in `src/lib/gameState.ts` (`tickWorld`); prefer extending repos over growing that file further.
 
+## Auth flow
+
+Auth is consolidated at `src/lib/auth.ts` and flows through a single endpoint:
+
+- **MiniApp** path: `sdk.quickAuth.getToken()` returns a JWT issued by Farcaster's hosted service. The server fetches the corresponding ES256 public key from `https://api.farcaster.xyz/v2/auth/jwks` (with a 1-hour module-scoped cache), uses `crypto.subtle.verify` with ECDSA P-256 / SHA-256, and **mandatorily** validates the JWT's `domain` claim against the request hostname — a token for `evil.com` is rejected even if its signature is genuine.
+- **Web SIWF** path: `@farcaster/auth-kit`'s `SignInButton.onSuccess` returns `{ signature, message, fid }` directly. The server parses the SIWF message string for mandatory `Domain` and `Expiration Time`, recovers the signer with viem's `recoverMessageAddress` (EIP-191 personal_sign), and binds the recovered address to the FID by checking Neynar's `verified_addresses.eth_addresses`.
+
+Both paths converge at `POST /api/auth/quick-auth/verify`, which returns an internal 7-day HS256 session JWT. The client stores it as `localStorage["auth-token"]`; `src/lib/fetcher.ts` auto-attaches `Authorization: Bearer <token>` on every consumer call. On 401 from any non-auth-issuing endpoint, the session is cleared and `window.CustomEvent("auth:expired")` is dispatched so any mounted page can re-prompt.
+
+All consumer routes (`/api/cases*`, `/api/inbox`) gate on `requireAuth(request)` and source the `fid` from the verified JWT — never from query string or body. The orphaned `/api/auth/farcaster/{status,initiate}` channel routes were deleted (consolidated auth flow replaces them).
+
 ## Consumer loop
 
 1. Auth (mini-app SDK or web Auth Kit)
