@@ -114,4 +114,6 @@ export const RETRY_PRESETS = {
   },
 };
 
-export default { withRetry, RETRY_PRESETS };
+const retry = { withRetry, RETRY_PRESETS };
+export default retry;
+export { retry };

@@ -265,7 +265,7 @@ export default function AuthComponent({
         </div>
 
         <p className="text-xs text-gray-400 text-center">
-          Don't have Farcaster? Download the app or visit farcaster.xyz
+          Don&apos;t have Farcaster? Download the app or visit farcaster.xyz
         </p>
 
         {onExploreWithoutAuthAction && (

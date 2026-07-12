@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import useSWR from "swr";
 import AnimatedGridBackdrop from "@/components/AnimatedGridBackdrop";
 import StarfieldBackground from "@/components/StarfieldBackground";
@@ -854,10 +855,19 @@ export default function AdminPage() {
                   key={player.fid}
                   className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-3 backdrop-blur-sm"
                 >
-                  <img
+                  {/*
+                    `unoptimized` because pfpUrl is an arbitrary external host
+                    — Next won't proxy it. Browser fetch is gated by CSP
+                    `img-src` (wrpcd.net, imx.stargazer.garden, *.fcra.xyz);
+                    missing pfp = check the CSP, not Next.
+                  */}
+                  <Image
                     src={player.pfpUrl}
-                    alt={player.username}
+                    alt={player.username || "Player"}
+                    width={48}
+                    height={48}
                     className="w-12 h-12 rounded-full border border-white/20"
+                    unoptimized
                   />
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-white truncate">
@@ -887,10 +897,18 @@ export default function AdminPage() {
                   className="bg-white/5 border border-white/10 rounded-xl p-4 backdrop-blur-sm"
                 >
                   <div className="flex items-center gap-3 mb-3">
-                    <img
+                    {/*
+                      Same CSP `img-src` constraint as player pfps above —
+                      `unoptimized` because bot.pfpUrl is an arbitrary
+                      external URL the Next optimizer should not proxy.
+                    */}
+                    <Image
                       src={bot.pfpUrl}
-                      alt={bot.username}
+                      alt={bot.username || "Bot"}
+                      width={48}
+                      height={48}
                       className="w-12 h-12 rounded-full border border-white/20"
+                      unoptimized
                     />
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-white truncate">
