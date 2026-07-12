@@ -10,6 +10,9 @@
  *   + an optional Discord webhook in production).
  * - Webhook POST is wrapped in try/catch — a failed dispatch never crashes
  *   the caller. The error still goes to the ring buffer so admin can see it.
+ * - `time` runs on a separate 100-entry ring buffer (`TIMING_BUFFER_SIZE`) so
+ *   successful responses never evict actual errors from the smaller
+ *   `RING_BUFFER_SIZE`. The two channels are intentionally independent.
  */
 
 import { getEnv } from "./env";
@@ -36,6 +39,39 @@ function pushError(entry: ErrorEntry): void {
   errorBuffer.push(entry);
   if (errorBuffer.length > RING_BUFFER_SIZE) {
     errorBuffer.shift();
+  }
+}
+
+// =====================================================================
+// Timing channel — independent from the error channel so successful
+// responses don't evict real errors. Phase 2 perf-baseline work uses this
+// to compute p50/p95/p99 latency over windows via `reportTimings()`.
+// =====================================================================
+
+export interface TimingEntry {
+  /** ISO 8601 timestamp the entry was created. */
+  timestamp: string;
+  /** Caller-supplied route tag — e.g. `/api/cases/[id] GET`. */
+  route: string;
+  /** HTTP method — `GET`, `POST`, etc. Required so logs are not silently mislabelled. */
+  method: string;
+  /** Elapsed wall-clock milliseconds. */
+  ms: number;
+  /** `true` if the wrapped fn threw. */
+  errored: boolean;
+}
+
+export const TIMING_BUFFER_SIZE = 100;
+const timingBuffer: TimingEntry[] = [];
+
+/**
+ * Push a timing entry into the per-route FIFO ring buffer.
+ * When the buffer overflows we evict the oldest entry first.
+ */
+function pushTiming(entry: TimingEntry): void {
+  timingBuffer.push(entry);
+  if (timingBuffer.length > TIMING_BUFFER_SIZE) {
+    timingBuffer.shift();
   }
 }
 
@@ -81,6 +117,45 @@ export const logger = {
     // should not pay the latency of a webhook round-trip on every error.
     void dispatchToWebhook(entry);
   },
+  /**
+   * Wraps an async function and records its wall-clock duration on the
+   * dedicated timing ring buffer. Does NOT touch the error ring buffer —
+   * successful responses are not errors. On throw, the error still surfaces
+   * to the caller (so the route's `catch` block can route it via
+   * `logger.error`); the timing entry is recorded with `errored: true` so
+   * `reportTimings()` can compute error rates.
+   *
+   * Usage:
+   *   return logger.time("/api/cases/[id]", "GET", async () => {
+   *     // handler body
+   *   });
+   *
+   *   method is REQUIRED — defaulting to "GET" silently mislabelled POSTs
+   *   and corrupted the by-method percentile view in the admin report.
+   */
+  async time<T>(
+    route: string,
+    method: string,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const startedAt = Date.now();
+    let errored = false;
+    try {
+      return await fn();
+    } catch (err) {
+      errored = true;
+      throw err;
+    } finally {
+      const ms = Date.now() - startedAt;
+      pushTiming({
+        timestamp: new Date(startedAt).toISOString(),
+        route,
+        method,
+        ms,
+        errored,
+      });
+    }
+  },
 };
 
 /**
@@ -89,6 +164,78 @@ export const logger = {
  */
 export function getRecentErrors(): ErrorEntry[] {
   return [...errorBuffer].reverse();
+}
+
+/**
+ * Newest-first read of the timing ring buffer.
+ */
+export function getRecentTimings(): TimingEntry[] {
+  return [...timingBuffer].reverse();
+}
+
+export interface TimingReport {
+  /** Number of timings considered (after the optional window filter). */
+  count: number;
+  /** Median latency in milliseconds; `null` when count is zero. */
+  p50: number | null;
+  /** 95th-percentile latency in milliseconds; `null` when count is zero. */
+  p95: number | null;
+  /** 99th-percentile latency in milliseconds; `null` when count is zero. */
+  p99: number | null;
+  /** Fraction of timings with `errored: true` (0..1). */
+  errorRate: number;
+  /** Optional filter applied — when omitted, the full buffer is used. */
+  route?: string;
+}
+
+/**
+ * Compute p50/p95/p99 + error rate over the timing ring buffer.
+ *
+ * The default filter is the full buffer; callers can pass `route` to focus
+ * on a single path or `windowMs` to limit to the last N milliseconds of
+ * activity (useful for "last 5 minutes" views on the admin page).
+ *
+ * Percentiles use the nearest-rank method — adequate for an ops surface,
+ * not a regression-test statistic. The admin page renders the 0/50/95/99
+ * reading verbatim, so the operator sees the same number we report.
+ */
+export function reportTimings(options?: {
+  route?: string;
+  windowMs?: number;
+}): TimingReport {
+  const filtered = timingBuffer.filter((t) => {
+    if (options?.route && t.route !== options.route) return false;
+    if (options?.windowMs) {
+      const age = Date.now() - new Date(t.timestamp).getTime();
+      if (age > options.windowMs) return false;
+    }
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    return {
+      count: 0,
+      p50: null,
+      p95: null,
+      p99: null,
+      errorRate: 0,
+      route: options?.route,
+    };
+  }
+
+  const sorted = [...filtered].sort((a, b) => a.ms - b.ms);
+  const last = sorted.length - 1;
+  const nearestRank = (p: number) => sorted[Math.min(last, Math.floor(p * sorted.length))].ms;
+  const errorCount = filtered.filter((t) => t.errored).length;
+
+  return {
+    count: filtered.length,
+    p50: nearestRank(0.5),
+    p95: nearestRank(0.95),
+    p99: nearestRank(0.99),
+    errorRate: errorCount / filtered.length,
+    route: options?.route,
+  };
 }
 
 async function dispatchToWebhook(entry: ErrorEntry): Promise<void> {
